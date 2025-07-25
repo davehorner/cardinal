@@ -1,5 +1,5 @@
-use image::{DynamicImage, ImageBuffer, ImageReader, Rgba};
 use cardinal_varvara::Varvara;
+use image::{DynamicImage, ImageBuffer, ImageReader, Rgba};
 use std::io::Read;
 use std::path::Path;
 use uxn::{Backend, Uxn, UxnRam};
