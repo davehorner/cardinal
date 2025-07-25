@@ -81,9 +81,9 @@ jobs:
     - name: Install wasm target
       run: rustup target add wasm32-unknown-unknown
     - name: Clippy
-      run: cargo clippy --target=wasm32-unknown-unknown -praven-gui
+      run: cargo clippy --target=wasm32-unknown-unknown -pcardinal-gui
     - name: Build
-      run: cargo build --target=wasm32-unknown-unknown -praven-gui
+      run: cargo build --target=wasm32-unknown-unknown -pcardinal-gui
   format:
     runs-on: ubuntu-latest
     steps:
