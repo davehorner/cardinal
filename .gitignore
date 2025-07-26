@@ -1,3 +1,5 @@
 /target
 /*.s
 cardinal-gui/dist
+run_report.md
+.bacon-locations
