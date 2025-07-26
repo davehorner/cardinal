@@ -6,9 +6,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 use uxn::{Ports, Uxn, DEV_SIZE};
-use zerocopy::{AsBytes, BigEndian, FromBytes, FromZeroes, U16};
+use zerocopy::{BigEndian, FromBytes, U16};
 
-#[derive(AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    zerocopy::IntoBytes,
+    zerocopy::FromBytes,
+    zerocopy::KnownLayout,
+    zerocopy::Immutable,
+)]
 #[repr(C)]
 pub struct AudioPorts {
     vector: U16<BigEndian>,
@@ -95,7 +100,9 @@ pub const CHANNELS: usize = 1;
 const CROSSFADE_COUNT: usize = 200;
 
 /// Decoder for the `adsr` port
-#[derive(Copy, Clone, Default, AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    Copy, Clone, Default, FromBytes, zerocopy::Immutable, zerocopy::IntoBytes,
+)]
 #[repr(C)]
 struct Envelope(U16<BigEndian>);
 impl Envelope {
@@ -125,7 +132,7 @@ impl Envelope {
 }
 
 /// Decoder for the `volume` port
-#[derive(Copy, Clone, AsBytes, FromZeroes, FromBytes)]
+#[derive(Copy, Clone, FromBytes, zerocopy::Immutable, zerocopy::IntoBytes)]
 #[repr(C)]
 struct Volume(u8);
 impl Volume {
@@ -140,9 +147,16 @@ impl Volume {
 }
 
 /// Decoder for the `pitch` port
-#[derive(Copy, Clone, AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    Copy,
+    Clone,
+    FromBytes,
+    zerocopy::Immutable,
+    zerocopy::IntoBytes,
+    zerocopy::KnownLayout,
+)]
 #[repr(C)]
-struct Pitch(u8);
+pub struct Pitch(u8);
 impl Pitch {
     fn loop_sample(&self) -> bool {
         (self.0 >> 7) == 0
@@ -265,7 +279,8 @@ impl StreamData {
 
     /// Fills the buffer with stream data
     pub fn next(&mut self, data: &mut [f32]) {
-        self.duration -= (data.len() / 2) as f32 / get_sample_rate() as f32 * 1000.0;
+        self.duration -=
+            (data.len() / 2) as f32 / get_sample_rate() as f32 * 1000.0;
         if self.duration <= 0.0 {
             self.done.store(true, Ordering::Relaxed);
         }
