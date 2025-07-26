@@ -10,7 +10,8 @@ use log::info;
 
 use clap::Parser;
 
-use crate::{audio_setup, Stage};
+use crate::Stage;
+use cardinal_gui::uxn::audio_setup; // Removed due to unresolved import error
 
 /// Uxn runner
 #[derive(Parser)]
