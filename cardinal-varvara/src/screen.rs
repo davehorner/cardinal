@@ -1,7 +1,7 @@
 use crate::Event;
 use std::mem::offset_of;
 use uxn::{Ports, Uxn};
-use zerocopy::{BigEndian, FromBytes, FromZeros, U16};
+use zerocopy::{BigEndian, FromBytes, U16};
 
 #[derive(
     zerocopy::Immutable,

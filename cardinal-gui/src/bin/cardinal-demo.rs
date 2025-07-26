@@ -329,7 +329,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Helper to download static ROMs by URL ---
     fn download_static_rom(
-        label: &str,
+        _label: &str,
         url: &str,
     ) -> Result<std::path::PathBuf, String> {
         if url.starts_with("file://") {
@@ -413,7 +413,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     // Set up event channel for UxnApp
-    let (event_tx, event_rx) = mpsc::channel();
+    let (_event_tx, event_rx) = mpsc::channel();
 
     let vm = Arc::clone(&uxn_mod.uxn);
     let mut vm = vm.lock().unwrap();
@@ -630,9 +630,9 @@ fn prompt_rom_selection(roms: &[String]) -> Result<String, String> {
         "  [Return] Enable AUTO ROM CYCLING mode (cycle all ROMs every 10s)"
     );
     print!("Select a ROM by number, or hit return for auto cycling: ");
-    std::io::stdout().flush();
+    let _ = std::io::stdout().flush();
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input);
+    let _ = std::io::stdin().read_line(&mut input);
     let trimmed = input.trim();
     if trimmed.is_empty() {
         println!(
@@ -693,10 +693,10 @@ fn send_orca_file_to_console(
     let file = File::open(file_path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
 
-    for (line_idx, line_res) in reader.lines().enumerate() {
+    for (_line_idx, line_res) in reader.lines().enumerate() {
         let line = line_res.map_err(|e| e.to_string())?;
         let mut arrow_count = 0;
-        for (col_idx, ch) in line.chars().enumerate() {
+        for (_col_idx, ch) in line.chars().enumerate() {
             let byte = ch as u8;
             dev.console(vm, byte);
             // println!("[DEBUG] Line {}, Col {}: Sent char '{}' (0x{:02X})", line_idx, col_idx, ch, byte);
