@@ -2,11 +2,12 @@
 name = "cardinal-gui"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
 description = "Simple GUI for a Uxn + Varvara system"
 authors = ["David Horner", "Matt Keeter <matt.j.keeter@gmail.com>"]
 readme = "../README.md"
-publish = false
+publish = true
 
 [dependencies]
 anyhow.workspace = true
@@ -14,7 +15,7 @@ eframe.workspace = true
 env_logger.workspace = true
 log.workspace = true
 
-varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
+varvara = { package = "cardinal-varvara", version = "0.2.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap.workspace = true
@@ -26,7 +27,9 @@ web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn", features = ["native"] }
+uxn = { package = "cardinal-uxn", version = "0.2.0", features = [
+  "native",
+] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.2.0" }
