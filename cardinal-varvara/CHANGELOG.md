@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.2.0...cardinal-varvara-v0.3.0) - 2025-07-26
+
+### Added
+
+- *(audio)* [**breaking**] support dynamic sample rate selection between 48000 and 44100 Hz
+
 ## [0.2.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.1.0...cardinal-varvara-v0.2.0) - 2025-07-26
 
 ### Added
