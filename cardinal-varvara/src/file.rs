@@ -5,9 +5,14 @@ use std::{
     mem::offset_of,
 };
 use uxn::{Ports, Uxn, DEV_SIZE};
-use zerocopy::{AsBytes, BigEndian, FromBytes, FromZeroes, U16};
+use zerocopy::{BigEndian, FromBytes, U16};
 
-#[derive(AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    zerocopy::IntoBytes,
+    zerocopy::FromBytes,
+    zerocopy::KnownLayout,
+    zerocopy::Immutable,
+)]
 #[repr(C)]
 pub struct FilePorts {
     _vector: U16<BigEndian>,
