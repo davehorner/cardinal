@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.1...cardinal-gui-v0.3.2) - 2025-07-26
+
+### Added
+
+- *(gui)* support wasm32 target on cardinal-gui, add `cardinal-orcas` bin.
+
 ## [0.3.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.0...cardinal-gui-v0.3.1) - 2025-07-26
 
 ### Added

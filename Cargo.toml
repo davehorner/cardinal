@@ -5,6 +5,7 @@ members = [
     "cardinal-varvara",
     "cardinal-cli",
     "cardinal-gui",
+    "cardinal-gui/src/bin/cardinal-orcas",
 ]
 exclude = ["fuzz"]
 

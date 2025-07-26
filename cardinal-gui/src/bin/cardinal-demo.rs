@@ -1,4 +1,5 @@
-use cardinal_gui::uxn::{audio_setup, InjectEvent};
+use cardinal_gui::uxn::audio_setup;
+use cardinal_gui::uxn::InjectEvent;
 
 /// Injects a string as Orca events, simulating character entry with right/left/down arrows
 fn build_orca_inject_queue_from_chars(
@@ -167,13 +168,14 @@ fn build_orca_inject_queue(
     }
     queue
 }
-// crate_uxn.rs - Uxn GUI runner for crate, with ROM selection and download
+// cardinal-demo.rs - Uxn GUI runner for crate, with ROM selection and download
 
 use cardinal_gui::uxn::{UxnApp, UxnModule};
 use eframe::egui;
+#[cfg(not(target_arch = "wasm32"))]
 use eframe::NativeOptions;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use rand::prelude::IndexedRandom;
+#[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
 use reqwest::Url;
 use std::io::Write;
@@ -183,6 +185,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     let mut rom_path: Option<PathBuf> = None;
@@ -244,14 +248,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "orca-toy/orca.rom",
             "https://rabbits.srht.site/orca-toy/orca.rom",
         ),
-        (
-            "orca-toy/bin/orca.rom",
-            "file:///C:/w/music/orca-toy/bin/orca.rom",
-        ),
-        (
-            "write_to_file.rom",
-            "file:///C:/w/music/orca-toy/bin/write_to_file.rom",
-        ),
+        // (
+        //     "orca-toy/bin/orca.rom",
+        //     "file:///C:/w/music/orca-toy/bin/orca.rom",
+        // ),
+        // (
+        //     "write_to_file.rom",
+        //     "file:///C:/w/music/orca-toy/bin/write_to_file.rom",
+        // ),
         ("potato.rom", "https://rabbits.srht.site/potato/potato.rom"),
         //("uxn.rom", "https://rabbits.srht.site/uxn/uxn.rom"),
         ("oekaki.rom", "https://rabbits.srht.site/oekaki/oekaki.rom"),
@@ -288,18 +292,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             selected_rom_label = Some(roms[idx].clone());
             if idx < static_rom_paths.len() {
                 rom_path = Some(static_rom_paths[idx].clone());
-                title = format!("crate_uxn - {}", roms[idx]);
+                title = format!("cardinal-demo - {}", roms[idx]);
             } else {
                 let github_idx = idx - static_rom_paths.len();
                 let rom_file = download_rom(&github_roms[github_idx])?;
-                title = format!("crate_uxn - {}", github_roms[github_idx]);
+                title = format!("cardinal-demo - {}", github_roms[github_idx]);
                 rom_path = Some(rom_file);
             }
         }
     } else if let Some(path) = &rom_path {
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             selected_rom_label = Some(name.to_string());
-            title = format!("crate_uxn - {}", name);
+            title = format!("cardinal-demo - {}", name);
         }
     }
 
@@ -349,7 +353,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else {
             let client = reqwest::blocking::Client::builder()
-                .user_agent("crate_uxn")
+                .user_agent("cardinal-demo")
                 .build()
                 .map_err(|e| e.to_string())?;
             let resp = client.get(url).send().map_err(|e| e.to_string())?;
@@ -551,7 +555,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let ctx = cc.egui_ctx.clone();
                 app.set_on_rom_change(move |rom_name| {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Title(
-                        format!("crate_uxn - {}", rom_name),
+                        format!("cardinal-demo - {}", rom_name),
                     ));
                 });
             }
@@ -590,10 +594,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Fetch the list of ROMs from the GitHub directory listing
+#[cfg(not(target_arch = "wasm32"))]
 fn fetch_rom_list() -> Result<Vec<String>, String> {
     let url = "https://api.github.com/repos/davehorner/cardinal/contents/roms";
     let client = Client::builder()
-        .user_agent("crate_uxn")
+        .user_agent("cardinal-demo")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -641,13 +646,19 @@ fn prompt_rom_selection(roms: &[String]) -> Result<String, String> {
 }
 
 /// Download the selected ROM to a temp file and return its path
+#[cfg(target_arch = "wasm32")]
+fn download_rom(_rom_name: &str) -> Result<PathBuf, String> {
+    Err("ROM download not supported on wasm32 targets.".to_string())
+}
+#[cfg(not(target_arch = "wasm32"))]
 fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
     let url = format!(
         "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{}",
         rom_name
     );
+
     let client = Client::builder()
-        .user_agent("crate_uxn")
+        .user_agent("cardinal-demo")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -705,3 +716,8 @@ fn send_orca_file_to_console(
     Ok(())
 }
 // ...removed UxnEguiApp, now using UxnApp from uxn.rs...
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    eprintln!("cardinal-demo does not support wasm32 targets.");
+}
