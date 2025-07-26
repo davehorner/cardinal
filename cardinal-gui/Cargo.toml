@@ -2,11 +2,12 @@
 name = "cardinal-gui"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
 description = "Simple GUI for a Uxn + Varvara system"
 authors = ["David Horner", "Matt Keeter <matt.j.keeter@gmail.com>"]
 readme = "../README.md"
-publish = false
+publish = true
 
 [dependencies]
 anyhow.workspace = true
@@ -26,7 +27,9 @@ web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn", features = ["native"] }
+uxn = { path = "../cardinal-uxn", package = "cardinal-uxn", features = [
+  "native",
+] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
 uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }

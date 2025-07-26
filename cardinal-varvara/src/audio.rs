@@ -68,7 +68,20 @@ impl AudioPorts {
 pub const DEV_COUNT: u8 = 4;
 
 /// Expected audio sample rate
-pub const SAMPLE_RATE: u32 = 44100;
+/// Audio sample rate (default: 44100, can be set to 48000 by backend)
+static mut SAMPLE_RATE: u32 = 44100;
+
+/// Sets the sample rate used by the audio engine (called by backend only)
+pub fn set_sample_rate(rate: u32) {
+    unsafe {
+        SAMPLE_RATE = rate;
+    }
+}
+
+/// Gets the current sample rate
+pub fn get_sample_rate() -> u32 {
+    unsafe { SAMPLE_RATE }
+}
 
 /// Expected number of audio channels
 #[cfg(not(target_arch = "wasm32"))]
@@ -92,19 +105,19 @@ impl Envelope {
             None
         } else {
             let a = a as f32 * 64.0;
-            Some(1000.0 / (a * SAMPLE_RATE as f32))
+            Some(1000.0 / (a * get_sample_rate() as f32))
         }
     }
     fn decay(&self) -> f32 {
         let d = (((self.0.get() >> 8) as u8 & 0xF) as f32 * 64.0).max(10.0);
-        1000.0 / (d * SAMPLE_RATE as f32)
+        1000.0 / (d * get_sample_rate() as f32)
     }
     fn sustain(&self) -> f32 {
         ((self.0.get() >> 4) as u8 & 0xF) as f32 / 16.0
     }
     fn release(&self) -> f32 {
         let r = (self.0.get() as u8 & 0xF) as f32 * 64.0;
-        1000.0 / (r * SAMPLE_RATE as f32)
+        1000.0 / (r * get_sample_rate() as f32)
     }
     fn disabled(&self) -> bool {
         self.0.get() == 0
@@ -252,7 +265,7 @@ impl StreamData {
 
     /// Fills the buffer with stream data
     pub fn next(&mut self, data: &mut [f32]) {
-        self.duration -= (data.len() / 2) as f32 / SAMPLE_RATE as f32 * 1000.0;
+        self.duration -= (data.len() / 2) as f32 / get_sample_rate() as f32 * 1000.0;
         if self.duration <= 0.0 {
             self.done.store(true, Ordering::Relaxed);
         }
@@ -403,7 +416,7 @@ impl Audio {
                 let sample_rate = if len <= 256 {
                     len as f32
                 } else {
-                    SAMPLE_RATE as f32 / MIDDLE_C
+                    (unsafe { SAMPLE_RATE } as f32) / MIDDLE_C
                 };
 
                 // Compute a crossfade transition from the previous sample

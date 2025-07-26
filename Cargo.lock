@@ -363,14 +363,14 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "zerocopy",
 ]
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cardinal-uxn",
  "chrono",
