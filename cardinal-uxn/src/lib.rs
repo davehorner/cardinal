@@ -3,6 +3,8 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(any(test, feature = "native")), forbid(unsafe_code))]
 
+pub mod disassembler;
+
 #[cfg(feature = "native")]
 mod native;
 
@@ -28,6 +30,43 @@ pub struct Stack {
     ///
     /// If the buffer is empty or full, it points to `u8::MAX`.
     index: u8,
+}
+
+impl Stack {
+    /// Returns an iterator over the stack from bottom to top
+    pub fn iter(&self) -> impl Iterator<Item = &u8> {
+        let len = self.len() as usize;
+        self.data[..len].iter()
+    }
+
+    /// Returns a mutable iterator over the stack from bottom to top
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut u8> {
+        let len = self.len() as usize;
+        self.data[..len].iter_mut()
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *const u8 {
+        self.data.as_ptr()
+    }
+
+    /// Returns a mutable pointer to the stack data
+    #[inline]
+    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.data.as_mut_ptr()
+    }
+
+    /// Returns the stack index (last occupied slot)
+    #[inline]
+    pub fn index(&self) -> u8 {
+        self.index
+    }
+
+    /// Gets the value at a given index (0 = bottom, index = top)
+    #[inline]
+    pub fn get(&self, idx: u8) -> u8 {
+        self.data[usize::from(idx)]
+    }
 }
 
 /// Uxn evaluation backend
@@ -172,6 +211,13 @@ impl From<Value> for u16 {
 }
 
 impl Stack {
+    /// Returns a slice of the working stack data up to the current length
+    #[inline]
+    pub fn data_slice(&self) -> &[u8] {
+        let len = self.data.len() as usize;
+        &self.data[..len]
+    }
+
     #[inline]
     fn pop_byte(&mut self) -> u8 {
         let out = self.data[usize::from(self.index)];
@@ -187,7 +233,7 @@ impl Stack {
     }
 
     #[inline]
-    fn push_byte(&mut self, v: u8) {
+    pub fn push_byte(&mut self, v: u8) {
         self.index = self.index.wrapping_add(1);
         self.data[usize::from(self.index)] = v;
     }
@@ -217,7 +263,7 @@ impl Stack {
     }
 
     #[inline]
-    fn push(&mut self, v: Value) {
+    pub fn push(&mut self, v: Value) {
         match v {
             Value::Short(v) => self.push_short(v),
             Value::Byte(v) => self.push_byte(v),
@@ -307,6 +353,30 @@ macro_rules! op_bin {
 }
 
 impl<'a> Uxn<'a> {
+    /// Returns a slice of the working stack data up to the current length
+    pub fn stack_data(&self) -> &[u8] {
+        let len = self.stack.len() as usize;
+        &self.stack.data[..len]
+    }
+
+    /// Returns a slice of the return stack data up to the current length
+    pub fn ret_data(&self) -> &[u8] {
+        let len = self.ret.len() as usize;
+        &self.ret.data[..len]
+    }
+    /// Helper to perform a DEO operation for a given port and value
+    pub fn deo_helper(
+        &mut self,
+        dev: &mut dyn Device,
+        port: u8,
+        value: u8,
+        pc: u16,
+    ) {
+        // Uxn expects value first, then port
+        self.stack_mut().push_byte(value);
+        self.stack_mut().push_byte(port);
+        let _ = self.deo::<0b000>(dev, pc);
+    }
     /// Build a new `Uxn` with zeroed memory
     pub fn new(ram: &'a mut [u8; 65536], backend: Backend) -> Self {
         Self {
@@ -441,27 +511,36 @@ impl<'a> Uxn<'a> {
 
     /// Converts raw ports memory into a [`Ports`] object
     #[inline]
-    pub fn dev<D: Ports>(&self) -> &D {
+    pub fn dev<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(
+        &self,
+    ) -> &D {
         self.dev_at(D::BASE)
     }
 
     /// Returns a reference to a device located at `pos`
     #[inline]
-    pub fn dev_at<D: Ports>(&self, pos: u8) -> &D {
+    pub fn dev_at<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(
+        &self,
+        pos: u8,
+    ) -> &D {
         Self::check_dev_size::<D>();
-        D::ref_from(&self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
+        &D::ref_from_bytes(&self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
     }
 
     /// Returns a reference to a device located at `pos`
     #[inline]
-    pub fn dev_mut_at<D: Ports>(&mut self, pos: u8) -> &mut D {
+    pub fn dev_mut_at<D: Ports + zerocopy::KnownLayout>(
+        &mut self,
+        pos: u8,
+    ) -> &mut D {
         Self::check_dev_size::<D>();
-        D::mut_from(&mut self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
+        let slice = &mut self.dev[usize::from(pos)..][..DEV_SIZE];
+        D::mut_from_bytes(slice).unwrap()
     }
 
     /// Returns a mutable reference to the given [`Ports`] object
     #[inline]
-    pub fn dev_mut<D: Ports>(&mut self) -> &mut D {
+    pub fn dev_mut<D: Ports + zerocopy::KnownLayout>(&mut self) -> &mut D {
         self.dev_mut_at(D::BASE)
     }
 
@@ -1568,7 +1647,10 @@ pub trait Device {
 
 /// Trait for a type which can be cast to a device ports `struct`
 pub trait Ports:
-    zerocopy::AsBytes + zerocopy::FromBytes + zerocopy::FromZeroes
+    zerocopy::IntoBytes
+    + zerocopy::FromBytes
+    + zerocopy::FromZeros
+    + zerocopy::Immutable
 {
     /// Base address of the port, of the form `0xA0`
     const BASE: u8;
