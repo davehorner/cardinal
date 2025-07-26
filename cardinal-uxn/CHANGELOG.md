@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.3.0...cardinal-uxn-v0.4.0) - 2025-07-26
+
+### Added
+
+- *(audio)* [**breaking**] support dynamic sample rate selection between 48000 and 44100 Hz
+
+### Other
+
+- *(deps)* [**breaking**] update to the latest and greatest for all dependencies!
+- add changelogs for cardinal-uxn and cardinal-varvara projects
+- rename raven project to cardinal and update related dependencies and documentation
+- Add notes on building the web GUI ([#19](https://github.com/davehorner/cardinal/pull/19))
+- Add fuzzing, fix things that were discovered ([#13](https://github.com/davehorner/cardinal/pull/13))
+- tweak text
+- Add license and stuff
+- Updating README to link to project page
+- Update README
+- Make README more accurate
+- Fix directory listing in Potato
+- More README updates
+- Implement arguments
+- Update implementation notes
+- Remove GUI loop from Varvara crate (!)
+- Make Varvara audio implementation-agnostic
+- use to/from_le_bytes instead
+- Working aroud bad codegen
+- Staring at assembly
+- Begin updating README
+
 ## [0.3.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.2.0...cardinal-uxn-v0.3.0) - 2025-07-26
 
 ### Added
