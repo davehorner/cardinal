@@ -55,7 +55,7 @@ impl<'a> Stage<'a> {
     ) -> Self {
         let image = egui::ColorImage::new(
             [usize::from(size.0), usize::from(size.1)],
-            egui::Color32::BLACK,
+            vec![egui::Color32::BLACK; (size.0 as usize) * (size.1 as usize)],
         );
 
         let texture =
@@ -143,14 +143,7 @@ impl eframe::App for Stage<'_> {
             for e in i.events.iter() {
                 match e {
                     egui::Event::Text(s) => {
-                        // The Text event doesn't handle Ctrl + characters, so
-                        // we do everything through the Key event, with the
-                        // exception of quotes (which don't have an associated
-                        // key; https://github.com/emilk/egui/pull/4683)
-                        //
-                        // Similarly, the Key event doesn't always decode
-                        // events with Shift and an attached key.  This is all
-                        // terribly messy; my apologies.
+                        // ...existing code...
                         const RAW_CHARS: [u8; 16] = [
                             b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*',
                             b'&', b'^', b'%', b'$', b'#', b'@', b'!', b'~',
@@ -167,6 +160,53 @@ impl eframe::App for Stage<'_> {
                         repeat,
                         ..
                     } => {
+                        // F2 support: push #1234 #010e DEO BRK onto the execution stack
+                        if *pressed && *key == egui::Key::F2 {
+                            //                                                        println!("[F2] Stack after:");
+                            //                                                     dbg!(&self.vm.stack());
+                            //                                                     dbg!(&self.vm.ret());
+                            //                             let wst = self.vm.stack();
+                            //                             let rst = self.vm.ret();
+                            //                             // Disassemble WST and RST using the new disassembler module
+                            //                             let wst_data = wst.data_slice();
+                            //                             let rst_data = rst.data_slice();
+                            //                             println!("WST disassembly: {} raw bytes: {:?}", wst.len(), wst_data);
+                            //                             uxn::disassembler::disassemble(wst_data, wst.len() as usize, |instr| {
+                            //                                 println!(
+                            //                                     "{:04X}: {:<4} {:02X}{}{}{} {:?}",
+                            //                                     instr.addr,
+                            //         instr.mnemonic,
+                            //         instr.opcode,
+                            //         if instr.keep { "k" } else { "" },
+                            //         if instr.ret { "r" } else { "" },
+                            //         if instr.short { "s" } else { "" },
+                            //         instr.literal
+                            //     );
+                            // });
+                            // println!("RST disassembly:");
+                            // uxn::disassembler::disassemble(rst_data, rst.len() as usize, |instr| {
+                            //     println!(
+                            //         "{:04X}: {:<4} {:02X}{}{}{} {:?}",
+                            //         instr.addr,
+                            //         instr.mnemonic,
+                            //         instr.opcode,
+                            //         if instr.keep { "k" } else { "" },
+                            //         if instr.ret { "r" } else { "" },
+                            //         if instr.short { "s" } else { "" },
+                            //         instr.literal
+                            //     );
+                            // });
+                            self.dev.system.debug(&mut self.vm);
+                            // self.vm.deo::<0>(&mut self.dev, 0xe);
+                            // // Trigger execution using Uxn deo_helper
+                            // self.vm.deo_helper(&mut self.dev, 0xe, 0x1, 0x100);
+                            #[cfg(target_os = "windows")]
+                            unsafe {
+                                winapi::um::winuser::MessageBeep(
+                                    winapi::um::winuser::MB_OK,
+                                );
+                            }
+                        }
                         if let Some(k) = decode_key(*key, shift_held) {
                             if *pressed {
                                 self.dev.pressed(&mut self.vm, k, *repeat);
@@ -175,9 +215,9 @@ impl eframe::App for Stage<'_> {
                             }
                         }
                     }
-                    egui::Event::Scroll(s) => {
-                        self.scroll.0 += s.x;
-                        self.scroll.1 -= s.y;
+                    egui::Event::MouseWheel { delta, .. } => {
+                        self.scroll.0 += delta.x;
+                        self.scroll.1 -= delta.y;
                     }
                     _ => (),
                 }
@@ -240,7 +280,10 @@ impl eframe::App for Stage<'_> {
         // TODO reduce allocation here?
         let mut image = egui::ColorImage::new(
             [out.size.0 as usize, out.size.1 as usize],
-            egui::Color32::BLACK,
+            vec![
+                egui::Color32::BLACK;
+                (out.size.0 as usize) * (out.size.1 as usize)
+            ],
         );
         for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
             *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);

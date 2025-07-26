@@ -17,9 +17,9 @@ mod system;
 /// Audio handler implementation
 mod audio;
 
+pub use audio::set_sample_rate;
 pub use audio::StreamData;
 pub use audio::CHANNELS as AUDIO_CHANNELS;
-pub use audio::set_sample_rate;
 pub use controller::Key;
 pub use mouse::MouseState;
 
