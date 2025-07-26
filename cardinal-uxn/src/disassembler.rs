@@ -1,5 +1,3 @@
-use crate::disassembler;
-
 // (
 // https://github.com/Liorst4/uxn-disassembler/tree/main
 // Copyright © 2025 David Horner

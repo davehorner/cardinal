@@ -109,13 +109,12 @@ pub enum InjectEvent {
 }
 // uxn.rs - Uxn integration for e_window
 
-#[cfg(feature = "uses_uxn")]
 pub mod uxn {
 
-    use cardinal_uxn::{Backend, Uxn};
-    use cardinal_varvara::Varvara;
     use std::path::Path;
     use std::sync::{Arc, Mutex};
+    use uxn::{Backend, Uxn};
+    use varvara::Varvara;
     /// UxnModule: Encapsulates a Uxn VM and its state for e_window
     pub struct UxnModule {
         pub uxn: Arc<Mutex<Uxn<'static>>>,
@@ -129,14 +128,14 @@ pub mod uxn {
             static mut RAM: [u8; 65536] = [0; 65536];
             let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
             let mut uxn = Uxn::new(ram, Backend::Interpreter);
-            let mut varvara = Varvara::default();
+            let varvara = Varvara::default();
 
             // varvara.screen.buffer.resize(1024 * 768 * 4, 0);
             // varvara.screen.changed = true;
             if let Some(path) = rom_path {
                 let rom = std::fs::read(path)
                     .map_err(|e| format!("Failed to read ROM: {e}"))?;
-                uxn.reset(&rom);
+                let _ = uxn.reset(&rom);
             }
 
             Ok(UxnModule {
@@ -148,7 +147,7 @@ pub mod uxn {
         /// Reset the Uxn VM (clears memory and state)
         pub fn reset(&self, rom: &[u8]) {
             let mut uxn = self.uxn.lock().unwrap();
-            uxn.reset(rom);
+            let _ = uxn.reset(rom);
         }
 
         /// Load a new ROM into the Uxn VM (resets VM)
@@ -159,11 +158,6 @@ pub mod uxn {
             Ok(())
         }
     }
-}
-
-#[cfg(not(feature = "uses_uxn"))]
-pub mod uxn {
-    // Stub module for when uses_uxn is disabled
 }
 
 use log::{error, info};
@@ -191,7 +185,7 @@ impl UxnModule {
         if let Some(path) = rom_path {
             let rom = std::fs::read(path)
                 .map_err(|e| format!("Failed to read ROM: {e}"))?;
-            uxn.reset(&rom);
+            let _ = uxn.reset(&rom);
         }
         Ok(UxnModule {
             uxn: Arc::new(Mutex::new(uxn)),
@@ -206,7 +200,7 @@ impl UxnModule {
     /// Reset the Uxn VM (clears memory and state)
     pub fn reset(&self, rom: &[u8]) {
         let mut uxn = self.uxn.lock().unwrap();
-        uxn.reset(rom);
+        let _ = uxn.reset(rom);
     }
 
     /// Load a new ROM into the Uxn VM (resets VM)
@@ -221,7 +215,6 @@ impl UxnModule {
 }
 
 // Optionally, add egui integration for UxnModule (UI panel, etc.)
-#[cfg(feature = "egui")]
 pub mod egui_ui {
     use super::*;
     use egui::{CollapsingHeader, Ui};
@@ -384,7 +377,7 @@ impl<'a> UxnApp<'a> {
         println!("[UxnApp] Reloading ROM from: {}", path.display());
         let rom = std::fs::read(path)
             .map_err(|e| format!("Failed to read ROM: {e}"))?;
-        self.vm.reset(&rom);
+        let _ = self.vm.reset(&rom);
         self.dev.reset(&rom);
         self.vm.run(&mut self.dev, 0x100);
         self.dev.redraw(&mut self.vm);

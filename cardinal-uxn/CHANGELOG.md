@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.0...cardinal-uxn-v0.4.1) - 2025-07-26
+
+### Added
+
+- *(gui)* support wasm32 target on cardinal-gui, add `cardinal-orcas` bin.
+
+### Other
+
+- suppress unused warnings and remove redundant code in uxn and demo
+
 ## [0.4.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.3.0...cardinal-uxn-v0.4.0) - 2025-07-26
 
 ### Other
