@@ -62,6 +62,7 @@ July 2025 Changes
 - stdout and stderr callbacks
 - feat(audio): support dynamic sample rate selection between 48000 and 44100 Hz
 - refactor(deps): update to the latest and greatest 7/25 for all dependencies!
+- feat(cardinal-gui): add cardinal-demo binary with hot reload, inject, and rom cycling; cardinal-orcas binary added, wip.
 
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)

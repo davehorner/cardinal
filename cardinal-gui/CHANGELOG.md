@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.0...cardinal-gui-v0.3.1) - 2025-07-26
+
+### Added
+
+- *(cardinal-gui)* add cardinal-demo binary with hot reload, inject, and rom cycling
+
 ## [0.2.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.1.0...cardinal-gui-v0.2.0) - 2025-07-26
 
 ### Other

@@ -3,8 +3,6 @@
 
 use eframe::egui;
 use egui::{ViewportBuilder, ViewportId};
-use log::info;
-use once_cell::sync::Lazy;
 // use std::sync::Mutex; // No longer needed here
 mod monitor_info;
 

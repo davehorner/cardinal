@@ -1,10 +1,9 @@
 use uxn::Uxn;
-use varvara::{Key, MouseState, Varvara, AUDIO_CHANNELS};
+use varvara::{Key, MouseState, Varvara};
 
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
 
 use anyhow::Result;
-use cpal::traits::StreamTrait;
 use eframe::egui;
 use log::{error, info};
 
@@ -312,84 +311,6 @@ impl eframe::App for Stage<'_> {
         // Update stdout / stderr / exiting
         out.check().expect("failed to print output?");
     }
-}
-
-pub fn audio_setup(
-    data: [Arc<Mutex<varvara::StreamData>>; 4],
-) -> Option<(cpal::Device, [cpal::Stream; 4])> {
-    use cpal::traits::{DeviceTrait, HostTrait};
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .expect("no output device available");
-    let supported_configs_range = device
-        .supported_output_configs()
-        .expect("error while querying configs")
-        .collect::<Vec<_>>();
-
-    let mut supported_config = None;
-    let mut used_rate = 0;
-    for &rate in &[48000, 44100] {
-        supported_config = supported_configs_range
-            .iter()
-            .filter(|c| usize::from(c.channels()) == AUDIO_CHANNELS)
-            .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
-            .find_map(|c| c.try_with_sample_rate(cpal::SampleRate(rate)));
-        if supported_config.is_some() {
-            used_rate = rate;
-            break;
-        }
-    }
-    let supported_config = match supported_config {
-        Some(cfg) => cfg,
-        None => {
-            error!(
-                "could not find supported audio config ({} channels, 48000 or 44100 Hz, f32)",
-                AUDIO_CHANNELS
-            );
-            error!("available configs:");
-            for c in &supported_configs_range {
-                if c.min_sample_rate() == c.max_sample_rate() {
-                    error!(
-                        "  channels: {}, sample_rate: {} Hz, {}",
-                        c.channels(),
-                        c.min_sample_rate().0,
-                        c.sample_format(),
-                    );
-                } else {
-                    error!(
-                        "  channels: {}, sample_rate: {} - {} Hz, {}",
-                        c.channels(),
-                        c.min_sample_rate().0,
-                        c.max_sample_rate().0,
-                        c.sample_format(),
-                    );
-                }
-            }
-            return None;
-        }
-    };
-    // Set the sample rate in the audio engine
-    varvara::set_sample_rate(used_rate);
-    let config = supported_config.config();
-
-    let streams = data.map(|d| {
-        let stream = device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f32], _opt: &cpal::OutputCallbackInfo| {
-                    d.lock().unwrap().next(data);
-                },
-                move |err| {
-                    panic!("{err}");
-                },
-                None,
-            )
-            .expect("could not build stream");
-        stream.play().unwrap();
-        stream
-    });
-    Some((device, streams))
 }
 
 fn decode_key(k: egui::Key, shift: bool) -> Option<Key> {
