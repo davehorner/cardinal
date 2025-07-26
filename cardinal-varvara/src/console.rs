@@ -6,7 +6,7 @@ impl Default for Console {
 use crate::{Event, EventData};
 use std::mem::offset_of;
 use uxn::{Ports, Uxn};
-use zerocopy::{AsBytes, BigEndian, FromBytes, FromZeroes, U16};
+use zerocopy::{BigEndian, U16};
 
 pub struct Console {
     stdout: Vec<u8>,
@@ -15,7 +15,12 @@ pub struct Console {
     stderr_listeners: Vec<Box<dyn FnMut(u8) + Send>>,
 }
 
-#[derive(AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    zerocopy::IntoBytes,
+    zerocopy::FromBytes,
+    zerocopy::KnownLayout,
+    zerocopy::Immutable,
+)]
 #[repr(C)]
 pub struct ConsolePorts {
     vector: U16<BigEndian>,

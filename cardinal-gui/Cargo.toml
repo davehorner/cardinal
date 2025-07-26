@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -11,11 +11,13 @@ publish = true
 
 [dependencies]
 anyhow.workspace = true
+display-info = "0.5.4"
 eframe.workspace = true
+egui = "0.32.0"
 env_logger.workspace = true
 log.workspace = true
-
-varvara = { package = "cardinal-varvara", version = "0.2.0" }
+once_cell = "1.21.3"
+winit = "0.30.11"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap.workspace = true
@@ -26,10 +28,21 @@ wasm-bindgen-futures.workspace = true
 web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["winuser"] }
+
+varvara = { package = "cardinal-varvara", version = "0.3.0" }
+#varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
+
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.2.0", features = [
-  "native",
-] }
+ uxn = { package = "cardinal-uxn", version = "0.3.0", features = [
+   "native",
+ ] }
+#uxn = { path = "../cardinal-uxn", features = [
+#  "native",
+#], package = "cardinal-uxn" }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.2.0" }
+uxn = { package = "cardinal-uxn", version = "0.3.0" }
+#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
