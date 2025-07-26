@@ -22,29 +22,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Release cardinal-uxn
+      - name: Install XCB dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxcb1-dev
+      - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
-          command: release --package cardinal-uxn
+          command: release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Release cardinal-varvara
-        uses: release-plz/action@v0.5
-        with:
-          command: release --package cardinal-varvara
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Release cardinal-gui
-        uses: release-plz/action@v0.5
-        with:
-          command: release --package cardinal-gui
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest

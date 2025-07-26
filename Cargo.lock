@@ -363,8 +363,8 @@ name = "cardinal-gui"
 version = "0.3.3"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.3.0",
- "cardinal-varvara 0.3.0",
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "cpal",
  "display-info",
@@ -380,18 +380,6 @@ dependencies = [
  "tempfile",
  "wasm-bindgen-futures",
  "web-sys",
- "winapi",
- "winit",
-]
-
-[[package]]
-name = "cardinal-orcas"
-version = "0.1.0"
-dependencies = [
- "display-info",
- "eframe",
- "egui",
- "once_cell",
  "winapi",
  "winit",
 ]
@@ -413,6 +401,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cardinal-uxn"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eff1bf6215b5be399a95b4dd9c63c2ec9f0682d2bf272ffb54069b79c603d237"
+dependencies = [
+ "zerocopy",
+]
+
+[[package]]
 name = "cardinal-varvara"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -427,11 +424,24 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
- "cardinal-uxn 0.3.0",
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "image",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7b4d262cc731aa30c075fa61cad65a8f9fec11115ae6b2e47c1d56bac37d92d"
+dependencies = [
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
  "log",
  "static_assertions",
  "zerocopy",
@@ -810,7 +820,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8470210c95a42cc985d9ffebfd5067eea55bdb1c3f7611484907db9639675e28"
 dependencies = [
  "ahash",
- "backtrace",
  "bitflags 2.9.1",
  "emath",
  "epaint",
@@ -1356,7 +1365,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2931,16 +2940,6 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "socket2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "233504af464074f9d066d7b5416c5f9b894a5862a6506e306f7b816cdd6f1807"
@@ -3132,9 +3131,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.46.1"
+version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
+checksum = "43864ed400b6043a4757a25c7a64a8efde741aed79a056a2fb348a406701bb35"
 dependencies = [
  "backtrace",
  "bytes",
@@ -3143,8 +3142,8 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "slab",
- "socket2 0.5.10",
- "windows-sys 0.52.0",
+ "socket2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
