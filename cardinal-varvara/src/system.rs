@@ -1,8 +1,8 @@
 use log::warn;
 use std::mem::offset_of;
 use uxn::{Ports, Uxn};
-use zerocopy::{AsBytes, BigEndian, FromBytes, FromZeroes, U16};
-
+use zerocopy::KnownLayout;
+use zerocopy::{BigEndian, FromBytes, FromZeros, IntoBytes, U16};
 pub struct System {
     exit: Option<i32>,
     banks: [Box<[u8; 65536]>; 15],
@@ -14,7 +14,7 @@ impl Default for System {
     }
 }
 
-#[derive(FromZeroes, FromBytes, AsBytes)]
+#[derive(FromBytes, IntoBytes)]
 #[repr(C)]
 struct Fill {
     length: U16<BigEndian>,
@@ -23,7 +23,7 @@ struct Fill {
     value: u8,
 }
 
-#[derive(FromZeroes, FromBytes, AsBytes)]
+#[derive(FromBytes, IntoBytes)]
 #[repr(C)]
 struct Cpy {
     length: U16<BigEndian>,
@@ -33,7 +33,7 @@ struct Cpy {
     dst_addr: U16<BigEndian>,
 }
 
-#[derive(AsBytes, FromZeroes, FromBytes)]
+#[derive(FromBytes, IntoBytes, KnownLayout, zerocopy::Immutable)]
 #[repr(C)]
 pub struct SystemPorts {
     _unused_0: u8,
@@ -94,6 +94,11 @@ impl System {
         self.exit = None;
     }
 
+    /// Triggers a debug output for the system ports
+    pub fn debug(&mut self, vm: &mut Uxn) {
+        self.deo(vm, SystemPorts::DEBUG);
+    }
+
     pub fn deo(&mut self, vm: &mut Uxn, target: u8) {
         let v = vm.dev::<SystemPorts>();
         match target {
@@ -103,7 +108,7 @@ impl System {
                 match op {
                     expansion::FILL => {
                         let mut f = Fill::new_zeroed();
-                        for (i, b) in f.as_bytes_mut().iter_mut().enumerate() {
+                        for (i, b) in f.as_mut_bytes().iter_mut().enumerate() {
                             *b = vm.ram_read_byte(
                                 addr.wrapping_add(1).wrapping_add(i as u16),
                             );
@@ -122,7 +127,7 @@ impl System {
                     }
                     expansion::CPYL | expansion::CPYR => {
                         let mut c = Cpy::new_zeroed();
-                        for (i, b) in c.as_bytes_mut().iter_mut().enumerate() {
+                        for (i, b) in c.as_mut_bytes().iter_mut().enumerate() {
                             *b = vm.ram_read_byte(
                                 addr.wrapping_add(1).wrapping_add(i as u16),
                             );

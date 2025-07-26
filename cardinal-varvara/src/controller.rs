@@ -1,9 +1,14 @@
 use crate::{Event, EventData};
 use std::{collections::HashSet, mem::offset_of};
 use uxn::{Ports, Uxn};
-use zerocopy::{AsBytes, BigEndian, FromBytes, FromZeroes, U16};
+use zerocopy::{BigEndian, U16};
 
-#[derive(AsBytes, FromZeroes, FromBytes)]
+#[derive(
+    zerocopy::FromBytes,
+    zerocopy::IntoBytes,
+    zerocopy::Immutable,
+    zerocopy::KnownLayout,
+)]
 #[repr(C)]
 pub struct ControllerPorts {
     vector: U16<BigEndian>,
