@@ -14,7 +14,7 @@ log.workspace = true
 static_assertions.workspace = true
 zerocopy.workspace = true
 
-uxn = { package = "cardinal-uxn", version = "0.4.1" }
+uxn = { package = "cardinal-uxn", version = "0.4.0" }
 #uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
 
 [dev-dependencies]
