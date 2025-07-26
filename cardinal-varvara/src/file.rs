@@ -5,7 +5,7 @@ use std::{
     mem::offset_of,
 };
 use uxn::{Ports, Uxn, DEV_SIZE};
-use zerocopy::{BigEndian, FromBytes, U16};
+use zerocopy::{BigEndian, U16};
 
 #[derive(
     zerocopy::IntoBytes,
