@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-varvara"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -14,7 +14,7 @@ log.workspace = true
 static_assertions.workspace = true
 zerocopy.workspace = true
 
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn", version = "0.1" }
+uxn = { path = "../cardinal-uxn", package = "cardinal-uxn", version = "0.2" }
 
 [dev-dependencies]
 image.workspace = true

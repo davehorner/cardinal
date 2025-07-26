@@ -60,6 +60,7 @@ trunk build --release --public-url=/projects/cardinal/demo/ # edit this path
 
 July 2025 Changes
 - stdout and stderr callbacks
+- feat(audio): support dynamic sample rate selection between 48000 and 44100 Hz
 
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)

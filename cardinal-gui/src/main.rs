@@ -1,5 +1,5 @@
 use uxn::Uxn;
-use varvara::{Key, MouseState, Varvara, AUDIO_CHANNELS, AUDIO_SAMPLE_RATE};
+use varvara::{Key, MouseState, Varvara, AUDIO_CHANNELS};
 
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -281,40 +281,53 @@ pub fn audio_setup(
         .expect("no output device available");
     let supported_configs_range = device
         .supported_output_configs()
-        .expect("error while querying configs");
+        .expect("error while querying configs")
+        .collect::<Vec<_>>();
 
-    let Some(supported_config) = supported_configs_range
-        .filter(|c| usize::from(c.channels()) == AUDIO_CHANNELS)
-        .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
-        .find_map(|c| {
-            c.try_with_sample_rate(cpal::SampleRate(AUDIO_SAMPLE_RATE))
-        })
-    else {
-        error!(
-            "could not find supported audio config ({} channels, {} Hz, f32)",
-            AUDIO_CHANNELS, AUDIO_SAMPLE_RATE
-        );
-        error!("available configs:");
-        for c in device.supported_output_configs().unwrap() {
-            if c.min_sample_rate() == c.max_sample_rate() {
-                error!(
-                    "  channels: {}, sample_rate: {} Hz, {}",
-                    c.channels(),
-                    c.min_sample_rate().0,
-                    c.sample_format(),
-                );
-            } else {
-                error!(
-                    "  channels: {}, sample_rate: {} - {} Hz, {}",
-                    c.channels(),
-                    c.min_sample_rate().0,
-                    c.max_sample_rate().0,
-                    c.sample_format(),
-                );
-            }
+    let mut supported_config = None;
+    let mut used_rate = 0;
+    for &rate in &[48000, 44100] {
+        supported_config = supported_configs_range
+            .iter()
+            .filter(|c| usize::from(c.channels()) == AUDIO_CHANNELS)
+            .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
+            .find_map(|c| c.try_with_sample_rate(cpal::SampleRate(rate)));
+        if supported_config.is_some() {
+            used_rate = rate;
+            break;
         }
-        return None;
+    }
+    let supported_config = match supported_config {
+        Some(cfg) => cfg,
+        None => {
+            error!(
+                "could not find supported audio config ({} channels, 48000 or 44100 Hz, f32)",
+                AUDIO_CHANNELS
+            );
+            error!("available configs:");
+            for c in &supported_configs_range {
+                if c.min_sample_rate() == c.max_sample_rate() {
+                    error!(
+                        "  channels: {}, sample_rate: {} Hz, {}",
+                        c.channels(),
+                        c.min_sample_rate().0,
+                        c.sample_format(),
+                    );
+                } else {
+                    error!(
+                        "  channels: {}, sample_rate: {} - {} Hz, {}",
+                        c.channels(),
+                        c.min_sample_rate().0,
+                        c.max_sample_rate().0,
+                        c.sample_format(),
+                    );
+                }
+            }
+            return None;
+        }
     };
+    // Set the sample rate in the audio engine
+    varvara::set_sample_rate(used_rate);
     let config = supported_config.config();
 
     let streams = data.map(|d| {

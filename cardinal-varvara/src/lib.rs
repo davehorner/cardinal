@@ -19,8 +19,7 @@ mod audio;
 
 pub use audio::StreamData;
 pub use audio::CHANNELS as AUDIO_CHANNELS;
-pub use audio::SAMPLE_RATE as AUDIO_SAMPLE_RATE;
-
+pub use audio::set_sample_rate;
 pub use controller::Key;
 pub use mouse::MouseState;
 
