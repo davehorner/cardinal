@@ -97,7 +97,8 @@ pub fn build_orca_inject_queue(
     queue
 }
 
-use rand::prelude::IndexedRandom;
+#[cfg(not(target_arch = "wasm32"))]
+use getrandom;
 #[derive(Debug, Clone)]
 pub enum InjectEvent {
     Char(u8),
@@ -497,19 +498,56 @@ impl eframe::App for UxnApp<'_> {
                             unsafe {
                                 LAST_CTRL_R = Some(now);
                             }
-                            if let Some(random_file) =
-                                files.choose(&mut rand::thread_rng())
-                            {
-                                let queue = build_orca_inject_queue(
-                                    random_file.to_str().unwrap(),
-                                );
-                                self.queue_input(queue);
+                            if !files.is_empty() {
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    // On wasm, just cycle sequentially through the files
+                                    static mut LAST_IDX: usize = 0;
+                                    let idx = unsafe {
+                                        let i = LAST_IDX;
+                                        LAST_IDX = (LAST_IDX + 1) % files.len();
+                                        i
+                                    };
+                                    let random_file = &files[idx];
+                                    let queue = build_orca_inject_queue(
+                                        random_file.to_str().unwrap(),
+                                    );
+                                    self.queue_input(queue);
+                                }
+                                #[cfg(not(target_arch = "wasm32"))]
+                                {
+                                    // On native, pick a random file
+                                    if let Ok(idx) = get_random_u128()
+                                        .map(|v| (v as usize) % files.len())
+                                    {
+                                        let idx: usize = idx;
+                                        let random_file = &files[idx];
+                                        let queue = build_orca_inject_queue(
+                                            random_file.to_str().unwrap(),
+                                        );
+                                        self.queue_input(queue);
+                                    }
+                                }
                             }
                         }
                     }
                 }
                 _ => {}
             }
+        }
+
+        /// Returns a random u128 using getrandom
+        #[cfg(not(target_arch = "wasm32"))]
+        pub fn get_random_u128() -> Result<u128, getrandom::Error> {
+            let mut buf = [0u8; 16];
+            getrandom::fill(&mut buf)?;
+            Ok(u128::from_ne_bytes(buf))
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        pub fn get_random_u128() -> Result<u128, Result<u128, ()>> {
+            // WASM: fallback to a deterministic value or use JS random if needed
+            Ok(42)
         }
         if exit_requested {
             std::process::exit(0);
@@ -870,7 +908,15 @@ pub fn decode_key(k: egui::Key, shift: bool) -> Option<Key> {
     Some(c)
 }
 
+/// Stub for audio_setup on wasm32
+// #[cfg(target_arch = "wasm32")]
+// pub fn audio_setup(
+//     _data: [Arc<Mutex<varvara::StreamData>>; 4],
+// ) -> Option<()> {
+//     None
+// }
 /// Shared audio setup for Varvara audio streams
+// #[cfg(not(target_arch = "wasm32"))]
 pub fn audio_setup(
     data: [Arc<Mutex<varvara::StreamData>>; 4],
 ) -> Option<(cpal::Device, [cpal::Stream; 4])> {

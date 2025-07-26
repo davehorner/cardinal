@@ -9,7 +9,8 @@ use std::sync::mpsc;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Uint8Array;
 
-use crate::{audio_setup, Event, Stage};
+use crate::{Event, Stage};
+use cardinal_gui::uxn::audio_setup;
 use uxn::{Backend, Uxn, UxnRam};
 use varvara::Varvara;
 
@@ -52,6 +53,7 @@ pub fn run() -> Result<()> {
 
     let size @ (width, height) = dev.output(&vm).size;
     let options = eframe::WebOptions {
+        #[cfg(not(target_arch = "wasm32"))]
         max_size_points: egui::Vec2::new(width as f32, height as f32),
         ..eframe::WebOptions::default()
     };
@@ -181,12 +183,13 @@ pub fn run() -> Result<()> {
         .ok_or_else(|| anyhow!("could not find audio-check"))?
         .dyn_into::<web_sys::HtmlElement>()
         .map_err(|e| anyhow!("could not cast to HtmlElement: {e:?}"))?;
+    let document_for_audio = document.clone();
     let a = Closure::<dyn FnMut()>::new(move || {
         if let Some(d) = audio_data.take() {
             info!("setting up audio");
             _audio = audio_setup(d);
         }
-        let audio_check = document
+        let audio_check = document_for_audio
             .get_element_by_id("audio-check")
             .ok_or_else(|| anyhow!("could not find audio-check"))
             .unwrap()
@@ -205,11 +208,16 @@ pub fn run() -> Result<()> {
             .set_css_text(&format!("width: {width}px; height: {height}px"));
         footer.style().set_css_text(&format!("width: {width}px"));
     });
+    let canvas = document
+        .get_element_by_id("varvara")
+        .ok_or_else(|| anyhow!("could not find canvas element 'varvara'"))?
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .map_err(|e| anyhow!("could not cast to HtmlCanvasElement: {e:?}"))?;
 
     wasm_bindgen_futures::spawn_local(async move {
         eframe::WebRunner::new()
             .start(
-                "varvara",
+                canvas,
                 options,
                 Box::new(move |cc| {
                     let mut s = Box::new(Stage::new(
@@ -221,7 +229,7 @@ pub fn run() -> Result<()> {
                         &cc.egui_ctx,
                     ));
                     s.set_resize_callback(resize_closure);
-                    s
+                    Ok(s)
                 }),
             )
             .await

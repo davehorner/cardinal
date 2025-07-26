@@ -347,6 +347,8 @@ impl eframe::App for CardinalViewportsApp {
         // ...existing code...
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let options = eframe::NativeOptions::default();
     // --- External event loop pattern for monitor snarfing ---
@@ -379,4 +381,9 @@ fn main() {
         &event_loop,
     );
     event_loop.run_app(&mut app).expect("eframe app failed");
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    eprintln!("Cardinal Viewports is not supported on wasm32 targets.");
 }
