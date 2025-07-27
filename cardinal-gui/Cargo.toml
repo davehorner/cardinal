@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -27,8 +27,8 @@ serde_json = "1.0.141"
 tempfile = "3.20.0"
 #e_window = "0.1.13"
 reqwest = { version = "0.12.22", features = ["blocking", "json"] }
-#varvara = { package = "cardinal-varvara", version = "0.4.2" }
-varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
+varvara = { package = "cardinal-varvara", version = "0.4.3" }
+#varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap.workspace = true
@@ -48,11 +48,11 @@ winapi = { version = "0.3.9", features = ["winuser"] }
 
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-#uxn = { package = "cardinal-uxn", version = "0.4.1", features = ["native"] }
-uxn = { path = "../cardinal-uxn", features = [
-  "native",
-], package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.1", features = ["native"] }
+#uxn = { path = "../cardinal-uxn", features = [
+#  "native",
+#], package = "cardinal-uxn" }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-#uxn = { package = "cardinal-uxn", version = "0.4.1" }
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.1" }
+#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
