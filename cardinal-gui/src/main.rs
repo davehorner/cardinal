@@ -253,6 +253,12 @@ impl eframe::App for Stage<'_> {
                 buttons,
             };
             self.dev.mouse(&mut self.vm, m);
+            let m = varvara::TrackerState {
+                pos: self.cursor_pos.unwrap_or((0.0, 0.0)),
+                scroll: std::mem::take(&mut self.scroll),
+                buttons,
+            };
+            self.dev.tracker(&mut self.vm, m);
             i.time
         });
 

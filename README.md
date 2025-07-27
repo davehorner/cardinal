@@ -64,6 +64,7 @@ July 2025 Changes
 - refactor(deps): update to the latest and greatest 7/25 for all dependencies!
 - feat(cardinal-gui): add cardinal-demo binary with hot reload, inject, and rom cycling; cardinal-orcas binary added, wip.
 - wasm notice: cardinal-gui supports wasm.  the others do not.  PRs welcome.
+- [notes/02.duplicate_mouse_device](notes/02.duplicate_mouse_device/) demonstrate custom Tracker Mouse device.
 
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)
