@@ -167,6 +167,7 @@ use std::sync::{Arc, Mutex};
 use ::uxn::{Backend, Uxn};
 use varvara::Key;
 use varvara::MouseState;
+use varvara::TrackerState;
 use varvara::Varvara;
 /// UxnModule: Encapsulates a Uxn VM and its state for e_window
 pub struct UxnModule {
@@ -701,6 +702,15 @@ impl eframe::App for UxnApp<'_> {
                 buttons,
             };
             self.dev.mouse(&mut self.vm, m);
+            let m = TrackerState {
+                pos: self
+                    .cursor_pos
+                    .map(|(x, y)| (x + 16.0, y + 16.0))
+                    .unwrap_or((16.0, 16.0)),
+                scroll: std::mem::take(&mut self.scroll),
+                buttons,
+            };
+            self.dev.tracker(&mut self.vm, m);
             i.time
         });
         self.dev.audio(&mut self.vm);
