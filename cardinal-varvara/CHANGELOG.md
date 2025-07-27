@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.3...cardinal-varvara-v0.4.4) - 2025-07-27
+
+### Added
+
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+
 ## [0.4.3](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.2...cardinal-varvara-v0.4.3) - 2025-07-27
 
 ### Added

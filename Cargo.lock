@@ -351,8 +351,8 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1",
- "cardinal-varvara 0.4.3",
+ "cardinal-uxn 0.4.2",
+ "cardinal-varvara 0.4.4",
  "clap",
  "env_logger",
  "log",
@@ -363,8 +363,8 @@ name = "cardinal-gui"
 version = "0.3.4"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.1",
+ "cardinal-varvara 0.4.3",
  "clap",
  "cpal",
  "display-info",
@@ -387,13 +387,6 @@ dependencies = [
 [[package]]
 name = "cardinal-uxn"
 version = "0.4.1"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-uxn"
-version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eff1bf6215b5be399a95b4dd9c63c2ec9f0682d2bf272ffb54069b79c603d237"
 dependencies = [
@@ -401,14 +394,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "cardinal-varvara"
-version = "0.4.3"
+name = "cardinal-uxn"
+version = "0.4.2"
 dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono",
- "image",
- "log",
- "static_assertions",
  "zerocopy",
 ]
 
@@ -418,8 +406,20 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "759ef8b53a72ab0a0ec3d968f340b71ecd37d4be96cde65867afafff433acdba"
 dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.1",
  "chrono",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.4"
+dependencies = [
+ "cardinal-uxn 0.4.1",
+ "chrono",
+ "image",
  "log",
  "static_assertions",
  "zerocopy",
