@@ -4,7 +4,7 @@ members = [
     "cardinal-uxn",
     "cardinal-varvara",
     "cardinal-cli",
-    #"cardinal-gui",
+    "cardinal-gui",
 ]
 exclude = ["fuzz"]
 

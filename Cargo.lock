@@ -352,7 +352,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.4.1",
- "cardinal-varvara",
+ "cardinal-varvara 0.4.3",
  "clap",
  "env_logger",
  "log",
@@ -363,8 +363,8 @@ name = "cardinal-gui"
 version = "0.3.4"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1",
- "cardinal-varvara",
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "cpal",
  "display-info",
@@ -404,9 +404,22 @@ dependencies = [
 name = "cardinal-varvara"
 version = "0.4.3"
 dependencies = [
- "cardinal-uxn",
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "image",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "759ef8b53a72ab0a0ec3d968f340b71ecd37d4be96cde65867afafff433acdba"
+dependencies = [
+ "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
  "log",
  "static_assertions",
  "zerocopy",
@@ -909,7 +922,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1662,7 +1675,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.2",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -2667,7 +2680,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.60.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
