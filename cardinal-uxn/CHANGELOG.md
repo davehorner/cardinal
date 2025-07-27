@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.1...cardinal-uxn-v0.4.2) - 2025-07-27
+
+### Added
+
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+
 ## [0.4.1](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.0...cardinal-uxn-v0.4.1) - 2025-07-26
 
 ### Added
