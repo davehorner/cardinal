@@ -14,18 +14,18 @@ clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
 
-varvara = { package = "cardinal-varvara", version = "0.3.0" }
-#varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
+#varvara = { package = "cardinal-varvara", version = "0.3.0" }
+varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
- uxn = { package = "cardinal-uxn", version = "0.3.0", features = [
-   "native",
- ] }
-#uxn = { path = "../cardinal-uxn", features = [
-#  "native",
-#], package = "cardinal-uxn" }
+# uxn = { package = "cardinal-uxn", version = "0.3.0", features = [
+#   "native",
+# ] }
+uxn = { path = "../cardinal-uxn", features = [
+  "native",
+], package = "cardinal-uxn" }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.3.0" }
-#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+#uxn = { package = "cardinal-uxn", version = "0.3.0" }
+uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
 

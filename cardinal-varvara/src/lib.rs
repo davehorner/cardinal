@@ -13,6 +13,7 @@ mod file;
 mod mouse;
 mod screen;
 mod system;
+mod tracker;
 
 /// Audio handler implementation
 mod audio;
@@ -20,10 +21,10 @@ mod audio;
 pub use audio::set_sample_rate;
 pub use audio::StreamData;
 pub use audio::CHANNELS as AUDIO_CHANNELS;
+pub use console::spawn_worker as spawn_console_worker;
 pub use controller::Key;
 pub use mouse::MouseState;
-
-pub use console::spawn_worker as spawn_console_worker;
+pub use tracker::TrackerState;
 
 use uxn::{Device, Ports, Uxn};
 
@@ -119,7 +120,8 @@ pub struct Varvara {
     pub file: file::File,
     /// Controller device (keyboard input)
     pub controller: controller::Controller,
-
+    /// Tracker device (position, buttons, scroll)
+    pub tracker: tracker::Tracker,
     /// Flags indicating if we've already printed a warning about a missing dev
     pub already_warned: [bool; 16],
 }
@@ -138,6 +140,7 @@ impl Device for Varvara {
             datetime::DatetimePorts::BASE => self.datetime.deo(vm, target),
             screen::ScreenPorts::BASE => self.screen.deo(vm, target),
             mouse::MousePorts::BASE => self.mouse.set_active(),
+            tracker::TrackerPorts::BASE => self.tracker.set_active(),
             f if file::FilePorts::matches(f) => self.file.deo(vm, target),
             controller::ControllerPorts::BASE => (),
             a if audio::AudioPorts::matches(a) => self.audio.deo(vm, target),
@@ -154,6 +157,7 @@ impl Device for Varvara {
             datetime::DatetimePorts::BASE => self.datetime.dei(vm, target),
             screen::ScreenPorts::BASE => self.screen.dei(vm, target),
             mouse::MousePorts::BASE => self.mouse.set_active(),
+            tracker::TrackerPorts::BASE => self.tracker.set_active(),
             f if file::FilePorts::matches(f) => (),
             controller::ControllerPorts::BASE => (),
             a if audio::AudioPorts::matches(a) => self.audio.dei(vm, target),
@@ -176,7 +180,7 @@ impl Varvara {
             mouse: mouse::Mouse::new(),
             file: file::File::new(),
             controller: controller::Controller::new(),
-
+            tracker: tracker::Tracker::new(),
             already_warned: [false; 16],
         }
     }
@@ -193,6 +197,7 @@ impl Varvara {
         self.mouse = mouse::Mouse::new();
         self.file = file::File::new();
         self.controller = controller::Controller::new();
+        self.tracker = tracker::Tracker::new();
         self.already_warned.fill(false);
     }
 
@@ -297,6 +302,13 @@ impl Varvara {
             if let Some(e) = self.audio.update(vm, usize::from(i)) {
                 self.process_event(vm, e);
             }
+        }
+    }
+
+    /// Updates the tracker state
+    pub fn tracker(&mut self, vm: &mut Uxn, m: tracker::TrackerState) {
+        if let Some(e) = self.tracker.update(vm, m) {
+            self.process_event(vm, e);
         }
     }
 

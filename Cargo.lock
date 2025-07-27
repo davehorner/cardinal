@@ -351,8 +351,8 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.3.0",
- "cardinal-varvara 0.3.0",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "env_logger",
  "log",
@@ -363,8 +363,8 @@ name = "cardinal-gui"
 version = "0.3.3"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "cpal",
  "display-info",
@@ -386,39 +386,8 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5a784e6a5b9fef264cb16af8932d2f81f89353042d9dd409f0ffe2b2e1c1f3"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-uxn"
 version = "0.4.1"
 dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-uxn"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff1bf6215b5be399a95b4dd9c63c2ec9f0682d2bf272ffb54069b79c603d237"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5768c0b2ad85d135351bd852cf4f33a6c405c3db20779278108ffa5f49cc660"
-dependencies = [
- "cardinal-uxn 0.3.0",
- "chrono",
- "log",
- "static_assertions",
  "zerocopy",
 ]
 
@@ -426,22 +395,9 @@ dependencies = [
 name = "cardinal-varvara"
 version = "0.4.2"
 dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn",
  "chrono",
  "image",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7b4d262cc731aa30c075fa61cad65a8f9fec11115ae6b2e47c1d56bac37d92d"
-dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono",
  "log",
  "static_assertions",
  "zerocopy",
