@@ -48,11 +48,11 @@ winapi = { version = "0.3.9", features = ["winuser"] }
 
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-#uxn = { package = "cardinal-uxn", version = "0.4.1", features = ["native"] }
-uxn = { path = "../cardinal-uxn", features = [
-  "native",
-], package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.1", features = ["native"] }
+#uxn = { path = "../cardinal-uxn", features = [
+#  "native",
+#], package = "cardinal-uxn" }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-#uxn = { package = "cardinal-uxn", version = "0.4.1" }
-uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.1" }
+#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
