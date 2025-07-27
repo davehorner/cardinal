@@ -404,7 +404,7 @@ dependencies = [
 name = "cardinal-varvara"
 version = "0.4.3"
 dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn",
  "chrono",
  "image",
  "log",
