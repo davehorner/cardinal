@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.3...cardinal-gui-v0.3.4) - 2025-07-27
+
+### Added
+
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+
 ## [0.3.3](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.2...cardinal-gui-v0.3.3) - 2025-07-26
 
 ### Other
