@@ -1,6 +1,8 @@
+#[allow(unused_imports)]
 use anyhow::{anyhow, Result};
+#[allow(unused_imports)]
+use eframe::egui;
 use eframe::{
-    egui,
     wasm_bindgen::{closure::Closure, JsCast},
     web_sys,
 };

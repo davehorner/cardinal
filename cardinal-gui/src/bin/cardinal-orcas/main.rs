@@ -1,9 +1,10 @@
-//! Example: Cardinal Viewports
+//! Example: cardinal-orcas
 // Spawns animated viewport windows in N, S, W, E directions on key press.
 
+use cardinal_gui::uxn_panel;
 use eframe::egui;
-use egui::{ViewportBuilder, ViewportId};
-// use std::sync::Mutex; // No longer needed here
+use egui::{StrokeKind, ViewportBuilder, ViewportId}; // Import the UxnPanel module
+                                                     // use std::sync::Mutex; // No longer needed here
 mod monitor_info;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -44,10 +45,20 @@ struct CardinalViewport {
     movement: (f32, f32),
 }
 
-pub struct CardinalViewportsApp {
+pub struct CardinalViewportsApp<'a> {
     viewports: Vec<CardinalViewport>,
     collision_enabled: bool,
     wrap_mode: WrapMode,
+    uxn_panels: Option<Vec<uxn_panel::UxnPanel<'a>>>,
+    grid_cols: usize,
+    grid_rows: usize,
+    focused_panel: Option<usize>,
+    all_panels_receive_input: bool,
+    all_panels_receive_mouse: bool,
+    #[cfg(feature = "uses_usb")]
+    #[allow(dead_code)]
+    last_usb_pedal: Option<u8>,
+    pending_focus_panel: Option<usize>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -58,68 +69,88 @@ enum WrapMode {
     AllMonitorsGeometric,
 }
 
-impl Default for CardinalViewportsApp {
+impl<'a> Default for CardinalViewportsApp<'a> {
     fn default() -> Self {
+        let grid_cols = 2;
+        let grid_rows = 2;
         Self {
             viewports: Vec::new(),
             collision_enabled: true,
-            wrap_mode: WrapMode::MonitorOfSpawn,
+            wrap_mode: WrapMode::ParentRect,
+            uxn_panels: None,
+            grid_cols,
+            grid_rows,
+            focused_panel: Some(0), // Focus the first panel by default
+            all_panels_receive_input: false,
+            all_panels_receive_mouse: false,
+            #[cfg(feature = "uses_usb")]
+            last_usb_pedal: None,
+            pending_focus_panel: None,
         }
     }
 }
 
-impl eframe::App for CardinalViewportsApp {
+impl<'a> eframe::App for CardinalViewportsApp<'a> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // --- Ctrl+Q to exit the app ---
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Q)) {
+            std::process::exit(0); // not nice to do this, sorry
+        }
         // Listen for key presses and button clicks
         let mut spawn_direction: Option<Direction> = None;
         egui::TopBottomPanel::top("cardinal_controls_top").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("Cardinal Viewports Example");
-                ui.label("Press N, S, W, E or use the buttons below to spawn animated viewports in each direction.");
-            });
-            ui.horizontal(|ui| {
-                if ui.button("North").clicked() {
-                    spawn_direction = Some(Direction::North);
-                }
-                if ui.button("South").clicked() {
-                    spawn_direction = Some(Direction::South);
-                }
-                if ui.button("West").clicked() {
-                    spawn_direction = Some(Direction::West);
-                }
-                if ui.button("East").clicked() {
-                    spawn_direction = Some(Direction::East);
-                }
-                ui.separator();
-                ui.checkbox(&mut self.collision_enabled, "Collision Detection");
-                ui.separator();
-                egui::ComboBox::from_label("Wrap Mode")
-                    .selected_text(match self.wrap_mode {
-                        WrapMode::ParentRect => "Parent Rect",
-                        WrapMode::MonitorOfSpawn => "Monitor of Spawn",
-                        WrapMode::AllMonitorsSequential => "All Monitors (Sequential)",
-                        WrapMode::AllMonitorsGeometric => "All Monitors (Geometric)",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.wrap_mode, WrapMode::ParentRect, "Parent Rect");
-                        ui.selectable_value(&mut self.wrap_mode, WrapMode::MonitorOfSpawn, "Monitor of Spawn");
-                        ui.selectable_value(&mut self.wrap_mode, WrapMode::AllMonitorsSequential, "All Monitors (Sequential)");
-                        ui.selectable_value(&mut self.wrap_mode, WrapMode::AllMonitorsGeometric, "All Monitors (Geometric)");
-                    });
+            ui.scope(|ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("cardinal-orcas");
+                    ui.label("Press N, S, W, E or use the buttons below to spawn animated viewports in each direction.");
+                });
+                ui.horizontal(|ui| {
+                    if ui.add(egui::Button::new("North").frame(false)).clicked() {
+                        spawn_direction = Some(Direction::North);
+                    }
+                    if ui.add(egui::Button::new("South").frame(false)).clicked() {
+                        spawn_direction = Some(Direction::South);
+                    }
+                    if ui.add(egui::Button::new("West").frame(false)).clicked() {
+                        spawn_direction = Some(Direction::West);
+                    }
+                    if ui.add(egui::Button::new("East").frame(false)).clicked() {
+                        spawn_direction = Some(Direction::East);
+                    }
+                    ui.separator();
+                    ui.checkbox(&mut self.collision_enabled, "Collision Detection");
+                    ui.separator();
+                    egui::ComboBox::from_label("Wrap Mode")
+                        .selected_text(match self.wrap_mode {
+                            WrapMode::ParentRect => "Parent Rect",
+                            WrapMode::MonitorOfSpawn => "Monitor of Spawn",
+                            WrapMode::AllMonitorsSequential => "All Monitors (Sequential)",
+                            WrapMode::AllMonitorsGeometric => "All Monitors (Geometric)",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.wrap_mode, WrapMode::ParentRect, "Parent Rect");
+                            ui.selectable_value(&mut self.wrap_mode, WrapMode::MonitorOfSpawn, "Monitor of Spawn");
+                            ui.selectable_value(&mut self.wrap_mode, WrapMode::AllMonitorsSequential, "All Monitors (Sequential)");
+                            ui.selectable_value(&mut self.wrap_mode, WrapMode::AllMonitorsGeometric, "All Monitors (Geometric)");
+                        });
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.all_panels_receive_input, "All panels receive keyboard input");
+                    ui.checkbox(&mut self.all_panels_receive_mouse, "All panels receive mouse input");
+                });
             });
         });
 
         for key in [egui::Key::N, egui::Key::S, egui::Key::W, egui::Key::E] {
-            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)) {
+            if ctx.input(|i| i.key_pressed(key)) {
                 spawn_direction = Direction::from_key(key);
             }
         }
 
         if let Some(direction) = spawn_direction {
             if let Some(parent_rect) = ctx.input(|i| i.viewport().outer_rect) {
-                let monitor_rects: Vec<egui::Rect> = unsafe {
-                    monitor_info::MONITOR_RECTS.lock().unwrap().clone()
-                };
+                let monitor_rects: Vec<egui::Rect> =
+                    monitor_info::MONITOR_RECTS.lock().unwrap().clone();
                 let collision_radius = 100.0;
                 let (dx, dy) = direction.vector();
                 let start_pos = egui::pos2(
@@ -131,12 +162,12 @@ impl eframe::App for CardinalViewportsApp {
                     .find(|r| r.contains(start_pos))
                     .cloned()
                     .unwrap_or_else(|| {
-                        monitor_rects.get(0).cloned().unwrap_or(
+                        monitor_rects.first().cloned().unwrap_or_else(|| {
                             egui::Rect::from_min_size(
                                 egui::Pos2::ZERO,
                                 egui::Vec2::new(1920.0, 1080.0),
-                            ),
-                        )
+                            )
+                        })
                     });
                 self.viewports.push(CardinalViewport {
                     direction,
@@ -146,13 +177,42 @@ impl eframe::App for CardinalViewportsApp {
                     monitor_rect: spawn_monitor_rect,
                     movement: (dx, dy),
                 });
+                // After spawning, set focus to the first panel (if any) only if none is focused
+                if self.focused_panel.is_none() {
+                    self.focused_panel = Some(0);
+                }
+                // Defer egui focus request for the currently focused panel (if any)
+                if let Some(idx) = self.focused_panel {
+                    self.pending_focus_panel = Some(idx);
+                }
             }
+        }
+
+        // Handle Tab key for panel focus cycling
+        let input = ctx.input(|i| i.clone());
+        let tab_pressed = input.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key {
+                    key: egui::Key::Tab,
+                    pressed: true,
+                    ..
+                }
+            )
+        });
+        if tab_pressed {
+            let panel_count = self.grid_cols * self.grid_rows;
+            let next_panel = match self.focused_panel {
+                Some(idx) => (idx + 1) % panel_count,
+                None => 0,
+            };
+            self.focused_panel = Some(next_panel);
         }
 
         if let Some(parent_rect) = ctx.input(|i| i.viewport().outer_rect) {
             let monitor_rects =
                 monitor_info::MONITOR_RECTS.lock().unwrap().clone();
-            let all_monitors_rect = monitor_rects.iter().skip(1).fold(
+            let _all_monitors_rect = monitor_rects.iter().skip(1).fold(
                 monitor_rects.first().cloned().unwrap_or(
                     egui::Rect::from_min_size(
                         egui::Pos2::ZERO,
@@ -164,20 +224,20 @@ impl eframe::App for CardinalViewportsApp {
             // Debug: print monitor rects
             #[cfg(debug_assertions)]
             {
-                println!("[DEBUG] Monitor rects:");
-                for (idx, r) in monitor_rects.iter().enumerate() {
-                    println!(
-                        " {} Monitor {idx}: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1})",
-                        idx,
-                        r.min.x,
-                        r.min.y,
-                        r.max.x,
-                        r.max.y,
-                        r.width(),
-                        r.height()
-                    );
-                }
-                println!("[DEBUG] All monitors union: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1})", all_monitors_rect.min.x, all_monitors_rect.min.y, all_monitors_rect.max.x, all_monitors_rect.max.y, all_monitors_rect.width(), all_monitors_rect.height());
+                // println!("[DEBUG] Monitor rects:");
+                // for (idx, r) in monitor_rects.iter().enumerate() {
+                //     println!(
+                //         " {} Monitor {idx}: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1})",
+                //         idx,
+                //         r.min.x,
+                //         r.min.y,
+                //         r.max.x,
+                //         r.max.y,
+                //         r.width(),
+                //         r.height()
+                //     );
+                // }
+                // println!("[DEBUG] All monitors union: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1})", all_monitors_rect.min.x, all_monitors_rect.min.y, all_monitors_rect.max.x, all_monitors_rect.max.y, all_monitors_rect.width(), all_monitors_rect.height());
             }
             for (i, viewport) in self.viewports.iter_mut().enumerate() {
                 if !viewport.open {
@@ -258,7 +318,7 @@ impl eframe::App for CardinalViewportsApp {
                 };
                 #[cfg(debug_assertions)]
                 {
-                    println!("[DEBUG] Viewport {i} {:?} wrap_mode={:?} wrap_rect: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1}) pos=({:.1},{:.1})", viewport.direction, self.wrap_mode, wrap_rect.min.x, wrap_rect.min.y, wrap_rect.max.x, wrap_rect.max.y, wrap_rect.width(), wrap_rect.height(), viewport.position.x, viewport.position.y);
+                    // println!("[DEBUG] Viewport {i} {:?} wrap_mode={:?} wrap_rect: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1}) pos=({:.1},{:.1})", viewport.direction, self.wrap_mode, wrap_rect.min.x, wrap_rect.min.y, wrap_rect.max.x, wrap_rect.max.y, wrap_rect.width(), wrap_rect.height(), viewport.position.x, viewport.position.y);
                 }
                 if viewport.position.x < wrap_rect.left() {
                     viewport.position.x = wrap_rect.right();
@@ -328,6 +388,7 @@ impl eframe::App for CardinalViewportsApp {
                             });
                         } else {
                             egui::CentralPanel::default().show(ctx, |ui| {
+                                // Do not handle or draw focus for this viewport, making it non-focusable
                                 ui.vertical_centered(|ui| {
                                     let dir_char = match viewport.direction {
                                         Direction::North => "N",
@@ -344,13 +405,297 @@ impl eframe::App for CardinalViewportsApp {
             }
         }
 
+        // --- USB Pedal Polling and Debug Panel ---
+        #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+        {
+            // Try to poll pedal state from the first panel's controller if available
+            if let Some(uxn_panels) = self.uxn_panels.as_mut() {
+                if let Some(panel) = uxn_panels.get_mut(0) {
+                    if let Some(varvara_controller) = panel
+                        .stage
+                        .dev
+                        .controller
+                        .as_any()
+                        .downcast_mut::<varvara::controller_usb::ControllerUsb>(
+                        )
+                    {
+                        varvara_controller.poll_pedal_event();
+                        if let Some(pedal) = varvara_controller.last_pedal {
+                            self.last_usb_pedal = Some(pedal);
+                            // Map pedal bits to panel focus: bits 1,2,4,8 -> panels 0-3, 7 (all pressed) -> panel 4
+                            let pedal_bits = pedal & 0x0F;
+                            let new_focus = match pedal_bits {
+                                0x01 => Some(0),
+                                0x02 => Some(1),
+                                0x04 => Some(2),
+                                0x07 => Some(3),
+                                _ => self.focused_panel, // no change
+                            };
+                            if new_focus != self.focused_panel {
+                                println!("[DEBUG][pedal] pedal=0x{pedal:02X} -> focus panel {new_focus:?}");
+                                self.focused_panel = new_focus;
+                                // Also request egui focus for the newly focused panel
+                                if let Some(idx) = new_focus {
+                                    if let Some(uxn_panels) =
+                                        self.uxn_panels.as_mut()
+                                    {
+                                        if let Some(panel) = uxn_panels.get(idx)
+                                        {
+                                            let response_id =
+                                                panel.last_response_id();
+                                            ctx.memory_mut(|mem| {
+                                                mem.request_focus(response_id)
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Optionally print debug info
+                        // println!("[DEBUG][orcas] poll_pedal_event: changed={:?}, last_pedal={:?}", changed, varvara_controller.last_pedal);
+                    }
+                }
+            }
+            egui::TopBottomPanel::bottom("usb_pedal_debug").show(ctx, |ui| {
+                let panel_id_str = if let Some(idx) = self.focused_panel {
+                    if let Some(uxn_panels) = self.uxn_panels.as_ref() {
+                        if let Some(panel) = uxn_panels.get(idx) {
+                            format!("{:?}", panel.last_response_id())
+                        } else {
+                            "None".to_string()
+                        }
+                    } else {
+                        "None".to_string()
+                    }
+                } else {
+                    "None".to_string()
+                };
+                egui::CollapsingHeader::new(format!(
+                    "[USB] Last pedal event: state={:?} | Focused panel id: {panel_id_str}",
+                    self.last_usb_pedal
+                ))
+                .default_open(false)
+                .show(ui, |ui| {
+                    if let Some(pedal) = self.last_usb_pedal {
+                        ui.label(format!("[USB] Last pedal event: state=0x{pedal:02X}"));
+                    } else {
+                        ui.label("[USB] No pedal events received yet.");
+                    }
+                    ui.label(format!("[USB] Focused panel id: {panel_id_str}"));
+                });
+            });
+        }
+
+        // --- UxnPanel grid in main area ---
+        let mut panel_scale: f32 = 1.0;
+        let panel_size = (680, 456);
+        let panel_padding = 16.0;
+        const TOP_PANEL_HEIGHT: f32 = 64.0;
+        // Handle Ctrl++ and Ctrl+- for scaling
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Plus)) {
+            panel_scale *= 1.1;
+        }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Minus)) {
+            panel_scale /= 1.1;
+        }
+        // Clamp scale
+        panel_scale = panel_scale.clamp(0.5, 3.0);
+        // Calculate window size
+        let window_width = self.grid_cols as f32
+            * (panel_size.0 as f32 * panel_scale + panel_padding);
+        let window_height = self.grid_rows as f32
+            * (panel_size.1 as f32 * panel_scale + panel_padding)
+            + TOP_PANEL_HEIGHT;
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            window_width,
+            window_height,
+        )));
+        // Create panels if needed
+        if self.uxn_panels.is_none() {
+            let mut uxn_panels = Vec::new();
+            // Use embedded ROM and sym data
+            let rom_data = CARDINAL_ORCAS_ROM;
+            let sym_data = CARDINAL_ORCAS_SYM;
+            for i in 0..(self.grid_cols * self.grid_rows) {
+                let texture_name = format!("uxn_panel_texture_{i}");
+                let mut panel = uxn_panel::UxnPanel::new(
+                    ctx,
+                    None,
+                    panel_size,
+                    texture_name,
+                );
+                // Provide embedded ROM and sym data to the panel
+                panel.set_rom_bytes(rom_data);
+                panel.set_sym_bytes(sym_data);
+                panel.stage.scale = panel_scale;
+                uxn_panels.push(panel);
+            }
+            self.uxn_panels = Some(uxn_panels);
+        }
+        if let Some(uxn_panels) = self.uxn_panels.as_mut() {
+            for panel in uxn_panels.iter_mut() {
+                panel.stage.scale = panel_scale;
+            }
+            egui::CentralPanel::default().show(ctx, |ui| {
+                egui::Grid::new("uxn_grid").num_columns(self.grid_cols).show(ui, |ui| {
+                    let input = ctx.input(|i| i.clone());
+                    for (i, panel) in uxn_panels.iter_mut().enumerate() {
+                        let response = panel.show(ui);
+                        let is_focused = self.focused_panel == Some(i);
+                        let rect = response.rect;
+                        if is_focused {
+                            let painter = ui.painter();
+                            painter.rect_stroke(
+                                rect,
+                                egui::CornerRadius::same(4),
+                                egui::Stroke::new(3.0, egui::Color32::from_rgb(0, 120, 255)),
+                                StrokeKind::Middle,
+                            );
+                            // Always request egui focus for the focused panel
+                            response.request_focus();
+                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                        }
+                        if response.clicked() {
+                        println!("[DEBUG] Panel {i} clicked, requesting focus");
+                            self.focused_panel = Some(i);
+                            // Request egui focus for this panel
+                            response.request_focus();
+                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                        }
+                        // Filter input events: only the focused panel gets keyboard events unless all_panels_receive_input is true
+                        let filtered_input = if self.all_panels_receive_input || is_focused{
+                            input.clone()
+                        } else {
+                            let mut no_events = input.clone();
+                            no_events.events.clear();
+                            no_events
+                        };
+                        // If all_panels_receive_mouse is set, inject mouse state directly into the VM device for all panels
+                        let filtered_input = if self.all_panels_receive_mouse {
+                            // This panel is already getting all events, so use filtered_input as normal
+                            if self.all_panels_receive_input || is_focused {
+                                filtered_input
+                            } else {
+                                // Instead of injecting synthetic egui events, inject mouse state directly into the VM device below
+                                let pointer_pos = ctx.input(|i| i.pointer.latest_pos());
+                                if let Some(global_pos) = pointer_pos {
+                                    // Map global pointer position into this panel's rect
+                                    let local_x = (global_pos.x - rect.min.x).max(0.0).min(rect.width()) + rect.min.x;
+                                    let local_y = (global_pos.y - rect.min.y).max(0.0).min(rect.height()) + rect.min.y;
+                                    let local_pos = egui::Pos2::new(local_x, local_y);
+                                    // Get button state
+                                    let pointer = ctx.input(|i| i.pointer.clone());
+                                    let left = pointer.button_down(egui::PointerButton::Primary);
+                                    let right = pointer.button_down(egui::PointerButton::Secondary);
+                                    let middle = pointer.button_down(egui::PointerButton::Middle);
+                                    // Inject directly into the VM device (Varvara mouse)
+                                    let mut buttons = 0u8;
+                                    if left { buttons |= 1; }
+                                    if middle { buttons |= 2; }
+                                    if right { buttons |= 4; }
+                                    let mouse_state = varvara::MouseState {
+                                        pos: (local_pos.x, local_pos.y),
+                                        scroll: (0.0, 0.0),
+                                        buttons,
+                                    };
+                                    // Directly update the mouse state using panel.stage.vm and panel.stage.dev.mouse
+                                    panel.stage.dev.mouse.set_active();
+                                    panel.stage.dev.mouse.update(
+                                        &mut panel.stage.vm,
+                                        mouse_state
+                                    );
+                                }
+                                // Return filtered_input with no pointer events (so egui doesn't double-handle)
+                                let mut no_mouse = filtered_input.clone();
+                                no_mouse.events.retain(|e| !matches!(e, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_) | egui::Event::PointerGone));
+                                no_mouse
+                            }
+                        } else {
+                            filtered_input
+                        };
+                        if self.all_panels_receive_input || is_focused || self.all_panels_receive_mouse {
+                            // Print egui focus state for this panel (public info only)
+                            // let has_focus = response.has_focus();
+                            // Print all egui input events for this panel
+                            for event in &filtered_input.events {
+                                // Silence MouseMoved events in debug output
+                                if matches!(event, egui::Event::MouseMoved(_)) {
+                                    continue;
+                                }
+                                println!("[DEBUG] Panel {i} egui event: {event:?}");
+                                if let egui::Event::Text(s) = event {
+                                    println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
+                                }
+                            }
+                            panel.handle_input(&filtered_input, &response, rect);
+                            // Step the VM and update the texture so UI reflects input
+                            panel.stage.vm.run(&mut panel.stage.dev, 0x100);
+                            panel.stage.dev.redraw(&mut panel.stage.vm);
+                            panel.stage.update_texture();
+                        }
+                        if (i + 1) % self.grid_cols == 0 {
+                            ui.end_row();
+                        }
+                    }
+                });
+            });
+            // After all panels are shown, if a focus is pending, request it now
+            if let Some(idx) = self.pending_focus_panel.take() {
+                if let Some(panel) =
+                    self.uxn_panels.as_ref().and_then(|v| v.get(idx))
+                {
+                    let response_id = panel.last_response_id();
+                    ctx.memory_mut(|mem| mem.request_focus(response_id));
+                }
+            }
+        }
         // ...existing code...
     }
 }
 
+// Embed the ROM and .sym file as byte arrays
+const CARDINAL_ORCAS_ROM: &[u8] =
+    include_bytes!("../../../../roms/cardinal-orcas.rom");
+const CARDINAL_ORCAS_SYM: &[u8] =
+    include_bytes!("../../../../roms/cardinal-orcas.rom.sym");
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    let options = eframe::NativeOptions::default();
+    // Use grid size from app default
+    let app_default = CardinalViewportsApp::default();
+    let grid_cols = app_default.grid_cols;
+    let grid_rows = app_default.grid_rows;
+    let panel_size = (128, 128);
+    let panel_padding = 16.0; // padding around each panel for blue rectangle
+                              // top_panel_height is now defined as TOP_PANEL_HEIGHT constant above
+                              // Total width: (panel width + padding) * columns + extra padding
+    let window_width = grid_cols as f32 * (panel_size.0 as f32 + panel_padding)
+        + panel_padding;
+    // Total height: (panel height + padding) * rows + top panel height + extra padding
+    let window_height =
+        grid_rows as f32 * (panel_size.1 as f32) + panel_padding;
+    let window_size = egui::Vec2::new(window_width, window_height);
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size(window_size),
+        ..Default::default()
+    };
+    monitor_info::fill_monitor_rects();
+    #[cfg(debug_assertions)]
+    {
+        let rects = monitor_info::MONITOR_RECTS.lock().unwrap();
+        println!("[DEBUG] Filled MONITOR_RECTS: {} monitors", rects.len());
+        for (i, r) in rects.iter().enumerate() {
+            println!(
+                "  Monitor {i}: min=({:.1},{:.1}) max=({:.1},{:.1}) size=({:.1},{:.1})",
+                r.min.x,
+                r.min.y,
+                r.max.x,
+                r.max.y,
+                r.width(),
+                r.height()
+            );
+        }
+    }
     // --- External event loop pattern for monitor snarfing ---
     use eframe::UserEvent;
     use winit::event_loop::EventLoop;
@@ -375,7 +720,7 @@ fn main() {
         }
     }
     let mut app = eframe::create_native(
-        "Cardinal Viewports",
+        "cardinal-orcas",
         options,
         Box::new(|_cc| Ok(Box::new(CardinalViewportsApp::default()))),
         &event_loop,
@@ -385,5 +730,115 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    eprintln!("Cardinal Viewports is not supported on wasm32 targets.");
+    eprintln!("cardinal-orcas is not supported on wasm32 targets.");
+}
+// Map egui::Key and shift to Varvara::Key
+#[allow(dead_code)]
+fn decode_key(k: egui::Key, shift: bool) -> Option<varvara::Key> {
+    use varvara::Key;
+    let c = match (k, shift) {
+        (egui::Key::ArrowUp, _) => Key::Up,
+        (egui::Key::ArrowDown, _) => Key::Down,
+        (egui::Key::ArrowLeft, _) => Key::Left,
+        (egui::Key::ArrowRight, _) => Key::Right,
+        (egui::Key::Home, _) => Key::Home,
+        (egui::Key::Num0, false) => Key::Char(b'0'),
+        (egui::Key::Num0, true) => Key::Char(b')'),
+        (egui::Key::Num1, false) => Key::Char(b'1'),
+        (egui::Key::Num1, true) => Key::Char(b'!'),
+        (egui::Key::Num2, false) => Key::Char(b'2'),
+        (egui::Key::Num2, true) => Key::Char(b'@'),
+        (egui::Key::Num3, false) => Key::Char(b'3'),
+        (egui::Key::Num3, true) => Key::Char(b'#'),
+        (egui::Key::Num4, false) => Key::Char(b'4'),
+        (egui::Key::Num4, true) => Key::Char(b'$'),
+        (egui::Key::Num5, false) => Key::Char(b'5'),
+        (egui::Key::Num5, true) => Key::Char(b'%'),
+        (egui::Key::Num6, false) => Key::Char(b'6'),
+        (egui::Key::Num6, true) => Key::Char(b'^'),
+        (egui::Key::Num7, false) => Key::Char(b'7'),
+        (egui::Key::Num7, true) => Key::Char(b'&'),
+        (egui::Key::Num8, false) => Key::Char(b'8'),
+        (egui::Key::Num8, true) => Key::Char(b'*'),
+        (egui::Key::Num9, false) => Key::Char(b'9'),
+        (egui::Key::Num9, true) => Key::Char(b'('),
+        (egui::Key::A, false) => Key::Char(b'a'),
+        (egui::Key::A, true) => Key::Char(b'A'),
+        (egui::Key::B, false) => Key::Char(b'b'),
+        (egui::Key::B, true) => Key::Char(b'B'),
+        (egui::Key::C, false) => Key::Char(b'c'),
+        (egui::Key::C, true) => Key::Char(b'C'),
+        (egui::Key::D, false) => Key::Char(b'd'),
+        (egui::Key::D, true) => Key::Char(b'D'),
+        (egui::Key::E, false) => Key::Char(b'e'),
+        (egui::Key::E, true) => Key::Char(b'E'),
+        (egui::Key::F, false) => Key::Char(b'f'),
+        (egui::Key::F, true) => Key::Char(b'F'),
+        (egui::Key::G, false) => Key::Char(b'g'),
+        (egui::Key::G, true) => Key::Char(b'G'),
+        (egui::Key::H, false) => Key::Char(b'h'),
+        (egui::Key::H, true) => Key::Char(b'H'),
+        (egui::Key::I, false) => Key::Char(b'i'),
+        (egui::Key::I, true) => Key::Char(b'I'),
+        (egui::Key::J, false) => Key::Char(b'j'),
+        (egui::Key::J, true) => Key::Char(b'J'),
+        (egui::Key::K, false) => Key::Char(b'k'),
+        (egui::Key::K, true) => Key::Char(b'K'),
+        (egui::Key::L, false) => Key::Char(b'l'),
+        (egui::Key::L, true) => Key::Char(b'L'),
+        (egui::Key::M, false) => Key::Char(b'm'),
+        (egui::Key::M, true) => Key::Char(b'M'),
+        (egui::Key::N, false) => Key::Char(b'n'),
+        (egui::Key::N, true) => Key::Char(b'N'),
+        (egui::Key::O, false) => Key::Char(b'o'),
+        (egui::Key::O, true) => Key::Char(b'O'),
+        (egui::Key::P, false) => Key::Char(b'p'),
+        (egui::Key::P, true) => Key::Char(b'P'),
+        (egui::Key::Q, false) => Key::Char(b'q'),
+        (egui::Key::Q, true) => Key::Char(b'Q'),
+        (egui::Key::R, false) => Key::Char(b'r'),
+        (egui::Key::R, true) => Key::Char(b'R'),
+        (egui::Key::S, false) => Key::Char(b's'),
+        (egui::Key::S, true) => Key::Char(b'S'),
+        (egui::Key::T, false) => Key::Char(b't'),
+        (egui::Key::T, true) => Key::Char(b'T'),
+        (egui::Key::U, false) => Key::Char(b'u'),
+        (egui::Key::U, true) => Key::Char(b'U'),
+        (egui::Key::V, false) => Key::Char(b'v'),
+        (egui::Key::V, true) => Key::Char(b'V'),
+        (egui::Key::W, false) => Key::Char(b'w'),
+        (egui::Key::W, true) => Key::Char(b'W'),
+        (egui::Key::X, false) => Key::Char(b'x'),
+        (egui::Key::X, true) => Key::Char(b'X'),
+        (egui::Key::Y, false) => Key::Char(b'y'),
+        (egui::Key::Y, true) => Key::Char(b'Y'),
+        (egui::Key::Z, false) => Key::Char(b'z'),
+        (egui::Key::Z, true) => Key::Char(b'Z'),
+        (egui::Key::Backtick, false) => Key::Char(b'`'),
+        (egui::Key::Backtick, true) => Key::Char(b'~'),
+        (egui::Key::Backslash, _) => Key::Char(b'\\'),
+        (egui::Key::Pipe, _) => Key::Char(b'|'),
+        (egui::Key::Comma, false) => Key::Char(b','),
+        (egui::Key::Comma, true) => Key::Char(b'<'),
+        (egui::Key::Equals, _) => Key::Char(b'='),
+        (egui::Key::Plus, _) => Key::Char(b'+'),
+        (egui::Key::OpenBracket, false) => Key::Char(b'['),
+        (egui::Key::OpenBracket, true) => Key::Char(b'{'),
+        (egui::Key::Minus, false) => Key::Char(b'-'),
+        (egui::Key::Minus, true) => Key::Char(b'_'),
+        (egui::Key::Period, false) => Key::Char(b'.'),
+        (egui::Key::Period, true) => Key::Char(b'>'),
+        (egui::Key::CloseBracket, false) => Key::Char(b']'),
+        (egui::Key::CloseBracket, true) => Key::Char(b'}'),
+        (egui::Key::Semicolon, _) => Key::Char(b';'),
+        (egui::Key::Colon, _) => Key::Char(b':'),
+        (egui::Key::Slash, _) => Key::Char(b'/'),
+        (egui::Key::Questionmark, _) => Key::Char(b'?'),
+        (egui::Key::Space, _) => Key::Char(b' '),
+        (egui::Key::Tab, _) => Key::Char(b'\t'),
+        (egui::Key::Enter, _) => Key::Char(b'\r'),
+        (egui::Key::Backspace, _) => Key::Char(0x08),
+        _ => return None,
+    };
+    Some(c)
 }

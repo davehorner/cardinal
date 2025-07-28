@@ -34,8 +34,8 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-test
     - if: runner.os == 'Linux'
-      name: Install dependencies
-      run: sudo apt install libasound2-dev
+      name: Install  libudev-dev libxcb1-dev libasound2-dev
+      run: sudo apt-get update && sudo apt-get install -y  libudev-dev libxcb1-dev libasound2-dev
       shell: bash
     - name: Test
       run: cargo test --release --verbose
@@ -61,8 +61,9 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-clippy
     - if: runner.os == 'Linux'
-      name: Install dependencies
-      run: sudo apt install libasound2-dev
+      name: Install libudev-dev and libxcb1-dev
+      run: sudo apt-get update && sudo apt-get install -y libudev-dev libxcb1-dev libasound2-dev
+      shell: bash
     - name: Clippy
       run: cargo clippy --all-targets --verbose
   wasm:

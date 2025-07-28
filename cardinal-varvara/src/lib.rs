@@ -1,22 +1,29 @@
 //! The Varvara computer system
 #![warn(missing_docs)]
 use log::warn;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{self, Read};
 use std::{
     io::Write,
     sync::{Arc, Mutex},
 };
 
+/// Audio handler implementation
+mod audio;
 mod console;
-mod controller;
+/// Controller device and input handling for the Varvara system.
+pub mod controller;
+mod controller_device;
+/// USB controller device support for the Varvara system (enabled with the `uses_usb` feature).
+#[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+pub mod controller_usb;
 mod datetime;
 mod file;
 mod mouse;
 mod screen;
 mod system;
 mod tracker;
-
-/// Audio handler implementation
-mod audio;
 
 pub use audio::set_sample_rate;
 pub use audio::StreamData;
@@ -37,7 +44,7 @@ pub struct EventData {
 }
 
 /// Internal events, accumulated by devices then applied to the CPU
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Event {
     /// Tuple of `(address, value)` to write in in device memory
     pub data: Option<EventData>,
@@ -46,7 +53,7 @@ pub struct Event {
     pub vector: u16,
 }
 
-/// Output from [`Varvara::update`], which may modify the GUI
+/// Output from Varvara::update, which may modify the GUI
 pub struct Output<'a> {
     /// Current window size
     pub size: (u16, u16),
@@ -119,16 +126,36 @@ pub struct Varvara {
     /// File device (file I/O)
     pub file: file::File,
     /// Controller device (keyboard input)
-    pub controller: controller::Controller,
+    pub controller: Box<dyn controller::ControllerDevice>,
     /// Tracker device (position, buttons, scroll)
     pub tracker: tracker::Tracker,
     /// Flags indicating if we've already printed a warning about a missing dev
     pub already_warned: [bool; 16],
+    /// Use USB controller (only present if feature = "uses_usb")
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+    pub uses_usb: bool,
+    /// Optional symbol map for vector labels
+    pub symbols: Option<HashMap<u16, String>>,
+    /// Last processed vector for deduplication
+    pub last_vector: u16,
 }
 
 impl Default for Varvara {
     fn default() -> Self {
-        Self::new()
+        #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+        {
+            let mut v = Self::new(true);
+            v.symbols = None;
+            v.last_vector = 0;
+            v
+        }
+        #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
+        {
+            let mut v = Self::new();
+            v.symbols = None;
+            v.last_vector = 0;
+            v
+        }
     }
 }
 
@@ -169,7 +196,57 @@ impl Device for Varvara {
 }
 
 impl Varvara {
+    /// Loads a .sym file into the Varvara instance
+    pub fn load_symbols_into_self(
+        &mut self,
+        path: &str,
+    ) -> std::io::Result<()> {
+        let map = Self::load_symbols(path)?;
+        self.symbols = Some(map);
+        Ok(())
+    }
+
+    /// Looks up a label for a given vector address
+    pub fn vector_to_label(&self, vector: u16) -> &str {
+        if let Some(ref map) = self.symbols {
+            map.get(&vector).map(|s| s.as_str()).unwrap_or("unknown")
+        } else {
+            "unknown"
+        }
+    }
     /// Builds a new instance of the Varvara peripherals
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+    pub fn new(uses_usb: bool) -> Self {
+        let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
+            Box::new(controller_usb::ControllerUsb {
+                rx: controller_usb::spawn_usb_controller_thread(
+                    controller_usb::UsbDeviceConfig::default(),
+                ),
+                last_pedal: None,
+                controller: controller::Controller::default(),
+            })
+        } else {
+            Box::new(controller::Controller::default())
+        };
+        Self {
+            console: console::Console::new(),
+            system: system::System::new(),
+            datetime: datetime::Datetime,
+            audio: audio::Audio::new(),
+            screen: screen::Screen::new(),
+            mouse: mouse::Mouse::new(),
+            file: file::File::new(),
+            controller,
+            tracker: tracker::Tracker::new(),
+            already_warned: [false; 16],
+            uses_usb,
+            symbols: None,
+            last_vector: 0,
+        }
+    }
+
+    /// Builds a new instance of the Varvara peripherals (non-USB/wasm version).
+    #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
     pub fn new() -> Self {
         Self {
             console: console::Console::new(),
@@ -179,9 +256,11 @@ impl Varvara {
             screen: screen::Screen::new(),
             mouse: mouse::Mouse::new(),
             file: file::File::new(),
-            controller: controller::Controller::new(),
+            controller: Box::new(controller::Controller::default()),
             tracker: tracker::Tracker::new(),
             already_warned: [false; 16],
+            symbols: None,
+            last_vector: 0,
         }
     }
 
@@ -189,6 +268,7 @@ impl Varvara {
     ///
     /// Note that the audio stream handles are unchanged, so any audio worker
     /// threads can continue to run.
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn reset(&mut self, extra: &[u8]) {
         self.system.reset(extra);
         self.console = console::Console::new();
@@ -196,7 +276,34 @@ impl Varvara {
         self.screen = screen::Screen::new();
         self.mouse = mouse::Mouse::new();
         self.file = file::File::new();
-        self.controller = controller::Controller::new();
+        self.controller = if self.uses_usb {
+            Box::new(controller_usb::ControllerUsb {
+                rx: controller_usb::spawn_usb_controller_thread(
+                    controller_usb::UsbDeviceConfig::default(),
+                ),
+                last_pedal: None,
+                controller: controller::Controller::default(),
+            })
+        } else {
+            Box::new(controller::Controller::default())
+        };
+        self.tracker = tracker::Tracker::new();
+        self.already_warned.fill(false);
+    }
+
+    /// Resets the CPU, loading extra data into expansion memory.
+    ///
+    /// This method resets all peripherals and state, including system, console, audio, screen, mouse, file, controller, and tracker.
+    /// The `extra` parameter is loaded into expansion memory.
+    #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
+    pub fn reset(&mut self, extra: &[u8]) {
+        self.system.reset(extra);
+        self.console = console::Console::new();
+        self.audio.reset();
+        self.screen = screen::Screen::new();
+        self.mouse = mouse::Mouse::new();
+        self.file = file::File::new();
+        self.controller = Box::new(controller::Controller::default());
         self.tracker = tracker::Tracker::new();
         self.already_warned.fill(false);
     }
@@ -264,14 +371,23 @@ impl Varvara {
     }
 
     /// Send a character from the keyboard (controller) device
+    /// Send a character from the keyboard (controller) device
     pub fn char(&mut self, vm: &mut Uxn, k: u8) {
+        println!("Sending character: {k}");
         let e = self.controller.char(vm, k);
+        println!("Processing event: {e:?}");
         self.process_event(vm, e);
     }
 
     /// Press a key on the controller device
+    /// Press a key on the controller device
     pub fn pressed(&mut self, vm: &mut Uxn, k: Key, repeat: bool) {
-        if let Some(e) = self.controller.pressed(vm, k, repeat) {
+        // Only send pressed events for non-character keys
+        println!("Pressed key: {k:?}");
+        if let Key::Char(_) = k {
+            // Do nothing, character keys are handled by char()
+        } else if let Some(e) = self.controller.pressed(vm, k, repeat) {
+            println!("Processing event: {e:?}");
             self.process_event(vm, e);
         }
     }
@@ -317,12 +433,23 @@ impl Varvara {
     /// Events with an unassigned vector (i.e. 0) are ignored
     fn process_event(&mut self, vm: &mut Uxn, e: Event) {
         if e.vector != 0 {
+            let label = self.vector_to_label(e.vector);
+            if self.last_vector != e.vector {
+                println!("[VARVARA][process_event] vector: 0x{:04x} [{}], data: {:?}", e.vector, label, e.data);
+                self.last_vector = e.vector;
+            }
+
             if let Some(d) = e.data {
+                println!("[VARVARA][process_event] write_dev_mem addr: 0x{:02x}, value: 0x{:02x} ('{}')", d.addr, d.value, d.value as char);
                 vm.write_dev_mem(d.addr, d.value);
             }
             vm.run(self, e.vector);
             if let Some(d) = e.data {
                 if d.clear {
+                    println!(
+                        "[VARVARA][process_event] clear addr: 0x{:02x}",
+                        d.addr
+                    );
                     vm.write_dev_mem(d.addr, 0);
                 }
             }
@@ -337,5 +464,46 @@ impl Varvara {
     /// Sets the global mute flag for audio
     pub fn audio_set_muted(&mut self, m: bool) {
         self.audio.set_muted(m)
+    }
+
+    /// Loads a .sym file and returns a map of address -> label
+    pub fn load_symbols(path: &str) -> io::Result<HashMap<u16, String>> {
+        let mut file = File::open(path)?;
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf)?;
+        let mut map = HashMap::new();
+        let mut i = 0;
+        while i + 2 < buf.len() {
+            let addr = ((buf[i] as u16) << 8) | (buf[i + 1] as u16);
+            i += 2;
+            let mut end = i;
+            while end < buf.len() && buf[end] != 0 {
+                end += 1;
+            }
+            let label = String::from_utf8_lossy(&buf[i..end]).to_string();
+            map.insert(addr, label);
+            i = end + 1;
+        }
+        Ok(map)
+    }
+
+    /// Parse a .sym file from a byte slice and return a map of address -> label
+    pub fn parse_symbols_from_bytes(
+        data: &[u8],
+    ) -> std::io::Result<std::collections::HashMap<u16, String>> {
+        let mut map = std::collections::HashMap::new();
+        let mut i = 0;
+        while i + 2 < data.len() {
+            let addr = ((data[i] as u16) << 8) | (data[i + 1] as u16);
+            i += 2;
+            let mut end = i;
+            while end < data.len() && data[end] != 0 {
+                end += 1;
+            }
+            let label = String::from_utf8_lossy(&data[i..end]).to_string();
+            map.insert(addr, label);
+            i = end + 1;
+        }
+        Ok(map)
     }
 }

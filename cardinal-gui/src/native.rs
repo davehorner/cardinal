@@ -59,7 +59,8 @@ pub fn run() -> Result<()> {
             Backend::Interpreter
         },
     );
-    let mut dev = Varvara::new();
+    let mut dev = Varvara::default();
+
     let extra = vm.reset(&rom);
     dev.reset(extra);
     dev.init_args(&mut vm, &args.args);

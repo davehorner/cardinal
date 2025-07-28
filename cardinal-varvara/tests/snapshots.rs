@@ -12,7 +12,7 @@ struct Snapshot {
 fn get_snapshot(rom: &[u8]) -> Result<Snapshot, std::io::Error> {
     let mut ram = UxnRam::new();
     let mut vm = Uxn::new(&mut ram, Backend::Interpreter);
-    let mut dev = Varvara::new();
+    let mut dev = Varvara::default();
     let data = vm.reset(rom);
     dev.reset(data);
     vm.run(&mut dev, 0x100); // init vector

@@ -87,9 +87,23 @@ impl<'a> Stage<'a> {
         let data = self.vm.reset(data);
         self.dev.reset(data);
         self.vm.run(&mut self.dev, 0x100);
+        // Try to load .sym file if ROM was loaded from a file
+        if let Some(path) = self.get_last_rom_path() {
+            let sym_path = path.with_extension("sym");
+            if sym_path.exists() {
+                let _ =
+                    self.dev.load_symbols_into_self(sym_path.to_str().unwrap());
+            }
+        }
         let out = self.dev.output(&self.vm);
         out.check()?;
         Ok(())
+    }
+
+    // Helper to get the last ROM path if available (for symbol loading)
+    fn get_last_rom_path(&self) -> Option<std::path::PathBuf> {
+        // This is a placeholder. You may want to store the last ROM path in the struct for more robust behavior.
+        None
     }
 }
 
@@ -152,6 +166,13 @@ impl eframe::App for Stage<'_> {
                                 self.dev.char(&mut self.vm, c);
                             }
                         }
+                        //                         for c in s.chars() {
+                        //     // Only send printable ASCII (or adjust as needed for your ROM)
+                        //     if c.is_ascii_graphic() || c == ' ' {
+                        //         let byte = c as u8;
+                        //         self.dev.char(&mut self.vm, byte);
+                        //     }
+                        // }
                     }
                     egui::Event::Key {
                         key,
