@@ -23,7 +23,7 @@ pub fn build_orca_inject_queue(
     let mut max_len = 0;
     if let Ok(file) = File::open(file_path) {
         let reader = BufReader::new(file);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             let chars: Vec<char> = line.chars().collect();
             max_len = max_len.max(chars.len());
             lines.push(chars);
@@ -48,9 +48,8 @@ pub fn build_orca_inject_queue(
     queue.push_back(InjectEvent::KeyPress(CTRL_H));
     queue.push_back(InjectEvent::KeyRelease(CTRL_H));
     // Visit all non '.' cells efficiently (row-major order)
-    for r in 0..rows + 2 {
-        for c in 0..cols + 2 {
-            let ch = grid[r][c];
+    for (r, row) in grid.iter().enumerate().take(rows + 2) {
+        for (c, &ch) in row.iter().enumerate().take(cols + 2) {
             if ch != '.' {
                 // Move to (r,c)
                 let dr = r as isize - cur_row as isize;
@@ -86,7 +85,7 @@ pub fn build_orca_inject_queue(
                 // If this is a border '/' (not top/bottom), write hex x,y to the right
                 if ch == '/' && r != 0 && r != rows + 1 {
                     // x = c, y = r
-                    let hex = format!("{:02X}{:02X}", c, r);
+                    let hex = format!("{c:02X}{r:02X}");
                     for b in hex.bytes() {
                         queue.push_back(InjectEvent::Char(b));
                     }
@@ -109,6 +108,7 @@ pub enum InjectEvent {
 }
 // uxn.rs - Uxn integration for e_window
 
+#[allow(clippy::module_inception)]
 pub mod uxn {
 
     use std::path::Path;
@@ -126,6 +126,7 @@ pub mod uxn {
         pub fn new(rom_path: Option<&Path>) -> Result<Self, String> {
             // Use a static RAM buffer for the Uxn VM
             static mut RAM: [u8; 65536] = [0; 65536];
+            #[allow(static_mut_refs)]
             let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
             let mut uxn = Uxn::new(ram, Backend::Interpreter);
             let varvara = Varvara::default();
@@ -180,6 +181,7 @@ impl UxnModule {
     pub fn new(rom_path: Option<&Path>) -> Result<Self, String> {
         // Use a static RAM buffer for the Uxn VM
         static mut RAM: [u8; 65536] = [0; 65536];
+        #[allow(static_mut_refs)]
         let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
         let mut uxn = Uxn::new(ram, Backend::Interpreter);
         let varvara = Varvara::default();
@@ -258,18 +260,33 @@ pub struct UxnApp<'a> {
     /// Parallel to auto_roms: labels or filenames for each ROM
     auto_rom_labels: Vec<String>,
     /// Callback for when the ROM changes (filename or label)
+    #[allow(clippy::type_complexity)]
     on_rom_change: Option<Box<dyn Fn(&str) + Send + Sync>>,
     /// Callback for first update/frame (for deferred actions)
+    #[allow(clippy::type_complexity)]
     on_first_update: Option<Box<dyn FnOnce(&mut UxnApp<'a>) + Send + 'a>>,
     first_update_done: bool,
     /// The current ROM label or filename (if available)
     current_rom_label: Option<String>,
     /// Queue for deferred input events (for orca injection)
     input_queue: std::collections::VecDeque<InjectEvent>,
+    /// The last ROM file path loaded (if any)
+    last_rom_path: Option<std::path::PathBuf>,
     // --- Hot-reload support ---
     pub reload_rx: std::sync::mpsc::Receiver<()>,
     pub rom_path_arc:
         std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>,
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+    pub usb_controller: Option<UsbControllerHandle>,
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+    pub last_usb_event: Option<(u8, Vec<u8>)>, // (pedal_state, raw data)
+}
+
+#[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+pub struct UsbControllerHandle {
+    pub rx: std::sync::mpsc::Receiver<
+        varvara::controller_usb::UsbControllerMessage,
+    >,
 }
 
 impl<'a> UxnApp<'a> {
@@ -285,6 +302,7 @@ impl<'a> UxnApp<'a> {
     pub fn set_rom_label<S: Into<String>>(&mut self, label: S) {
         self.current_rom_label = Some(label.into());
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_mode(
         mut vm: Uxn<'a>,
         mut dev: Varvara,
@@ -306,8 +324,8 @@ impl<'a> UxnApp<'a> {
 
         dev.redraw(&mut vm);
 
-        let w = usize::from(2048 as usize); //size.0);
-        let h = usize::from(2048 as usize);
+        let w = 2048_usize; //size.0);
+        let h = 2048_usize;
         size.0 = w as u16;
         size.1 = h as u16;
         let image =
@@ -363,6 +381,11 @@ impl<'a> UxnApp<'a> {
             input_queue: std::collections::VecDeque::new(),
             reload_rx,
             rom_path_arc,
+            last_rom_path: None,
+            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+            usb_controller: None,
+            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+            last_usb_event: None,
         }
     }
     /// Set a callback to be called when the ROM changes (filename or label)
@@ -396,20 +419,46 @@ impl<'a> UxnApp<'a> {
         self.resized = Some(f);
     }
 
+    /// Load a ROM from a file path, tracking the file path for symbol support
+    pub fn load_rom_with_path<P: AsRef<std::path::Path>>(
+        &mut self,
+        path: P,
+    ) -> anyhow::Result<()> {
+        let path = path.as_ref();
+        let data = std::fs::read(path)?;
+        self.last_rom_path = Some(path.to_path_buf());
+        let _ = self.vm.reset(&data);
+        self.dev.reset(&data);
+        self.vm.run(&mut self.dev, 0x100);
+        // Try to load .sym file if ROM was loaded from a file
+        let sym_path = path.with_extension("sym");
+        if sym_path.exists() {
+            let _ = self.dev.load_symbols_into_self(sym_path.to_str().unwrap());
+        }
+        // Optionally update the ROM label
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            self.set_rom_label(name);
+        }
+        let out = self.dev.output(&self.vm);
+        out.check()?;
+        Ok(())
+    }
+
+    /// Backward-compatible load_rom for in-memory loads (no file path)
     fn load_rom(&mut self, data: &[u8]) -> anyhow::Result<()> {
-        let data = self.vm.reset(data);
+        self.last_rom_path = None;
+        let _ = self.vm.reset(data);
         self.dev.reset(data);
         self.vm.run(&mut self.dev, 0x100);
         let out = self.dev.output(&self.vm);
         out.check()?;
-        // Try to get a label from dev, fallback to current_rom_label or unknown
-        let label =
-            self.current_rom_label.as_deref().unwrap_or("[unknown ROM]");
-        if let Some(cb) = &self.on_rom_change {
-            cb(label);
-        }
         Ok(())
     }
+
+    // Helper to get the last ROM path if available (for symbol loading)
+    // fn get_last_rom_path(&self) -> Option<std::path::PathBuf> {
+    //     self.last_rom_path.clone()
+    // }
 
     /// Queue a sequence of input events to be sent per frame
     pub fn queue_input<I: IntoIterator<Item = InjectEvent>>(
@@ -431,10 +480,7 @@ impl eframe::App for UxnApp<'_> {
                     path.display()
                 );
                 if let Err(e) = self.reload_rom(path) {
-                    eprintln!(
-                        "[ROM WATCHER] Failed to reload ROM in app: {}",
-                        e
-                    );
+                    eprintln!("[ROM WATCHER] Failed to reload ROM in app: {e}");
                 } else {
                     println!("[ROM WATCHER] ROM reloaded in app successfully.");
                 }
@@ -470,63 +516,60 @@ impl eframe::App for UxnApp<'_> {
         static mut LAST_CTRL_R: Option<std::time::Instant> = None;
         let mut exit_requested = false;
         for event in ctx.input(|i| i.events.clone()) {
-            match event {
-                egui::Event::Key { key, pressed, .. } => {
-                    if key == egui::Key::C
-                        && ctx.input(|i| i.modifiers.ctrl)
-                        && pressed
-                    {
-                        exit_requested = true;
-                    }
-                    if key == egui::Key::R
-                        && ctx.input(|i| i.modifiers.ctrl)
-                        && pressed
-                    {
-                        let now = std::time::Instant::now();
-                        let last = unsafe { LAST_CTRL_R };
-                        let allow = match last {
-                            Some(t) => now.duration_since(t).as_millis() > 500,
-                            None => true,
-                        };
-                        if allow {
-                            unsafe {
-                                LAST_CTRL_R = Some(now);
+            if let egui::Event::Key { key, pressed, .. } = event {
+                if key == egui::Key::C
+                    && ctx.input(|i| i.modifiers.ctrl)
+                    && pressed
+                {
+                    exit_requested = true;
+                }
+                if key == egui::Key::R
+                    && ctx.input(|i| i.modifiers.ctrl)
+                    && pressed
+                {
+                    let now = std::time::Instant::now();
+                    let last = unsafe { LAST_CTRL_R };
+                    let allow = match last {
+                        Some(t) => now.duration_since(t).as_millis() > 500,
+                        None => true,
+                    };
+                    if allow {
+                        unsafe {
+                            LAST_CTRL_R = Some(now);
+                        }
+                        if !files.is_empty() {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                // On wasm, just cycle sequentially through the files
+                                static mut LAST_IDX: usize = 0;
+                                let idx = unsafe {
+                                    let i = LAST_IDX;
+                                    LAST_IDX = (LAST_IDX + 1) % files.len();
+                                    i
+                                };
+                                let random_file = &files[idx];
+                                let queue = build_orca_inject_queue(
+                                    random_file.to_str().unwrap(),
+                                );
+                                self.queue_input(queue);
                             }
-                            if !files.is_empty() {
-                                #[cfg(target_arch = "wasm32")]
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                // On native, pick a random file
+                                if let Ok(idx) = get_random_u128()
+                                    .map(|v| (v as usize) % files.len())
                                 {
-                                    // On wasm, just cycle sequentially through the files
-                                    static mut LAST_IDX: usize = 0;
-                                    let idx = unsafe {
-                                        let i = LAST_IDX;
-                                        LAST_IDX = (LAST_IDX + 1) % files.len();
-                                        i
-                                    };
+                                    let idx: usize = idx;
                                     let random_file = &files[idx];
                                     let queue = build_orca_inject_queue(
                                         random_file.to_str().unwrap(),
                                     );
                                     self.queue_input(queue);
                                 }
-                                #[cfg(not(target_arch = "wasm32"))]
-                                {
-                                    // On native, pick a random file
-                                    if let Ok(idx) = get_random_u128()
-                                        .map(|v| (v as usize) % files.len())
-                                    {
-                                        let idx: usize = idx;
-                                        let random_file = &files[idx];
-                                        let queue = build_orca_inject_queue(
-                                            random_file.to_str().unwrap(),
-                                        );
-                                        self.queue_input(queue);
-                                    }
-                                }
                             }
                         }
                     }
                 }
-                _ => {}
             }
         }
 
@@ -539,6 +582,7 @@ impl eframe::App for UxnApp<'_> {
         }
 
         #[cfg(target_arch = "wasm32")]
+        #[allow(dead_code)]
         pub fn get_random_u128() -> Result<u128, Result<u128, ()>> {
             // WASM: fallback to a deterministic value or use JS random if needed
             Ok(42)
@@ -614,6 +658,56 @@ impl eframe::App for UxnApp<'_> {
                 }
             }
         }
+        if let Some(ref mut varvara_controller) =
+            self.dev
+                .controller
+                .as_any()
+                .downcast_mut::<varvara::controller::Controller>()
+        {
+            // Example pedal event mapping (replace with your actual pedal state logic)
+            // Assume pedal_state is a u8 bitmask from your input source
+            let pedal_state: u8 = 0; // TODO: get real pedal state
+            static mut PREV_PEDAL: u8 = 0;
+            let _prev;
+            unsafe {
+                _prev = PREV_PEDAL;
+                PREV_PEDAL = pedal_state;
+            }
+            // Use canonical helper from varvara::controller
+            varvara::controller::inject_pedal_keys(
+                varvara_controller,
+                &mut self.vm,
+                _prev,
+                pedal_state,
+            );
+        }
+        #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+        if let Some(ref mut varvara_controller) =
+            self.dev
+                .controller
+                .as_any()
+                .downcast_mut::<varvara::controller_usb::ControllerUsb>()
+        {
+            // Poll pedal event and inject mapped key events into the VM
+
+            static mut PREV_PEDAL: u8 = 0;
+            varvara_controller.poll_pedal_event();
+            println!(
+                "[DEBUG][poll_pedal_event] called, changed=(), last_pedal={:?}",
+                varvara_controller.last_pedal
+            );
+            if let Some(pedal) = varvara_controller.last_pedal {
+                // Update last_usb_event for debug panel
+                self.last_usb_event = Some((pedal, vec![]));
+                let _prev;
+                unsafe {
+                    _prev = PREV_PEDAL;
+                    PREV_PEDAL = pedal;
+                }
+                // Use shared controller pedal key injection logic
+                // Controller::inject_pedal_keys(&mut self.vm, prev, pedal);
+            }
+        }
 
         ctx.request_repaint();
         ctx.input(|i| {
@@ -624,10 +718,8 @@ impl eframe::App for UxnApp<'_> {
             if i.raw.dropped_files.len() == 1 {
                 let target = &i.raw.dropped_files[0];
                 let r = if let Some(path) = &target.path {
-                    let data =
-                        std::fs::read(path).expect("failed to read file");
-                    info!("loading {} bytes from {path:?}", data.len());
-                    self.load_rom(&data)
+                    info!("loading ROM from {path:?}");
+                    self.load_rom_with_path(path)
                 } else if let Some(data) = &target.bytes {
                     self.load_rom(data)
                 } else {
@@ -641,14 +733,8 @@ impl eframe::App for UxnApp<'_> {
             for e in i.events.iter() {
                 match e {
                     egui::Event::Text(s) => {
-                        const RAW_CHARS: [u8; 16] = [
-                            b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*',
-                            b'&', b'^', b'%', b'$', b'#', b'@', b'!', b'~',
-                        ];
                         for c in s.bytes() {
-                            if RAW_CHARS.contains(&c) {
-                                self.dev.char(&mut self.vm, c);
-                            }
+                            self.dev.char(&mut self.vm, c);
                         }
                     }
                     egui::Event::Key {
@@ -665,10 +751,6 @@ impl eframe::App for UxnApp<'_> {
                             }
                         }
                     }
-                    // egui::Event::ScrollDelta(s) => {
-                    //     self.scroll.0 += s.x;
-                    //     self.scroll.1 -= s.y;
-                    // }
                     _ => (),
                 }
             }
@@ -791,6 +873,15 @@ impl eframe::App for UxnApp<'_> {
                     egui::Color32::WHITE,
                 );
                 ui.painter().add(egui::Shape::mesh(mesh));
+                // --- USB Debug Panel ---
+                #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+                egui::CollapsingHeader::new("USB Pedal Debug").default_open(true).show(ui, |ui| {
+                    if let Some((pedal_state, ref data)) = self.last_usb_event {
+                        ui.label(format!("[USB] Last pedal event: state=0x{pedal_state:02X}, data={data:?}"));
+                    } else {
+                        ui.label("[USB] No pedal events received yet.");
+                    }
+                });
                 // Show auto ROM cycling info
                 if self.auto_rom_select && !self.auto_roms.is_empty() {
                     ui.label(format!(
@@ -804,111 +895,110 @@ impl eframe::App for UxnApp<'_> {
 }
 
 pub fn decode_key(k: egui::Key, shift: bool) -> Option<Key> {
-    let c = match (k, shift) {
-        (egui::Key::ArrowUp, _) => Key::Up,
-        (egui::Key::ArrowDown, _) => Key::Down,
-        (egui::Key::ArrowLeft, _) => Key::Left,
-        (egui::Key::ArrowRight, _) => Key::Right,
-        (egui::Key::Home, _) => Key::Home,
-        (egui::Key::Num0, false) => Key::Char(b'0'),
-        (egui::Key::Num0, true) => Key::Char(b')'),
-        (egui::Key::Num1, false) => Key::Char(b'1'),
-        (egui::Key::Num1, true) => Key::Char(b'!'),
-        (egui::Key::Num2, false) => Key::Char(b'2'),
-        (egui::Key::Num2, true) => Key::Char(b'@'),
-        (egui::Key::Num3, false) => Key::Char(b'3'),
-        (egui::Key::Num3, true) => Key::Char(b'#'),
-        (egui::Key::Num4, false) => Key::Char(b'4'),
-        (egui::Key::Num4, true) => Key::Char(b'$'),
-        (egui::Key::Num5, false) => Key::Char(b'5'),
-        (egui::Key::Num5, true) => Key::Char(b'5'),
-        (egui::Key::Num6, false) => Key::Char(b'6'),
-        (egui::Key::Num6, true) => Key::Char(b'^'),
-        (egui::Key::Num7, false) => Key::Char(b'7'),
-        (egui::Key::Num7, true) => Key::Char(b'&'),
-        (egui::Key::Num8, false) => Key::Char(b'8'),
-        (egui::Key::Num8, true) => Key::Char(b'*'),
-        (egui::Key::Num9, false) => Key::Char(b'9'),
-        (egui::Key::Num9, true) => Key::Char(b'('),
-        (egui::Key::A, false) => Key::Char(b'a'),
-        (egui::Key::A, true) => Key::Char(b'A'),
-        (egui::Key::B, false) => Key::Char(b'b'),
-        (egui::Key::B, true) => Key::Char(b'B'),
-        (egui::Key::C, false) => Key::Char(b'c'),
-        (egui::Key::C, true) => Key::Char(b'C'),
-        (egui::Key::D, false) => Key::Char(b'd'),
-        (egui::Key::D, true) => Key::Char(b'D'),
-        (egui::Key::E, false) => Key::Char(b'e'),
-        (egui::Key::E, true) => Key::Char(b'E'),
-        (egui::Key::F, false) => Key::Char(b'f'),
-        (egui::Key::F, true) => Key::Char(b'F'),
-        (egui::Key::G, false) => Key::Char(b'g'),
-        (egui::Key::G, true) => Key::Char(b'G'),
-        (egui::Key::H, false) => Key::Char(b'h'),
-        (egui::Key::H, true) => Key::Char(b'H'),
-        (egui::Key::I, false) => Key::Char(b'i'),
-        (egui::Key::I, true) => Key::Char(b'I'),
-        (egui::Key::J, false) => Key::Char(b'j'),
-        (egui::Key::J, true) => Key::Char(b'J'),
-        (egui::Key::K, false) => Key::Char(b'k'),
-        (egui::Key::K, true) => Key::Char(b'K'),
-        (egui::Key::L, false) => Key::Char(b'l'),
-        (egui::Key::L, true) => Key::Char(b'L'),
-        (egui::Key::M, false) => Key::Char(b'm'),
-        (egui::Key::M, true) => Key::Char(b'M'),
-        (egui::Key::N, false) => Key::Char(b'n'),
-        (egui::Key::N, true) => Key::Char(b'N'),
-        (egui::Key::O, false) => Key::Char(b'o'),
-        (egui::Key::O, true) => Key::Char(b'O'),
-        (egui::Key::P, false) => Key::Char(b'p'),
-        (egui::Key::P, true) => Key::Char(b'P'),
-        (egui::Key::Q, false) => Key::Char(b'q'),
-        (egui::Key::Q, true) => Key::Char(b'Q'),
-        (egui::Key::R, false) => Key::Char(b'r'),
-        (egui::Key::R, true) => Key::Char(b'R'),
-        (egui::Key::S, false) => Key::Char(b's'),
-        (egui::Key::S, true) => Key::Char(b'S'),
-        (egui::Key::T, false) => Key::Char(b't'),
-        (egui::Key::T, true) => Key::Char(b'T'),
-        (egui::Key::U, false) => Key::Char(b'u'),
-        (egui::Key::U, true) => Key::Char(b'U'),
-        (egui::Key::V, false) => Key::Char(b'v'),
-        (egui::Key::V, true) => Key::Char(b'V'),
-        (egui::Key::W, false) => Key::Char(b'w'),
-        (egui::Key::W, true) => Key::Char(b'W'),
-        (egui::Key::X, false) => Key::Char(b'x'),
-        (egui::Key::X, true) => Key::Char(b'X'),
-        (egui::Key::Y, false) => Key::Char(b'y'),
-        (egui::Key::Y, true) => Key::Char(b'Y'),
-        (egui::Key::Z, false) => Key::Char(b'z'),
-        (egui::Key::Z, true) => Key::Char(b'Z'),
-        (egui::Key::Backtick, false) => Key::Char(b'`'),
-        (egui::Key::Backtick, true) => Key::Char(b'~'),
-        (egui::Key::Backslash, _) => Key::Char(b'\\'),
-        (egui::Key::Pipe, _) => Key::Char(b'|'),
-        (egui::Key::Comma, false) => Key::Char(b','),
-        (egui::Key::Comma, true) => Key::Char(b'<'),
-        (egui::Key::Equals, _) => Key::Char(b'='),
-        (egui::Key::Plus, _) => Key::Char(b'+'),
-        (egui::Key::OpenBracket, false) => Key::Char(b'['),
-        (egui::Key::OpenBracket, true) => Key::Char(b'{'),
-        (egui::Key::Minus, false) => Key::Char(b'-'),
-        (egui::Key::Minus, true) => Key::Char(b'_'),
-        (egui::Key::Period, false) => Key::Char(b'.'),
-        (egui::Key::Period, true) => Key::Char(b'>'),
-        (egui::Key::CloseBracket, false) => Key::Char(b']'),
-        (egui::Key::CloseBracket, true) => Key::Char(b'}'),
-        (egui::Key::Semicolon, _) => Key::Char(b';'),
-        (egui::Key::Colon, _) => Key::Char(b':'),
-        (egui::Key::Slash, _) => Key::Char(b'/'),
-        (egui::Key::Questionmark, _) => Key::Char(b'?'),
-        (egui::Key::Space, _) => Key::Char(b' '),
-        (egui::Key::Tab, _) => Key::Char(b'\t'),
-        (egui::Key::Enter, _) => Key::Char(b'\r'),
-        (egui::Key::Backspace, _) => Key::Char(0x08),
-        _ => return None,
-    };
-    Some(c)
+    match (k, shift) {
+        (egui::Key::ArrowUp, _) => Some(Key::Up),
+        (egui::Key::ArrowDown, _) => Some(Key::Down),
+        (egui::Key::ArrowLeft, _) => Some(Key::Left),
+        (egui::Key::ArrowRight, _) => Some(Key::Right),
+        (egui::Key::Home, _) => Some(Key::Home),
+        (egui::Key::Num0, false) => Some(Key::Char(b'0')),
+        (egui::Key::Num0, true) => Some(Key::Char(b')')),
+        (egui::Key::Num1, false) => Some(Key::Char(b'1')),
+        (egui::Key::Num1, true) => Some(Key::Char(b'!')),
+        (egui::Key::Num2, false) => Some(Key::Char(b'2')),
+        (egui::Key::Num2, true) => Some(Key::Char(b'@')),
+        (egui::Key::Num3, false) => Some(Key::Char(b'3')),
+        (egui::Key::Num3, true) => Some(Key::Char(b'#')),
+        (egui::Key::Num4, false) => Some(Key::Char(b'4')),
+        (egui::Key::Num4, true) => Some(Key::Char(b'$')),
+        (egui::Key::Num5, false) => Some(Key::Char(b'5')),
+        (egui::Key::Num5, true) => Some(Key::Char(b'%')),
+        (egui::Key::Num6, false) => Some(Key::Char(b'6')),
+        (egui::Key::Num6, true) => Some(Key::Char(b'^')),
+        (egui::Key::Num7, false) => Some(Key::Char(b'7')),
+        (egui::Key::Num7, true) => Some(Key::Char(b'&')),
+        (egui::Key::Num8, false) => Some(Key::Char(b'8')),
+        (egui::Key::Num8, true) => Some(Key::Char(b'*')),
+        (egui::Key::Num9, false) => Some(Key::Char(b'9')),
+        (egui::Key::Num9, true) => Some(Key::Char(b'(')),
+        (egui::Key::A, false) => Some(Key::Char(b'a')),
+        (egui::Key::A, true) => Some(Key::Char(b'A')),
+        (egui::Key::B, false) => Some(Key::Char(b'b')),
+        (egui::Key::B, true) => Some(Key::Char(b'B')),
+        (egui::Key::C, false) => Some(Key::Char(b'c')),
+        (egui::Key::C, true) => Some(Key::Char(b'C')),
+        (egui::Key::D, false) => Some(Key::Char(b'd')),
+        (egui::Key::D, true) => Some(Key::Char(b'D')),
+        (egui::Key::E, false) => Some(Key::Char(b'e')),
+        (egui::Key::E, true) => Some(Key::Char(b'E')),
+        (egui::Key::F, false) => Some(Key::Char(b'f')),
+        (egui::Key::F, true) => Some(Key::Char(b'F')),
+        (egui::Key::G, false) => Some(Key::Char(b'g')),
+        (egui::Key::G, true) => Some(Key::Char(b'G')),
+        (egui::Key::H, false) => Some(Key::Char(b'h')),
+        (egui::Key::H, true) => Some(Key::Char(b'H')),
+        (egui::Key::I, false) => Some(Key::Char(b'i')),
+        (egui::Key::I, true) => Some(Key::Char(b'I')),
+        (egui::Key::J, false) => Some(Key::Char(b'j')),
+        (egui::Key::J, true) => Some(Key::Char(b'J')),
+        (egui::Key::K, false) => Some(Key::Char(b'k')),
+        (egui::Key::K, true) => Some(Key::Char(b'K')),
+        (egui::Key::L, false) => Some(Key::Char(b'l')),
+        (egui::Key::L, true) => Some(Key::Char(b'L')),
+        (egui::Key::M, false) => Some(Key::Char(b'm')),
+        (egui::Key::M, true) => Some(Key::Char(b'M')),
+        (egui::Key::N, false) => Some(Key::Char(b'n')),
+        (egui::Key::N, true) => Some(Key::Char(b'N')),
+        (egui::Key::O, false) => Some(Key::Char(b'o')),
+        (egui::Key::O, true) => Some(Key::Char(b'O')),
+        (egui::Key::P, false) => Some(Key::Char(b'p')),
+        (egui::Key::P, true) => Some(Key::Char(b'P')),
+        (egui::Key::Q, false) => Some(Key::Char(b'q')),
+        (egui::Key::Q, true) => Some(Key::Char(b'Q')),
+        (egui::Key::R, false) => Some(Key::Char(b'r')),
+        (egui::Key::R, true) => Some(Key::Char(b'R')),
+        (egui::Key::S, false) => Some(Key::Char(b's')),
+        (egui::Key::S, true) => Some(Key::Char(b'S')),
+        (egui::Key::T, false) => Some(Key::Char(b't')),
+        (egui::Key::T, true) => Some(Key::Char(b'T')),
+        (egui::Key::U, false) => Some(Key::Char(b'u')),
+        (egui::Key::U, true) => Some(Key::Char(b'U')),
+        (egui::Key::V, false) => Some(Key::Char(b'v')),
+        (egui::Key::V, true) => Some(Key::Char(b'V')),
+        (egui::Key::W, false) => Some(Key::Char(b'w')),
+        (egui::Key::W, true) => Some(Key::Char(b'W')),
+        (egui::Key::X, false) => Some(Key::Char(b'x')),
+        (egui::Key::X, true) => Some(Key::Char(b'X')),
+        (egui::Key::Y, false) => Some(Key::Char(b'y')),
+        (egui::Key::Y, true) => Some(Key::Char(b'Y')),
+        (egui::Key::Z, false) => Some(Key::Char(b'z')),
+        (egui::Key::Z, true) => Some(Key::Char(b'Z')),
+        (egui::Key::Backtick, false) => Some(Key::Char(b'`')),
+        (egui::Key::Backtick, true) => Some(Key::Char(b'~')),
+        (egui::Key::Backslash, _) => Some(Key::Char(b'\\')),
+        (egui::Key::Pipe, _) => Some(Key::Char(b'|')),
+        (egui::Key::Comma, false) => Some(Key::Char(b',')),
+        (egui::Key::Comma, true) => Some(Key::Char(b'<')),
+        (egui::Key::Equals, _) => Some(Key::Char(b'=')),
+        (egui::Key::Plus, _) => Some(Key::Char(b'+')),
+        (egui::Key::OpenBracket, false) => Some(Key::Char(b'[')),
+        (egui::Key::OpenBracket, true) => Some(Key::Char(b'{')),
+        (egui::Key::Minus, false) => Some(Key::Char(b'-')),
+        (egui::Key::Minus, true) => Some(Key::Char(b'_')),
+        (egui::Key::Period, false) => Some(Key::Char(b'.')),
+        (egui::Key::Period, true) => Some(Key::Char(b'>')),
+        (egui::Key::CloseBracket, false) => Some(Key::Char(b']')),
+        (egui::Key::CloseBracket, true) => Some(Key::Char(b'}')),
+        (egui::Key::Semicolon, _) => Some(Key::Char(b';')),
+        (egui::Key::Colon, _) => Some(Key::Char(b':')),
+        (egui::Key::Slash, _) => Some(Key::Char(b'/')),
+        (egui::Key::Questionmark, _) => Some(Key::Char(b'?')),
+        (egui::Key::Space, _) => Some(Key::Char(b' ')),
+        (egui::Key::Tab, _) => Some(Key::Char(b'\t')),
+        (egui::Key::Enter, _) => Some(Key::Char(b'\r')),
+        (egui::Key::Backspace, _) => Some(Key::Char(0x08)),
+        _ => None,
+    }
 }
 
 /// Stub for audio_setup on wasm32
@@ -924,6 +1014,7 @@ pub fn audio_setup(
     data: [Arc<Mutex<varvara::StreamData>>; 4],
 ) -> Option<(cpal::Device, [cpal::Stream; 4])> {
     use cpal::traits::{DeviceTrait, HostTrait};
+
     let host = cpal::default_host();
     let device = host
         .default_output_device()
@@ -996,4 +1087,67 @@ pub fn audio_setup(
         stream
     });
     Some((device, streams))
+}
+
+/// Inject key events from egui input into the VM, handling press/release and modifiers
+pub fn inject_key_events(
+    vm: &mut ::uxn::Uxn,
+    dev: &mut varvara::Varvara,
+    events: &[egui::Event],
+    modifiers: &egui::Modifiers,
+    _repeat: bool,
+) {
+    use varvara::Key;
+    let shift_held = modifiers.shift;
+    for e in events {
+        match e {
+            egui::Event::Text(s) => {
+                const RAW_CHARS: [u8; 16] = [
+                    b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&',
+                    b'^', b'%', b'$', b'#', b'@', b'!', b'~',
+                ];
+                for c in s.bytes() {
+                    if RAW_CHARS.contains(&c) {
+                        dev.char(vm, c);
+                    }
+                }
+            }
+            egui::Event::Key {
+                key,
+                pressed,
+                repeat,
+                ..
+            } => {
+                if let Some(k) = decode_key(*key, shift_held) {
+                    if *pressed {
+                        dev.pressed(vm, k, *repeat);
+                    } else {
+                        dev.released(vm, k);
+                    }
+                }
+            }
+            egui::Event::MouseWheel { delta, .. } => {
+                dev.mouse(
+                    vm,
+                    varvara::MouseState {
+                        pos: (0.0, 0.0),
+                        scroll: (delta.x, -delta.y),
+                        buttons: 0,
+                    },
+                );
+            }
+            _ => (),
+        }
+    }
+    for (b, k) in [
+        (modifiers.ctrl, Key::Ctrl),
+        (modifiers.alt, Key::Alt),
+        (modifiers.shift, Key::Shift),
+    ] {
+        if b {
+            dev.pressed(vm, k, false)
+        } else {
+            dev.released(vm, k)
+        }
+    }
 }

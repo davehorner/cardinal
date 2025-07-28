@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -8,6 +8,10 @@ description = "Simple GUI for a Uxn + Varvara system"
 authors = ["David Horner", "Matt Keeter <matt.j.keeter@gmail.com>"]
 readme = "../README.md"
 publish = true
+
+[features]
+uses_usb = ["dep:hidapi", "varvara/uses_usb"]
+default = ["uses_usb"]
 
 [[bin]]
 name="cardinal-orcas"
@@ -27,8 +31,7 @@ serde_json = "1.0.141"
 tempfile = "3.20.0"
 #e_window = "0.1.13"
 reqwest = { version = "0.12.22", features = ["blocking", "json"] }
-varvara = { package = "cardinal-varvara", version = "0.4.3" }
-#varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
+varvara = { package = "cardinal-varvara", version = "0.4.4", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap.workspace = true
@@ -42,17 +45,18 @@ web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 #getrandom = { version = "0.3.3", features = ["wasm_js"] }
 
-
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["winuser"] }
-
+hidapi = { version = "2.6.3", optional = true, features = ["windows-native"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.4.1", features = ["native"] }
-#uxn = { path = "../cardinal-uxn", features = [
-#  "native",
-#], package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.2", features = ["native"] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.4.1" }
-#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.2" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+hidapi = { version = "2.6.3", optional = true, features = [] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hidapi = { version = "2.6.3", optional = true, features = ["macos-shared-device"] }

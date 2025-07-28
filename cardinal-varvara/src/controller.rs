@@ -1,7 +1,37 @@
+pub use crate::controller_device::ControllerDevice;
+
 use crate::{Event, EventData};
 use std::{collections::HashSet, mem::offset_of};
 use uxn::{Ports, Uxn};
 use zerocopy::{BigEndian, U16};
+
+/// Helper to map pedal bits to controller key events
+pub fn inject_pedal_keys(
+    controller: &mut Controller,
+    vm: &mut Uxn,
+    prev: u8,
+    pedal: u8,
+) {
+    let pedal_map = [
+        (0, Key::Shift),
+        (1, Key::Ctrl),
+        (2, Key::Alt),
+        (3, Key::Home),
+        (4, Key::Up),
+        (5, Key::Down),
+        (6, Key::Left),
+        (7, Key::Right),
+    ];
+    for (bit, key) in pedal_map.iter() {
+        let was_down = (prev & (1 << bit)) != 0;
+        let is_down = (pedal & (1 << bit)) != 0;
+        if !was_down && is_down {
+            controller.pressed(vm, *key, false);
+        } else if was_down && !is_down {
+            controller.released(vm, *key);
+        }
+    }
+}
 
 #[derive(
     zerocopy::FromBytes,
@@ -10,11 +40,16 @@ use zerocopy::{BigEndian, U16};
     zerocopy::KnownLayout,
 )]
 #[repr(C)]
+/// Controller port mappings for the Varvara system.
 pub struct ControllerPorts {
-    vector: U16<BigEndian>,
-    button: u8,
-    key: u8,
-    _pad: [u8; 12],
+    /// The vector address for controller events.
+    pub vector: U16<BigEndian>,
+    /// The button state.
+    pub button: u8,
+    /// The key code.
+    pub key: u8,
+    /// Padding bytes.
+    pub _pad: [u8; 12],
 }
 
 impl Ports for ControllerPorts {
@@ -22,16 +57,18 @@ impl Ports for ControllerPorts {
 }
 
 impl ControllerPorts {
-    const KEY: u8 = Self::BASE | offset_of!(Self, key) as u8;
+    /// Offset for the key field in the controller port.
+    pub const KEY: u8 = Self::BASE | offset_of!(Self, key) as u8;
 }
 
 #[derive(Default)]
+/// Main controller device for the Varvara system.
 pub struct Controller {
     /// Keys that are currently held down
-    down: HashSet<Key>,
+    pub down: HashSet<Key>,
 
     /// Current button state
-    buttons: u8,
+    pub buttons: u8,
 }
 
 /// Key input to the controller device
@@ -59,14 +96,16 @@ impl Controller {
     /// Sends a single character event
     pub fn char(&mut self, vm: &mut Uxn, c: u8) -> Event {
         let p = vm.dev::<ControllerPorts>();
-        Event {
+        let event = Event {
             vector: p.vector.get(),
             data: Some(EventData {
                 addr: ControllerPorts::KEY,
                 value: c,
                 clear: true,
             }),
-        }
+        };
+        println!("[CONTROLLER][char] char: '{}' (0x{:02x}), vector: 0x{:04x}, addr: 0x{:02x}", c as char, c, event.vector, ControllerPorts::KEY);
+        event
     }
 
     /// Send the given key event, returning an event if needed
@@ -96,7 +135,12 @@ impl Controller {
         }
     }
 
-    fn check_buttons(&mut self, vm: &mut Uxn, repeat: bool) -> Option<Event> {
+    /// Checks the current button states and returns an event if any button state changed.
+    pub fn check_buttons(
+        &mut self,
+        vm: &mut Uxn,
+        repeat: bool,
+    ) -> Option<Event> {
         let mut buttons = 0;
         for (i, k) in [
             Key::Ctrl,

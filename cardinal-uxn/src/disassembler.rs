@@ -1,3 +1,4 @@
+//! Uxn disassembler
 // (
 // https://github.com/Liorst4/uxn-disassembler/tree/main
 // Copyright © 2025 David Horner
@@ -35,23 +36,34 @@ const OPCODE_NAMES: [&str; 32] = [
     "EOR", "SFT",
 ];
 
+/// A disassembled Uxn instruction
 pub struct DisassembledInstr {
+    /// Address of the instruction
     pub addr: usize,
+    /// Opcode byte
     pub opcode: u8,
+    /// Mnemonic string
     pub mnemonic: &'static str,
+    /// Keep flag
     pub keep: bool,
+    /// Return flag
     pub ret: bool,
+    /// Short flag
     pub short: bool,
+    /// Optional literal value
     pub literal: Option<u16>,
-    pub raw_bytes: [u8; 4], // max instruction size is 3 bytes + opcode
+    /// Raw bytes of the instruction (max 4)
+    pub raw_bytes: [u8; 4],
+    /// Length of the instruction in bytes
     pub raw_len: usize,
 }
 
-pub fn disassemble<F>(rom: &[u8], disassemble_to_byte: usize, mut callback: F)
+/// Disassemble a Uxn ROM, calling `callback` for each instruction
+pub fn disassemble<F>(rom: &[u8], _disassemble_to_byte: usize, mut callback: F)
 where
     F: FnMut(DisassembledInstr),
 {
-    let mut i = 0; //&& i < disassemble_to_byte
+    let mut i = 0;
     while i < rom.len() {
         let instr = rom[i];
         let opcode = instr & OPCODE_MASK;
@@ -66,9 +78,7 @@ where
                 if i + 2 >= rom.len() {
                     let mut raw = [0u8; 4];
                     let len = rom.len() - i;
-                    for j in 0..len {
-                        raw[j] = rom[i + j];
-                    }
+                    raw[..len].copy_from_slice(&rom[i..(len + i)]);
                     callback(DisassembledInstr {
                         addr,
                         opcode,
@@ -99,9 +109,7 @@ where
                 if i + 1 >= rom.len() {
                     let mut raw = [0u8; 4];
                     let len = rom.len() - i;
-                    for j in 0..len {
-                        raw[j] = rom[i + j];
-                    }
+                    raw[..len].copy_from_slice(&rom[i..(len + i)]);
                     callback(DisassembledInstr {
                         addr,
                         opcode,
@@ -145,10 +153,11 @@ where
     }
 }
 
+#[allow(dead_code)]
 fn write_literal_prefix(
     buf: &mut [u8],
     short: bool,
-    keep: bool,
+    _keep: bool,
     ret: bool,
 ) -> usize {
     let mut idx = 0;
@@ -171,6 +180,7 @@ fn write_literal_prefix(
     idx
 }
 
+#[allow(dead_code)]
 fn write_literal_postfix(buf: &mut [u8], short: bool, ret: bool) -> usize {
     let mut idx = 0;
     if short && ret {

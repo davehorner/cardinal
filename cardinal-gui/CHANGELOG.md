@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.4...cardinal-gui-v0.3.5) - 2025-07-28
+
+### Added
+
+- *(gui)* add USB pedal support and uxn panel grid to cardinal-orcas
+
 ## [0.3.4](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.3...cardinal-gui-v0.3.4) - 2025-07-27
 
 ### Added

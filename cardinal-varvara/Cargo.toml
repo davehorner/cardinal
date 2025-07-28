@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-varvara"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -8,14 +8,30 @@ description = "Varvara Ordinator"
 authors = ["David Horner", "Matt Keeter <matt.j.keeter@gmail.com>"]
 readme = "../README.md"
 
+[features]
+default = ["uses_usb"]
+uses_usb = ["hidapi"]
+
 [dependencies]
 chrono.workspace = true
 log.workspace = true
 static_assertions.workspace = true
 zerocopy.workspace = true
 
-uxn = { package = "cardinal-uxn", version = "0.4.1" }
-#uxn = { path = "../cardinal-uxn", package = "cardinal-uxn" }
+uxn = { package = "cardinal-uxn", version = "0.4.2" }
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2.6.3", optional = true, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+hidapi = { version = "2.6.3", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hidapi = { version = "2.6.3", optional = true, features = ["macos-shared-device"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 
 [dev-dependencies]
 image.workspace = true
+
+

@@ -351,8 +351,8 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1",
- "cardinal-varvara 0.4.3",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "env_logger",
  "log",
@@ -360,11 +360,11 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "cpal",
  "display-info",
@@ -372,6 +372,7 @@ dependencies = [
  "egui",
  "env_logger",
  "getrandom 0.3.3",
+ "hidapi",
  "log",
  "notify",
  "once_cell",
@@ -386,40 +387,19 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.4.1"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-uxn"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff1bf6215b5be399a95b4dd9c63c2ec9f0682d2bf272ffb54069b79c603d237"
+version = "0.4.2"
 dependencies = [
  "zerocopy",
 ]
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn",
  "chrono",
+ "hidapi",
  "image",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "759ef8b53a72ab0a0ec3d968f340b71ecd37d4be96cde65867afafff433acdba"
-dependencies = [
- "cardinal-uxn 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono",
  "log",
  "static_assertions",
  "zerocopy",
@@ -922,7 +902,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1234,6 +1214,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
+name = "hidapi"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03b876ecf37e86b359573c16c8366bc3eba52b689884a0fc42ba3f67203d2a8b"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "pkg-config",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "http"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1363,7 +1356,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -1675,7 +1668,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -2653,9 +2646,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "989e6739f80c4ad5b13e0fd7fe89531180375b18520cc8c82080e4dc4035b84f"
+checksum = "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace"
 
 [[package]]
 name = "rustix"
@@ -2680,14 +2673,14 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.29"
+version = "0.23.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2491382039b29b9b11ff08b76ff6c97cf287671dbb74f0be44bda389fffe9bd1"
+checksum = "069a8df149a16b1a12dcc31497c3396a173844be3cac4bd40c9e7671fef96671"
 dependencies = [
  "once_cell",
  "rustls-pki-types",
@@ -3632,7 +3625,7 @@ version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "810ce18ed2112484b0d4e15d022e5f598113e220c53e373fb31e67e21670c1ce"
 dependencies = [
- "windows-implement 0.59.0",
+ "windows-implement",
  "windows-interface",
  "windows-result 0.3.4",
  "windows-strings 0.3.1",
@@ -3640,34 +3633,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-core"
-version = "0.61.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0fdd3ddb90610c7638aa2b3a3ab2904fb9e5cdbecc643ddb3647212781c4ae3"
-dependencies = [
- "windows-implement 0.60.0",
- "windows-interface",
- "windows-link",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
-]
-
-[[package]]
 name = "windows-implement"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83577b051e2f49a058c308f17f273b570a6a758386fc291b5f6a934dd84e48c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "windows-implement"
-version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3745,6 +3714,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75283be5efb2831d37ea142365f009c02ec203cd29a3ebecbc093d52315b66d0"
 dependencies = [
  "windows-targets 0.42.2",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
+dependencies = [
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -4018,9 +3996,9 @@ checksum = "271414315aff87387382ec3d271b52d7ae78726f5d44ac98b4f4030c91880486"
 
 [[package]]
 name = "winit"
-version = "0.30.11"
+version = "0.30.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4409c10174df8779dc29a4788cac85ed84024ccbc1743b776b21a520ee1aaf4"
+checksum = "c66d4b9ed69c4009f6321f762d6e61ad8a2389cd431b97cb1e146812e9e6c732"
 dependencies = [
  "ahash",
  "android-activity",

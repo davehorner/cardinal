@@ -1,0 +1,954 @@
+( Orca )
+
+|00 @System/vector $2 &expansion $2 &wst $1 &rst $1 &metadata $2 &r $2 &g $2 &b $2 &debug $1 &state $1
+|10 @Console/vector $2 &read $1 &pad $5 &write $1
+|20 @Screen/vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+|80 @Controller/vector $2 &button $1 &key $1
+|90 @Mouse/vector $2 &x $2 &y $2 &state $1 &chord $1 &pad $4 &scrolly &scrolly-hb $1 &scrolly-lb $1
+|a0 @File/vector $2 &success $1 &success-lb $1 &stat $2 &delete $1 &append $1 &name $2 &length $2 &read $2 &write $2
+|c0 @DateTime &year $2 &month $1 &day $1 &hour $1 &minute $1 &second $1 &dotw $1 &doty $2 &isdst $1
+
+(
+@|enums )
+
+|10 @Types/lock-default
+|12 @Types/lock-lut
+|1c @Types/lock-right
+|1d @Types/lock-output
+|01 @Types/pl
+|08 @Types/op
+|0a @Types/io
+|04 @Styles/selected
+|80 @Row/width
+
+|000
+
+	@timer &beat $1 &speed $1 &frame $1 &frame-lb $1
+	@help $1
+	@src/buf $3f &cap $1
+	@grid/length $2 &x1 $2 &y1 $2 &x2 $2 &y2 $2 &size &width $1 &height $1
+	@select/from &x1 $1 &y1 $1 &to &x2 $1 &y2 $1
+	@head/pos &x $1 &y $1 &addr $2
+	@variables/buf $24
+	@voices/buf ( len vel chn pitch )
+	$40 &cap
+
+|100
+
+@on-reset ( -> )
+	( | meta )
+	;meta #06 DEO2
+	( | theme )
+	#0f64 .System/r DEO2
+	#0fd4 .System/g DEO2
+	#0fb4 .System/b DEO2
+	theme/<load>
+	random/<init>
+	( | resize )
+	#02a8 .Screen/width DEO2
+	#01c8 .Screen/height DEO2
+	grid/<fit>
+	[ LIT2 15 -Screen/auto ] DEO
+	( | cache positions )
+	.grid/x1 LDZ2
+	( ) DUP2 #0078 ADD2 ;src/x STA2
+	( ) DUP2 ;select/widget/x STA2
+	( ) DUP2 #0030 ADD2 ;timer/widget/x STA2
+	( ) #0060 ADD2 ;draw-speed/x STA2
+	.grid/x2 LDZ2
+	( ) #0040 SUB2 ;voices/x STA2
+	.grid/y2 LDZ2 #0008 ADD2
+	( ) DUP2 ;select/widget/y STA2
+	( ) DUP2 ;timer/widget/y STA2
+	( ) DUP2 ;draw-speed/y STA2
+	( ) DUP2 ;src/y STA2
+	( ) ;voices/y STA2
+	( | Unlock )
+	file/<new>
+	help/<toggle>
+	select/widget/<draw>
+	( | vectors )
+	;on-button .Controller/vector DEO2
+	;on-mouse .Mouse/vector DEO2
+	;timer/on-play .Screen/vector DEO2
+	;src/on-console .Console/vector DEO2
+	BRK
+
+@meta 00
+	( name ) "HornersOrca 0a
+	( details ) "A 20 "Livecoding 20 "Playground 0a
+	( author ) "By 20 "Hundred 20 "Rabbits 0a
+	( date ) "19 20 "Jun 20 "2025 00 01
+	( icon ) 83 =appicon
+
+@manifest/dat ( . )
+	={ =dict/orca
+	( - ) 01 "n =file/<new> =dict
+	( - ) 01 "o =file/<reopen> =dict
+	( - ) 01 "s =file/<save> =dict
+	( - ) 01 "q =file/<exit> =dict }
+	={ =dict/edit
+	( - ) 01 "i =insert/<toggle> =dict
+	( - ) 01 "c =edit/<copy> =dict
+	( - ) 01 "v =edit/<paste> =dict
+	( - ) 01 "x =edit/<cut> =dict
+	( - ) 01 "/ =edit/<toggle-comment> =dict
+	( - ) 00 08 =edit/<erase> =dict }
+	={ =dict/play
+	( - ) 01 ", =timer/<decr> =dict
+	( - ) 01 ". =timer/<incr> =dict
+	( - ) 00 20 =timer/<toggle> =dict
+	( - ) 00 0d =timer/<step> =dict }
+	={ =dict/view
+	( - ) 01 "h =help/<toggle> =dict }
+	={ =dict/select
+	( - ) 01 "a =select/<all> =dict
+	( - ) 00 1b =select/<reset> =dict }
+	$1
+
+@manifest/scan ( but key -- fn* )
+	ORAk ?{ POP2 #ffff JMP2r }
+	,&bk STR2
+	;&dat
+	&>cat
+		LDA2k OVR2 #0004 ADD2
+		&>opt
+			LDA2k [ LIT2 &bk $2 ] NEQ2 ?{
+				NIP2 NIP2 INC2 INC2 LDA2 JMP2r }
+			#0006 ADD2 GTH2k ?&>opt
+		POP2 POP2 LDA2 LDAk ?&>cat
+	POP2 #ffff JMP2r
+
+(
+@|src )
+
+@src/on-console ( -> )
+	.Console/read DEI
+	( ) DUP #20 GTH ?{ POP file/<reopen>
+		BRK }
+	/<push>
+	BRK
+
+@src/<init> ( -- )
+	[ LIT2 -&buf _&ptr ] STR
+	JMP2r
+
+@src/<reset> ( -- )
+	[ LIT2 -&buf _&ptr ] STR
+	;&default-path
+	&>lr
+		LDAk DUP ?{
+			POP POP2 /<init>
+			#00 !src/<force-change> }
+		/<push>
+		INC2 !&>lr
+
+@src/<push> ( c -- )
+	[ LIT2 00 &ptr -&buf ] INCk ,&ptr STR
+	STZ2
+	JMP2r
+
+@src/<unchange> ( -- )
+	#00 !/<set-change>
+
+@src/<change> ( -- )
+	#01
+	( >> )
+
+@src/<set-change> ( value -- )
+	DUP [ LIT &last 00 ] NEQ ?{ POP JMP2r }
+	( >> )
+
+@src/<force-change> ( value -- )
+	DUP ,&last STR
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	;&buf #02 font/<draw-str>
+	?{ !/<fill> }
+	[ LIT2 "* 02 ] font/<draw-char-color>
+	( >> )
+
+@src/<fill> ( -- )
+	;voices/x LDA2 .Screen/x DEI2 SUB2 #03 SFT2 SUB
+	&>lf
+		#20 font/<draw-char>
+		INC DUP ?&>lf
+	POP JMP2r
+
+@src/default-path "untitled.orca $1
+
+(
+@|Macros )
+
+%ciuc ( char -- bool ) {
+	LIT "A SUB #1a LTH }
+
+%cilc ( char -- bool ) {
+	LIT "a SUB #1a LTH }
+
+%chrb36 ( char -- b36 ) {
+	#00 SWP ;chrb36/lut ADD2 LDA }
+
+%b36chr ( b36 -- char ) {
+	#24 [ DIVk MUL SUB ] #00 SWP ;b36clc ADD2 LDA }
+
+%chrmid ( char -- midi ) {
+	DUP chrb36 SWP ciuc #24 MUL ADD #00 SWP ;midi/lut ADD2 LDA }
+
+%set-case ( value case -- raw ) {
+	SWP b36chr DUP #60 GTH ROT AND #50 SFT SUB }
+
+%below ( addr* -- next-row* ) {
+	;Row/width ADD2 }
+
+%above ( addr* -- prev-row* ) {
+	;Row/width SUB2 }
+
+%get-row ( row* -- addr* ) {
+	;Row/width MUL2 }
+
+%get-addr ( x y -- addr* ) {
+	#00 SWP get-row ROT #00 SWP ADD2 }
+
+(
+@|vectors )
+
+@on-button ( -> )
+	.Controller/button DEI2
+	( | handlers )
+	DUP2 manifest/scan INC2k ORA ?{
+		( | not in manifest )
+		POP2 OVR #f0 AND ?on-button-arrow
+		select/<fill>
+		POP BRK }
+	JSR2 POP2 BRK
+
+@on-button-arrow ( button key -> )
+	POP DUP DUP #0f AND ,&mod STR
+	#04 SFT #00 OVR #03 AND ;&vec ADD2 LDA ,&y STR
+	#02 SFT #00 SWP #03 AND ;&vec ADD2 LDA ,&x STR
+	[ LIT2 &x $1 &y $1 ] [ LIT &mod $1 ] select/<mod>
+	#0f AND .Controller/button DEO
+	BRK
+	&vec 00 ff 01 00
+
+@on-mouse ( -> )
+	#41 cursor/<update>
+	[ LIT &last $1 ] .Mouse/state DEI DUP ,&last STR
+	( | handlers )
+	DUP2 #0001 EQU2 ?/down
+	DUP2 #0101 EQU2 ?/drag
+	POP2 BRK
+
+@on-mouse/down ( mouse* -> )
+	POP2
+	( | check for menubar )
+	.Mouse/y DEI2 .grid/y2 LDZ2 #0008 ADD2 SUB2 #04 SFT2 ORA ?{
+		.Mouse/x DEI2 .grid/x1 LDZ2 SUB2 #03 SFT2 #0006 DIV2
+		( | handlers )
+		DUP #00 NEQ ?{ insert/<toggle> }
+		DUP #01 NEQ ?{ timer/<toggle> }
+		POP2 BRK }
+	get-pos select/<from>
+	BRK
+
+@on-mouse/drag ( mouse* -> )
+	POP2 get-pos select/<to>
+	BRK
+
+@get-pos ( -- x y )
+	( x ) .Mouse/x DEI2 .grid/x1 LDZ2 SUB2 #83 SFT2
+	( y ) .Mouse/y DEI2 .grid/y1 LDZ2 SUB2 #04 SFT2 ORA2 JMP2r
+
+(
+@|core )
+
+%types/get ( addr* -- cell ) {
+	;types/buf ADD2 LDA }
+
+%types/<set> ( type addr* -- ) {
+	;types/buf ADD2 STA }
+
+@types/<reset> ( -- )
+	.grid/height LDZ #00
+	&>ver
+		( row ) [ LITr 00 ] STHk [ LIT2r =Row/width ] MUL2r
+		( ) .grid/width LDZ #00
+		&>hor
+			#0000 STH2kr ;types/buf ADD2 STA2
+			INC2r INC2r INC INC GTHk ?&>hor
+		POP2 POP2r INC GTHk ?&>ver
+	POP2 JMP2r
+
+@variables/<pull> ( -- )
+	{ "variables.orca $1 } STH2r .File/name DEO2
+	#0024 .File/length DEO2
+	;&buf .File/read DEO2
+	JMP2r
+
+@variables/<commit> ( -- )
+	{ "variables.orca $1 } STH2r .File/name DEO2
+	#0024 .File/length DEO2
+	;&buf .File/write DEO2
+	JMP2r
+
+@variables/<reset> ( -- )
+	;&buf DUP2 #0024 ADD2 SWP2
+	&>l
+		[ LIT2 ".. ] OVR2 STA2
+		INC2 INC2 GTH2k ?&>l
+	POP2 POP2 JMP2r
+
+%variables/get ( var -- value ) {
+	.variables/buf ADD LDZ }
+
+%variables/<set> ( var -- value ) {
+	.variables/buf ADD STZ }
+
+(
+@|Grid )
+
+%grid/get ( addr* -- cell ) {
+	;grid/buf ADD2 LDA }
+
+%grid/<set> ( cell addr* -- ) {
+	;grid/buf ADD2 STA }
+
+@<step> ( -- )
+	types/<reset>
+	variables/<pull>
+	.grid/height LDZ #00
+	( | reset head )
+	&>ver
+		DUP .head/y STZ
+		( row ) [ LITr 00 ] STHk [ LIT2r =Row/width ] MUL2r
+		( ) .grid/width LDZ #00
+		&>hor
+			DUP .head/x STZ
+			DUP2r [ LITr -head/addr ] STZ2r
+			STH2kr types/get #f0 AND ?{
+				STH2kr #00 STH2kr grid/get DUP ADD ;library/lut ADD2 LDA2 JSR2 }
+			INC2r INC GTHk ?&>hor
+		POP2r POP2 INC GTHk ?&>ver
+	POP2
+	( | end )
+	grid/<reqdraw>
+	timer/widget/<draw>
+	variables/<commit>
+	.timer/frame LDZ2 INC2 .timer/frame STZ2
+	[ LIT2 00 -timer/beat ] STZ !voices/<update>
+
+@grid/<fit> ( -- )
+	( | x )
+	#0010 .grid/x1 STZ2
+	.Screen/width DEI2
+	( ) DUP2 #03 SFT2 NIP #04 SUB .grid/width STZ
+	( ) #01 SFT2 .grid/width LDZ #01 SFT #00 SWP #30 SFT2 ADD2 #0004 ADD2 .grid/x2 STZ2
+	( | y )
+	#0010 .grid/y1 STZ2
+	.Screen/height DEI2
+	( ) DUP2 #04 SFT2 NIP #03 SUB .grid/height STZ
+	( ) #01 SFT2 .grid/height LDZ #01 SFT #00 SWP #40 SFT2 ADD2 .grid/y2 STZ2
+	( | length )
+	;grid/height LDZ ;grid/width LDZ
+	( ) MUL2 .grid/length STZ2
+	JMP2r
+
+@grid/<reset> ( -- )
+	.grid/height LDZ #00
+	&>res-ver
+		( row ) [ LITr 00 ] STHk [ LIT2r =Row/width ] MUL2r
+		( ) .grid/width LDZ #00
+		&>res-hor
+			[ LIT2 ".. ] STH2kr ;grid/buf ADD2 STA2
+			INC2r INC2r INC INC GTHk ?&>res-hor
+		POP2 POP2r INC GTHk ?&>res-ver
+	POP2 JMP2r
+
+@grid/<reqdraw> ( -- )
+	[ LIT2 01 _&req ] STR
+	JMP2r
+
+@grid/<try-draw> ( -- )
+	[ LIT &req $1 ] ?{ JMP2r }
+	[ LIT2 00 _&req ] STR
+	( | draw )
+	.select/to LDZ2 get-addr grid/get ;&highlight STA
+	.grid/height LDZ #00
+	&>ver
+		( row ) [ LITr 00 ] STHk [ LIT2r =Row/width ] MUL2r
+		( x ) .grid/x1 LDZ2 .Screen/x DEO2
+		( y ) #00 OVR #40 SFT2 .grid/y1 LDZ2 ADD2 .Screen/y DEO2
+		.grid/width LDZ #00
+		&>hor
+			( +bound x y ) ROTk STH2kr /<draw-cell>
+			( -bound ) POP INC2r INC GTHk ?&>hor
+		POP2 POP2r INC GTHk ?&>ver
+	POP2 .help LDZ ?help/<draw>
+	JMP2r
+
+@grid/<draw-cell> ( x y addr* -- )
+	OVR2 select/is-within ?/<draw-cell-selected>
+	DUP2 types/get STHk ?/<draw-cell-port>
+	grid/get DUP LIT ". EQU ?/<draw-cell-grid>
+	DUP cilc ?/<draw-cell-lowercase>
+	#00 SWP #40 SFT2 ;font/glyphs ADD2 .Screen/addr DEO2
+	( draw ) #0f STHr AND INC .Screen/sprite DEO
+	POP2 JMP2r
+
+@grid/<draw-cell-lowercase> ( x y value . type -- )
+	#00 OVR #40 SFT2 ;font/glyphs ADD2 .Screen/addr DEO2
+	[ LIT &highlight $1 ] NEQ DUP ADD INC .Screen/sprite DEO
+	POP2 POPr JMP2r
+
+@grid/<draw-cell-grid> ( x y value . type -- )
+	POP POPr #0703 AND2 ORA ?{
+		;font/dot .Screen/addr DEO2
+		[ LIT2 03 -Screen/sprite ] DEO
+		JMP2r }
+	;font/space .Screen/addr DEO2
+	[ LIT2 01 -Screen/sprite ] DEO
+	JMP2r
+
+@grid/<draw-cell-port> ( x y addr* . type -- )
+	grid/get #00 SWP #40 SFT2 ;font/glyphs ADD2 .Screen/addr DEO2
+	( draw ) #0f STHr AND INC .Screen/sprite DEO
+	POP2 JMP2r
+
+@grid/<draw-cell-selected> ( x y addr* -- )
+	grid/get #00 SWP #40 SFT2 ;font/glyphs ADD2 .Screen/addr DEO2
+	[ LIT2 -Styles/selected -Screen/sprite ] DEO
+	POP2 JMP2r
+
+@help/<toggle> ( -- )
+	.help LDZk #00 EQU SWP STZ !grid/<reqdraw>
+
+@help/<draw> ( -- )
+	.Screen/width DEI2 #0200 GTH2 ?{ JMP2r }
+	#0020 #0000
+	&>l
+		( x ) DUP2 #84 SFT2 .grid/x1 LDZ2 ADD2 #0020 ADD2 .Screen/x DEO2
+		( y ) DUP2 #000f AND2 #40 SFT2 .grid/y1 LDZ2 ADD2 #0020 ADD2 .Screen/y DEO2
+		.Screen/y DEI2 .grid/y2 LDZ2 #0030 SUB2 GTH2 ?{
+			DUP2k ADD2 ;&lut ADD2 LDA2
+			( glyph ) LDAk #0c font/<draw-char-color>
+			( space ) ;Screen/sprite DEO
+			( text ) INC2 #01 font/<draw-str> }
+		INC2 GTH2k ?&>l
+	POP2 POP2
+	( | toggle message )
+	( x ) .grid/x1 LDZ2 #0030 ADD2 .Screen/x DEO2
+	( y ) .grid/y1 LDZ2 #0130 ADD2 .Screen/y DEO2
+	;dict/guide #02 !font/<draw-str>
+
+@get-bang ( -- bang )
+	.head/addr LDZ2 ;grid/buf ADD2 STH2k
+	( left ) #0001 SUB2 LDA LIT "* EQU ?&bang
+	( top ) STH2kr above LDA LIT "* EQU ?&bang
+	( right ) STH2kr INC2 LDA LIT "* EQU ?&bang
+	( bottom ) STH2kr below LDA LIT "* EQU ?&bang
+	POP2r #00 JMP2r
+	&bang POP2r #01 JMP2r
+
+(
+@|voices ) ( len vel chn note )
+
+@voices/find ( chn pitch -- <voice> )
+	,&t STR2
+	[ LIT2 -&cap -&buf ]
+	&>lf
+		LDZk #00 EQU ?{
+			INCk INC LDZ2 [ LIT2 &t $2 ] NEQ2 ?{ NIP JMP2r } }
+		#04 ADD GTHk ?&>lf
+	POP2 #ff JMP2r
+
+@voices/next ( -- voice )
+	[ LIT2 -&cap -&buf ]
+	&>ln
+		LDZk #00 EQU ?&end
+		#04 ADD GTHk ?&>ln &end NIP JMP2r
+
+@voices/count ( -- count )
+	LITr 00 [ LIT2 -&cap -&buf ]
+	&>lc
+		LDZk #00 NEQ STH
+		ADDr #04 ADD GTHk ?&>lc
+	POP2 STHr JMP2r
+
+@voices/<release> ( voice -- )
+	( chn ) INC INC LDZ2 SWP .Console/write DEO
+	( note ) .Console/write DEO
+	( vel ) #00 .Console/write DEO
+	JMP2r
+
+@voices/<add> ( chn pitch len vel -- )
+	OVR2 /find DUP #ff EQU ?{
+		DUP /<release>
+		#00 OVR STZ }
+	POP
+	( save ) /next STHk STZ2
+	INCkr INCr STHr STZ2
+	STHr
+	( chn ) INC INCk LDZ2 SWP .Console/write DEO
+	( note ) .Console/write DEO
+	( vel ) LDZ .Console/write DEO !/<draw>
+
+@voices/<update> ( -- )
+	#1000
+	( record changes ) [ LITr 00 ]
+	&>lu
+		DUP #20 SFT .&buf ADD LDZk #00 EQU ?{
+			( decrement ) LDZk #01 SUB OVR STZ
+			LDZk ?{ DUP /<release> }
+			INCr }
+		POP INC GTHk ?&>lu
+	POP2 STHr ?{ JMP2r }
+	( >> )
+
+@voices/<draw> ( -- )
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	#02 ;font/color STA
+	/count STH
+	#0800
+	&>wd
+		INCk STHkr GTH [ LIT2 "-+ ] ROT [ JMP SWP POP ] font/<draw-char>
+		INC GTHk ?&>wd
+	POP2 POPr JMP2r
+
+(
+@|Font )
+
+@font/<draw-short> ( short* -- )
+	SWP /<draw-byte>
+	( >> )
+
+@font/<draw-byte> ( byte -- )
+	DUP #04 SFT /<draw-hex>
+	( >> )
+
+@font/<draw-hex> ( byte -- )
+	#0f AND DUP #09 GTH #07 MUL ADD #30 ADD !/<draw-char>
+
+@font/<draw-char-color> ( char color -- )
+	,&color STR
+	( >> )
+
+@font/<draw-char> ( char -- )
+	#00 SWP #40 SFT2 ;&glyphs ADD2 .Screen/addr DEO2
+	[ LIT2 &color 01 -Screen/sprite ] DEO
+	JMP2r
+
+@font/<draw-str> ( str* color -- )
+	,&color STR
+	&>while
+		LDAk DUP ?{ POP POP2 JMP2r }
+		/<draw-char>
+		INC2 !&>while
+
+(
+@|ports )
+
+@ports/get-right1-val ( addr* -- value )
+	INC2
+	( >> )
+
+@ports/get-right-val ( addr* -- value )
+	ports/get-right-raw chrb36 JMP2r
+
+@ports/get-left1-val ( addr* -- value )
+	#0001 SUB2
+	( >> )
+
+@ports/get-left-val ( addr* -- value )
+	ports/get-left-raw chrb36 JMP2r
+
+@ports/get-left1-raw ( addr* -- value )
+	#0001 SUB2
+	( >> )
+
+@ports/get-left-raw ( addr* -- value )
+	( type ) STH2k .Types/pl STH2r types/<set>
+	grid/get JMP2r
+
+@ports/get-right1-case ( addr* -- value case )
+	ports/get-right1-raw DUP chrb36 SWP ciuc JMP2r
+
+@ports/get-right1-raw ( addr* -- value )
+	INC2
+	( >> )
+
+@ports/get-right-raw ( addr* -- value )
+	STH2k
+	( type ) .Types/lock-right STH2r types/<set>
+	grid/get JMP2r
+
+@ports/<set-output-below> ( value addr* -- )
+	below
+	( >> )
+
+@ports/<set-output> ( value addr* -- )
+	STH2k
+	( type ) .Types/lock-output STH2r types/<set>
+	grid/<set>
+	JMP2r
+
+@ports/<set-raw> ( value addr* -- )
+	STH2k
+	( type ) .Types/lock-default STH2r types/<set>
+	grid/<set>
+	JMP2r
+
+@ports/<set-lock> ( addr* -- )
+	STH2
+	( type ) .Types/lock-lut STH2r types/<set>
+	JMP2r
+
+(
+@|File )
+
+@file/<new> ( -- )
+	grid/<reset>
+	types/<reset>
+	variables/<reset>
+	src/<reset>
+	( | default speed )
+	#0b timer/<set> !<step>
+
+@file/<reopen> ( -- )
+	#0000 ;src/buf file/<inject>
+	src/<init>
+	grid/<reqdraw>
+	#00 !src/<force-change>
+
+@file/<inject> ( x y path* -- )
+	.File/name DEO2
+	#0001 .File/length DEO2
+	STH2k POP ,&anchor-x STR
+	&>stream
+		;&b .File/read DEO2
+		.File/success-lb DEI ?{ POP2r JMP2r }
+		[ LIT2 0a &b $1 ] NEQk ?{
+			( pop chars ) POP2
+			( reset x ) NIPr [ LITr &anchor-x $1 ] SWPr
+			( incr y ) INCr !&>stream }
+	STH2kr get-addr grid/<set>
+	[ LIT2r 0100 ] ADD2r POP !&>stream
+
+@file/<save> ( -- )
+	;src/buf .File/name DEO2
+	#0001 .File/length DEO2
+	.grid/height LDZ #00
+	&>ver
+		.grid/width LDZ #00
+		&>hor
+			OVR2 NIP OVR SWP get-addr ;grid/buf ADD2 .File/write DEO2
+			INC GTHk ?&>hor
+		POP2
+		( linebreak ) ;&lb .File/write DEO2
+		INC GTHk ?&>ver
+	POP2 !src/<unchange>
+	&lb 0a
+
+@file/<exit> ( -- )
+	#800f DEO
+	JMP2r
+
+(
+@|Edit )
+
+@edit/<cut> ( -- )
+	edit/<copy>
+	LIT ". !select/<fill>
+
+@edit/<copy> ( -- )
+	;&buf ,&ptr STR2
+	.select/y2 LDZ INC .select/y1 LDZ
+	&>ver
+		STHk .select/x2 LDZ INC .select/x1 LDZ
+		&>hor
+			DUP STHkr get-addr grid/get /<push>
+			INC GTHk ?&>hor
+		POP2 POPr
+		( linebreak ) #0a /<push>
+		INC GTHk ?&>ver
+	POP2 JMP2r
+
+@edit/<push> ( c -- )
+	#00 [ LIT2 &ptr =&buf ] INC2k ,&ptr STR2
+	STA2
+	JMP2r
+
+@edit/<paste> ( -- )
+	,&ptr LDR2 ;&buf .select/from LDZ2 OVR ,&anchor STR
+	STH2
+	&>lp
+		GTH2k ?{ POP2 POP2 POP2r !grid/<reqdraw> }
+		LDAk DUP #0a NEQ ?{
+			( linebreak ) POP NIPr [ LITr &anchor 00 ] SWPr INCr INC2 !&>lp }
+	( insert ) STH2kr get-addr grid/<set>
+	( move ) LIT2r 0100 ADD2r INC2 !&>lp
+
+@edit/<erase> ( -- )
+	LIT ". !select/<fill>
+
+@edit/<toggle-comment> ( -- )
+	[ LIT2 "#. ]
+	( get cell ) .select/from LDZ2 get-addr grid/get
+	( toggle ) [ LIT "# ] NEQ [ JMP SWP POP ] ,&c STR
+	( | apply )
+	.select/y2 LDZ INC .select/y1 LDZ
+	&>l
+		STHk [ LIT &c $1 ]
+		( l ) DUP .select/x1 LDZ STHkr get-addr grid/<set>
+		( r ) .select/x2 LDZ STHr get-addr grid/<set>
+		INC GTHk ?&>l
+	POP2 JMP2r
+
+(
+@|Timer )
+
+@timer/on-play ( -> )
+	( on beat ) .timer LDZ2 NEQ ?{ <step> }
+	( inc beat ) .timer/beat LDZk INC SWP STZ
+	( >> )
+
+@timer/on-pause ( -> )
+	[ LIT2 01 &f $1 ] INCk ,&f STR
+	AND ?{ grid/<try-draw> }
+	BRK
+
+@timer/<toggle> ( -- )
+	.Screen/vector DEI2 ;&on-play EQU2 ?{ ;&on-play .Screen/vector DEO2
+		JMP2r }
+	;&on-pause .Screen/vector DEO2 !/widget/<draw>
+
+@timer/<step> ( -- )
+	;&on-pause .Screen/vector DEO2
+	<step> !/widget/<draw>
+
+@timer/<decr> #ff !/<mod>
+
+@timer/<incr> #01 !/<mod>
+
+@timer/<mod> ( mod -- )
+	.&speed LDZ ADD
+	( >> )
+
+@timer/<set> ( speed -- )
+	#1f AND #04 GTHk [ JMP SWP POP ] .&speed STZ
+	[ LIT2 00 -&beat ] STZ !draw-speed
+
+@timer/widget/<draw> ( -- )
+	[ LIT2 &widget/x $2 ] .Screen/x DEO2
+	[ LIT2 &widget/y $2 ] .Screen/y DEO2
+	( | icon )
+	;beat-icn .Screen/addr DEO2
+	[ LIT2 01 -&frame-lb ] LDZ AND DUP ADD INC .Screen/sprite DEO
+	( | text )
+	.Screen/vector DEI2 ;&on-play NEQ2 #02 ADD ;font/color STA
+	.&frame LDZ2 !font/<draw-short>
+
+@draw-speed ( -- )
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	.timer/speed LDZ !font/<draw-byte>
+
+(
+@|Select )
+
+%add-pos ( xy xy -- xy ) {
+	ROT ADD STH
+	ADD STHr }
+
+@select/<mod> ( x y mod -- )
+	DUP #04 NEQ ?{
+		POP
+		( | scale )
+		/validate-to ?{ POP2 JMP2r }
+		.&to LDZ2 add-pos !/<to> }
+	#01 NEQ ?{
+		( | drag )
+		/validate-from ?{ POP2 JMP2r }
+		/validate-to ?{ POP2 JMP2r }
+		edit/<cut>
+		STH2k .&from LDZ2 add-pos STH2r .&to LDZ2 add-pos /<range> !edit/<paste> }
+	( | move )
+	/validate-from ?{ POP2 JMP2r }
+	/validate-to ?{ POP2 JMP2r }
+	STH2k .&from LDZ2 add-pos STH2r .&to LDZ2 add-pos !/<range>
+
+@select/validate-from ( x y -- x y bool )
+	DUP .&y1 LDZ #ff00 NEQ2 STH
+	OVR .&x1 LDZ #ff00 NEQ2 STHr AND JMP2r
+
+@select/validate-to ( x y -- x y bool )
+	DUP .&y2 LDZ INC [ LIT2 01 -grid/height ] LDZ NEQ2 STH
+	OVR .&x2 LDZ INC [ LIT2 01 -grid/width ] LDZ NEQ2 STHr AND JMP2r
+
+@select/is-within ( x y -- bool )
+	DUP .&y1 LDZ LTH ?&outside
+	DUP .&y2 LDZ GTH ?&outside
+	OVR .&x1 LDZ LTH ?&outside
+	OVR .&x2 LDZ GTH ?&outside
+	POP2 #01 JMP2r
+	&outside POP2 #00 JMP2r
+
+@select/<reset> ( -- )
+	.&from LDZ2 !/<from>
+
+@select/<all> ( -- )
+	#0000 .grid/size LDZ2 !/<range>
+
+@select/<from> ( x y -- )
+	DUP .grid/height LDZ LTH ?{ POP2 JMP2r }
+	OVR .grid/width LDZ LTH ?{ POP2 JMP2r }
+	DUP2 !/<range>
+
+@select/<to> ( x y -- )
+	DUP .grid/height LDZ LTH ?{ POP2 JMP2r }
+	INCk .&y1 LDZ GTH ?{ POP2 JMP2r }
+	OVR .grid/width LDZ LTH ?{ POP2 JMP2r }
+	OVR INC .&x1 LDZ GTH ?{ POP2 JMP2r }
+	.&from LDZ2 SWP2
+	( >> )
+
+@select/<range> ( from* to* -- )
+	DUP2 .&to LDZ2 NEQ2 ?{ POP2 POP2 JMP2r }
+	.&to STZ2
+	.&from STZ2
+	[ LIT2 00 -help ] STZ
+	grid/<reqdraw> !select/widget/<draw>
+
+@select/<fill> ( char -- )
+	DUP ?{ POP JMP2r }
+	DUP #20 SUB #5f LTH ?{ POP LIT ". }
+	,&c STR
+	.&y2 LDZ INC .&y1 LDZ
+	&>ver
+		STHk .&x2 LDZ INC .&x1 LDZ
+		&>hor
+			[ LIT &c $1 ] OVR STHkr get-addr grid/<set>
+			INC GTHk ?&>hor
+		POP2 POPr INC GTHk ?&>ver
+	POP2 grid/<reqdraw> !src/<change>
+
+@select/widget/<draw> ( -- )
+	[ LIT2 &widget/x $2 ] .Screen/x DEO2
+	[ LIT2 &widget/y $2 ] .Screen/y DEO2
+	( | icon )
+	#00 .Controller/vector DEI2 ;insert/on-button EQU2 STHk
+	( get addr ) #40 SFT2 ;select/icns ADD2 .Screen/addr DEO2
+	( draw ) INCr INCr DUPr [ LITr -Screen/sprite ] DEOr
+	( set color ) [ LIT2r =font/color ] STAr
+	( | draw size )
+	.select/from LDZ2 .select/to LDZ2 EQU2k ?{ SWP2 SUB2 DUP2 }
+	( | value )
+	POP2 !font/<draw-short>
+
+@insert/<toggle> ( -- )
+	.select/to LDZ2 INC ,&anchor STR2
+	;on-button ;&on-button .Controller/vector DEI2 ;&on-button EQU2 [ JMP SWP2 POP2 ] .Controller/vector DEO2 !select/widget/<draw>
+
+@insert/on-button ( -> )
+	.Controller/key DEI [ #00 ] EQUk NIP ?&end
+	[ #1b ] NEQk NIP ?{ /<toggle>
+		POP BRK }
+	[ #0d ] NEQk NIP ?{
+		[ LIT2 &anchor $2 ] INC2k ,&anchor STR2
+		select/<from>
+		POP BRK }
+	[ #20 ] NEQk NIP ?{
+		#0100 #00 select/<mod>
+		POP BRK }
+	[ #08 ] NEQk NIP ?{
+		#ff00 #00 select/<mod>
+		LIT ". select/<fill>
+		POP BRK }
+	DUP #7e GTH ?{
+		DUP select/<fill>
+		#0100 #00 select/<mod> } &end POP BRK
+
+(
+@|Cursor )
+
+@cursor/<update> ( color -- )
+	;fill-icn .Screen/addr DEO2
+	#40 /<draw>
+	;&sprite-icn .Screen/addr DEO2
+	.Mouse/x DEI2 ,&x STR2
+	.Mouse/y DEI2 ,&y STR2
+	( >> )
+
+@cursor/<draw> ( color -- )
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	.Screen/sprite DEO
+	JMP2r
+
+@cursor/sprite-icn [ 80c0 e0f0 f8fc feff f8d8 8c0c 0606 0000 ]
+
+(
+@|Random )
+
+@random/<init> ( -- )
+	( seed ) [ LIT2 00 -DateTime/second ] DEI [ LIT2 00 -DateTime/minute ] DEI #60 SFT2 EOR2 [ LIT2 00 -DateTime/hour ] DEI #c0 SFT2 EOR2 ,&x STR2
+	[ LIT2 00 -DateTime/hour ] DEI #04 SFT2 [ LIT2 00 -DateTime/day ] DEI DUP2 ADD2 EOR2 [ LIT2 00 -DateTime/month ] DEI #60 SFT2 EOR2 .DateTime/year DEI2 #a0 SFT2 EOR2 ,&y STR2
+	JMP2r
+
+@random/generate ( -- number* )
+	[ LIT2 &x $2 ] DUP2 #50 SFT2 EOR2 DUP2 #03 SFT2 EOR2 [ LIT2 &y $2 ] DUP2 ,&x STR2
+	DUP2 #01 SFT2 EOR2 EOR2 ,&y STR2k POP JMP2r
+
+(
+@|Theme )
+
+@theme/<load> ( -- )
+	;&path .File/name DEO2
+	#0002 .File/length DEO2
+	;&r .File/read DEO2
+	;&g .File/read DEO2
+	;&b .File/read DEO2
+	.File/success DEI2 ORA #01 JCN
+	JMP2r
+	LIT2 &r $2 .System/r DEO2
+	LIT2 &g $2 .System/g DEO2
+	LIT2 &b $2 .System/b DEO2
+	JMP2r
+
+	&path ".theme $1
+
+(
+@|stdlib )
+
+@chrvel ( char -- vel )
+	DUP LIT "0 EQU ?&silence
+	chrb36 #03 MUL DUP ?&has-vel
+	POP #7f &has-vel JMP2r
+	&silence POP #00 JMP2r
+
+@lerp ( rate target val -- val )
+	DUP2 GTHk [ JMP SWP SUB ] STH
+	( if rate GTH target ) ROT DUP STHr LTH ?{ POP2 JMP2r }
+	( target val rate ) STH
+	GTHk ?&no-below
+	NIP STHr SUB JMP2r
+	&no-below NIP STHr ADD JMP2r
+
+@<phex> ( short* -: )
+	SWP /b
+	&b ( byte -: )
+	DUP #04 SFT /c
+	&c ( byte -: )
+	#0f AND DUP #09 GTH #27 MUL ADD [ LIT "0 ] ADD #18 DEO
+	JMP2r
+
+@dict
+	&orca "Orca $1
+	&view "View $1
+	&edit "Edit $1
+	&play "Play $1
+	&select "Select $1
+	&guide "Ctrl+h 20 "to 20 "toggle 20 "guide. $1
+
+~src/library.tal

@@ -1,15 +1,23 @@
+#![allow(unused_imports)]
 use cardinal_gui::uxn::audio_setup;
 use cardinal_gui::uxn::InjectEvent;
+#[cfg(not(target_arch = "wasm32"))]
+use eframe::NativeOptions;
+use reqwest::Url;
+use std::thread;
+use varvara::Key;
 
 /// Injects a string as Orca events, simulating character entry with right/left/down arrows
+#[allow(dead_code)]
 fn build_orca_inject_queue_from_chars(
     chars: &str,
 ) -> std::collections::VecDeque<InjectEvent> {
     use std::collections::VecDeque;
-    use varvara::Key;
     let mut queue = VecDeque::new();
+    #[allow(dead_code)]
     const CTRL_H: Key = Key::Ctrl;
     const RIGHT: Key = Key::Right;
+    #[allow(dead_code)]
     const LEFT: Key = Key::Left;
     const DOWN: Key = Key::Down;
     // Send Ctrl + . four times instead of Ctrl+H
@@ -45,6 +53,7 @@ fn build_orca_inject_queue_from_chars(
 
     queue
 }
+#[allow(dead_code)]
 /// Build an InjectEvent queue for orca file injection with rectangle and efficient movement
 fn build_orca_inject_queue(
     file_path: &str,
@@ -52,10 +61,10 @@ fn build_orca_inject_queue(
     use std::collections::VecDeque;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-    use varvara::Key;
     let mut queue = VecDeque::new();
     const CTRL_H: Key = Key::Ctrl;
     const RIGHT: Key = Key::Right;
+    #[allow(dead_code)]
     const LEFT: Key = Key::Left;
     const UP: Key = Key::Up;
     const DOWN: Key = Key::Down;
@@ -64,10 +73,18 @@ fn build_orca_inject_queue(
     let mut max_len = 0;
     if let Ok(file) = File::open(file_path) {
         let reader = BufReader::new(file);
-        for line in reader.lines().flatten() {
-            let chars: Vec<char> = line.chars().collect();
-            max_len = max_len.max(chars.len());
-            lines.push(chars);
+        for line_result in reader.lines() {
+            match line_result {
+                Ok(line) => {
+                    let chars: Vec<char> = line.chars().collect();
+                    max_len = max_len.max(chars.len());
+                    lines.push(chars);
+                }
+                Err(e) => {
+                    eprintln!("Error reading line from file: {e}");
+                    break;
+                }
+            }
         }
     }
     let rows = lines.len();
@@ -129,15 +146,15 @@ fn build_orca_inject_queue(
                 if r == 0 || r == rows + 1 {
                     // Top or bottom border: just '/'
                     if grid[r][c] == '/' {
-                        queue.push_back(InjectEvent::Char('/' as u8));
+                        queue.push_back(InjectEvent::Char(b'/'));
                     } else {
-                        queue.push_back(InjectEvent::Char(grid[r][c] as u8));
+                        queue.push_back(InjectEvent::Char(grid[r][c] as u8)); // char to u8: only safe for ASCII
                     }
                 } else if c == 0 {
                     // Left border: '/' then row and col as two hex digits each
-                    queue.push_back(InjectEvent::Char('/' as u8));
+                    queue.push_back(InjectEvent::Char(b'/'));
                     queue.push_back(InjectEvent::KeyPress(RIGHT));
-                    let hex = format!("{:01X}{:01X}", r, c);
+                    let hex = format!("{r:01X}{c:01X}");
                     for b in hex.bytes() {
                         queue.push_back(InjectEvent::Char(b));
 
@@ -145,9 +162,9 @@ fn build_orca_inject_queue(
                     }
                 } else if c == cols + 1 {
                     // Right border: '/' then row and col as two hex digits each
-                    queue.push_back(InjectEvent::Char('/' as u8));
+                    queue.push_back(InjectEvent::Char(b'/'));
                     queue.push_back(InjectEvent::KeyPress(RIGHT));
-                    let hex = format!("{:01X}{:01X}", r, c);
+                    let hex = format!("{r:01X}{c:01X}");
                     for b in hex.bytes() {
                         queue.push_back(InjectEvent::Char(b));
                         queue.push_back(InjectEvent::KeyRelease(RIGHT));
@@ -160,7 +177,7 @@ fn build_orca_inject_queue(
                     queue.push_back(InjectEvent::KeyPress(DOWN));
                 } else {
                     // File contents
-                    queue.push_back(InjectEvent::Char(grid[r][c] as u8));
+                    queue.push_back(InjectEvent::Char(grid[r][c] as u8)); // char to u8: only safe for ASCII
                 }
                 visited[r][c] = true;
             }
@@ -171,19 +188,15 @@ fn build_orca_inject_queue(
 // cardinal-demo.rs - Uxn GUI runner for crate, with ROM selection and download
 
 use cardinal_gui::uxn::{UxnApp, UxnModule};
-use eframe::egui;
 #[cfg(not(target_arch = "wasm32"))]
-use eframe::NativeOptions;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
-use reqwest::Url;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread;
 use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -303,7 +316,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(path) = &rom_path {
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             selected_rom_label = Some(name.to_string());
-            title = format!("cardinal-demo - {}", name);
+            title = format!("cardinal-demo - {name}");
         }
     }
 
@@ -332,9 +345,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _label: &str,
         url: &str,
     ) -> Result<std::path::PathBuf, String> {
-        if url.starts_with("file://") {
+        if let Some(stripped) = url.strip_prefix("file://") {
             // Use the local file path directly
-            let mut path_str = &url[7..];
+            #[cfg(windows)]
+            let mut path_str = stripped;
             // On Windows, strip leading slash if path is like /C:/...
             #[cfg(windows)]
             {
@@ -345,6 +359,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     path_str = &path_str[1..];
                 }
             }
+            #[cfg(not(windows))]
+            let path_str = stripped;
             let path = std::path::PathBuf::from(path_str);
             if path.exists() {
                 Ok(path)
@@ -369,7 +385,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create UxnModule
     let rom_path_arc = Arc::new(Mutex::new(rom_path.clone()));
-    let mut uxn_mod = UxnModule::new(rom_path.as_ref().map(|p| p.as_path()))?;
+    let mut uxn_mod = UxnModule::new(rom_path.as_deref())?;
     // --- ROM File Watcher ---
     let (reload_tx, reload_rx) = std::sync::mpsc::channel();
     if let Some(ref rom_path) = rom_path {
@@ -421,7 +437,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _audio = audio_setup(dev.audio_streams());
 
     // Use selected_rom_label for matching, not temp file name
-    println!("[DEBUG] selected_rom_label: {:?}", selected_rom_label);
+    println!("[DEBUG] selected_rom_label: {selected_rom_label:?}");
     if let Some(label) = &selected_rom_label {
         if label.contains("orca.rom") {
             // println!("[DEBUG] ROM matched orca.rom by label: {}", label);
@@ -464,7 +480,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     }
             // }
         } else {
-            println!("[DEBUG] ROM label did not match orca.rom: {}", label);
+            println!("[DEBUG] ROM label did not match orca.rom: {label}");
         }
     } else {
         println!("[DEBUG] selected_rom_label is None");
@@ -482,12 +498,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // Register listeners for console output
     dev.console.register_stdout_listener(|byte| {
-        eprint!("{:02X} ", byte);
+        eprint!("{byte:02X} ");
         eprintln!();
         beep();
     });
     dev.console.register_stderr_listener(|byte| {
-        println!("Console stderr: {}", byte);
+        println!("Console stderr: {byte}");
     });
 
     dev.audio(&mut vm);
@@ -496,8 +512,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([
-            (window_size.0 as f32 * scale) as f32,
-            (window_size.1 as f32 * scale) as f32,
+            (window_size.0 as f32 * scale),
+            (window_size.1 as f32 * scale),
         ])
         .with_title(&title);
 
@@ -531,6 +547,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm = Arc::clone(&uxn_mod.uxn);
             let mut vm = vm.lock().unwrap();
             static mut RAM: [u8; 65536] = [0; 65536];
+            #[allow(static_mut_refs)]
             let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
             let new_uxn = uxn::Uxn::new(ram, uxn::Backend::Interpreter);
             let mut app = UxnApp::new_with_mode(
@@ -555,7 +572,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let ctx = cc.egui_ctx.clone();
                 app.set_on_rom_change(move |rom_name| {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Title(
-                        format!("cardinal-demo - {}", rom_name),
+                        format!("cardinal-demo - {rom_name}"),
                     ));
                 });
             }
@@ -621,10 +638,11 @@ fn fetch_rom_list() -> Result<Vec<String>, String> {
 }
 
 /// Prompt the user to select a ROM (simple CLI prompt)
+#[allow(dead_code)]
 fn prompt_rom_selection(roms: &[String]) -> Result<String, String> {
     println!("Available ROMs: (hit return for auto ROM cycling)");
     for (i, rom) in roms.iter().enumerate() {
-        println!("  [{}] {}", i + 1, rom);
+        println!("  [{i}] {rom}", i = i + 1, rom = rom);
     }
     println!(
         "  [Return] Enable AUTO ROM CYCLING mode (cycle all ROMs every 10s)"
@@ -647,15 +665,15 @@ fn prompt_rom_selection(roms: &[String]) -> Result<String, String> {
 
 /// Download the selected ROM to a temp file and return its path
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn download_rom(_rom_name: &str) -> Result<PathBuf, String> {
     Err("ROM download not supported on wasm32 targets.".to_string())
 }
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
     let url = format!(
-        "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{}",
-        rom_name
-    );
+        "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{rom_name}");
 
     let client = Client::builder()
         .user_agent("cardinal-demo")
@@ -672,6 +690,7 @@ fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+#[allow(dead_code)]
 /// Send an orca file to the VM console, simulating character entry with right/left/down arrows
 fn send_orca_file_to_console(
     dev: &mut varvara::Varvara,
@@ -693,25 +712,19 @@ fn send_orca_file_to_console(
     let file = File::open(file_path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
 
-    for (_line_idx, line_res) in reader.lines().enumerate() {
+    for line_res in reader.lines() {
         let line = line_res.map_err(|e| e.to_string())?;
         let mut arrow_count = 0;
-        for (_col_idx, ch) in line.chars().enumerate() {
+        for ch in line.chars() {
             let byte = ch as u8;
             dev.console(vm, byte);
-            // println!("[DEBUG] Line {}, Col {}: Sent char '{}' (0x{:02X})", line_idx, col_idx, ch, byte);
             dev.console(vm, RIGHT_ARROW);
-            // println!("[DEBUG] Sent RIGHT_ARROW after char");
             arrow_count += 1;
         }
-        // After line, send LEFT_ARROW 'arrow_count' times to return to column 0
-        for i in 0..arrow_count {
+        for _ in 0..arrow_count {
             dev.console(vm, LEFT_ARROW);
-            // println!("[DEBUG] Sent LEFT_ARROW to return to column 0 ({} of {})", i+1, arrow_count);
         }
-        // Send DOWN_ARROW to move to next line
         dev.console(vm, DOWN_ARROW);
-        // println!("[DEBUG] Sent DOWN_ARROW to move to next line");
     }
     Ok(())
 }

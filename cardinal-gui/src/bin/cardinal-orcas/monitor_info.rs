@@ -1,7 +1,9 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MonitorTraversal {
+    #[allow(dead_code)]
     Sequential, // step through monitors in a fixed order
-    Geometric,  // wrap to monitor in geometric direction, or farthest if none
+    #[allow(dead_code)]
+    Geometric, // wrap to monitor in geometric direction, or farthest if none
 }
 
 // Only one static for monitor rects
@@ -15,11 +17,13 @@ pub static MONITOR_RECTS: Lazy<Mutex<Vec<Rect>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct MonitorGrid {
     pub rects: Vec<Rect>,
     // Optionally, you could add adjacency info here for geometric traversal
 }
 
+#[allow(dead_code)]
 pub fn fill_monitor_rects() {
     #[cfg(not(target_arch = "wasm32"))]
     {

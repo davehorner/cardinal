@@ -1,8 +1,12 @@
 //! Uxn virtual machine
+
 #![cfg_attr(not(test), no_std)]
 #![warn(missing_docs)]
 #![cfg_attr(not(any(test, feature = "native")), forbid(unsafe_code))]
 
+//! Uxn VM core library
+
+/// Uxn disassembler module
 pub mod disassembler;
 
 #[cfg(feature = "native")]
@@ -46,6 +50,8 @@ impl Stack {
     }
 
     #[inline]
+    /// Returns a pointer to the stack data
+    /// Returns a pointer to the stack data
     pub fn as_ptr(&self) -> *const u8 {
         self.data.as_ptr()
     }
@@ -171,9 +177,12 @@ impl Default for Stack {
     }
 }
 
+/// A value on the Uxn stack (byte or short)
 #[derive(Copy, Clone, Debug)]
-enum Value {
+pub enum Value {
+    /// A 16-bit short value
     Short(u16),
+    /// An 8-bit byte value
     Byte(u8),
 }
 
@@ -214,7 +223,7 @@ impl Stack {
     /// Returns a slice of the working stack data up to the current length
     #[inline]
     pub fn data_slice(&self) -> &[u8] {
-        let len = self.data.len() as usize;
+        let len = self.data.len();
         &self.data[..len]
     }
 
@@ -233,6 +242,7 @@ impl Stack {
     }
 
     #[inline]
+    /// Push a byte onto the stack
     pub fn push_byte(&mut self, v: u8) {
         self.index = self.index.wrapping_add(1);
         self.data[usize::from(self.index)] = v;
@@ -263,10 +273,11 @@ impl Stack {
     }
 
     #[inline]
-    pub fn push(&mut self, v: Value) {
+    /// Push a value (byte or short) onto the stack
+    pub fn push(&mut self, v: crate::Value) {
         match v {
-            Value::Short(v) => self.push_short(v),
-            Value::Byte(v) => self.push_byte(v),
+            crate::Value::Short(v) => self.push_short(v),
+            crate::Value::Byte(v) => self.push_byte(v),
         }
     }
 
@@ -524,7 +535,7 @@ impl<'a> Uxn<'a> {
         pos: u8,
     ) -> &D {
         Self::check_dev_size::<D>();
-        &D::ref_from_bytes(&self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
+        D::ref_from_bytes(&self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
     }
 
     /// Returns a reference to a device located at `pos`
