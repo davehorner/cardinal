@@ -7,6 +7,9 @@ members = [
     "cardinal-gui",
 ]
 exclude = ["fuzz"]
+include = [
+    "roms/**",
+]
 
 [profile.release]
 debug = true
@@ -32,8 +35,8 @@ web-sys = { version = "0.3.77", features = [
     "HtmlOptionElement",
 ] }
 
-[patch.crates-io]
-varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
-uxn = { path = "cardinal-uxn", package = "cardinal-uxn", features = [
-  "native",
-] }
+#[patch.crates-io]
+#varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
+#uxn = { path = "cardinal-uxn", package = "cardinal-uxn", features = [
+#  "native",
+#] }
