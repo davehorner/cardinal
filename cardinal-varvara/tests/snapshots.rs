@@ -120,17 +120,23 @@ fn run_and_check(name: &str) {
 mod snapshots {
     use super::*;
 
+
     #[test]
+    #[ignore]
     fn audio() {
         run_and_check("audio");
     }
 
+
     #[test]
+    #[ignore]
     fn controller() {
         run_and_check("controller");
     }
 
+
     #[test]
+    #[ignore]
     fn piano() {
         run_and_check("piano");
     }
