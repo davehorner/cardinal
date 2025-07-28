@@ -692,10 +692,10 @@ impl eframe::App for UxnApp<'_> {
 
             static mut PREV_PEDAL: u8 = 0;
             varvara_controller.poll_pedal_event();
-            println!(
-                "[DEBUG][poll_pedal_event] called, changed=(), last_pedal={:?}",
-                varvara_controller.last_pedal
-            );
+            // println!(
+            //     "[DEBUG][poll_pedal_event] called, changed=(), last_pedal={:?}",
+            //     varvara_controller.last_pedal
+            // );
             if let Some(pedal) = varvara_controller.last_pedal {
                 // Update last_usb_event for debug panel
                 self.last_usb_event = Some((pedal, vec![]));
