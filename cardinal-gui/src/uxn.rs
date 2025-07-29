@@ -691,7 +691,7 @@ impl eframe::App for UxnApp<'_> {
             // Poll pedal event and inject mapped key events into the VM
 
             static mut PREV_PEDAL: u8 = 0;
-            varvara_controller.poll_pedal_event();
+            varvara_controller.poll_pedal_event(&mut self.vm);
             // println!(
             //     "[DEBUG][poll_pedal_event] called, changed=(), last_pedal={:?}",
             //     varvara_controller.last_pedal

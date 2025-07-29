@@ -1,5 +1,7 @@
 //! The Varvara computer system
 #![warn(missing_docs)]
+#[cfg(feature = "uses_gilrs")]
+use crate::controller_gilrs::ControllerGilrs;
 use log::warn;
 use std::collections::HashMap;
 use std::fs::File;
@@ -8,13 +10,15 @@ use std::{
     io::Write,
     sync::{Arc, Mutex},
 };
-
 /// Audio handler implementation
 mod audio;
 mod console;
 /// Controller device and input handling for the Varvara system.
 pub mod controller;
 mod controller_device;
+/// Gilrs controller device support for the Varvara system (enabled with the `uses_gilrs` feature).
+#[cfg(feature = "uses_gilrs")]
+pub mod controller_gilrs;
 /// USB controller device support for the Varvara system (enabled with the `uses_usb` feature).
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 pub mod controller_usb;
@@ -217,16 +221,45 @@ impl Varvara {
     /// Builds a new instance of the Varvara peripherals
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn new(uses_usb: bool) -> Self {
+        #[cfg(feature = "uses_gilrs")]
+        {}
         let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
-            Box::new(controller_usb::ControllerUsb {
-                rx: controller_usb::spawn_usb_controller_thread(
-                    controller_usb::UsbDeviceConfig::default(),
-                ),
-                last_pedal: None,
-                controller: controller::Controller::default(),
-            })
+            #[cfg(feature = "uses_gilrs")]
+            {
+                Box::new(controller_usb::ControllerUsb {
+                    rx: controller_usb::spawn_usb_controller_thread(
+                        controller_usb::UsbDeviceConfig::default(),
+                    ),
+                    last_pedal: None,
+                    controller: controller::Controller::default(),
+                    gilrs: Some(ControllerGilrs::new(
+                        controller::Controller::default(),
+                    )),
+                })
+            }
+            #[cfg(not(feature = "uses_gilrs"))]
+            {
+                Box::new(controller_usb::ControllerUsb {
+                    rx: controller_usb::spawn_usb_controller_thread(
+                        controller_usb::UsbDeviceConfig::default(),
+                    ),
+                    last_pedal: None,
+                    controller: controller::Controller::default(),
+                })
+            }
         } else {
-            Box::new(controller::Controller::default())
+            #[cfg(feature = "uses_gilrs")]
+            {
+                use crate::controller_gilrs::ControllerGilrs;
+
+                Box::new(
+                    ControllerGilrs::new(controller::Controller::default()),
+                )
+            }
+            #[cfg(not(feature = "uses_gilrs"))]
+            {
+                Box::new(controller::Controller::default())
+            }
         };
         Self {
             console: console::Console::new(),
@@ -248,6 +281,10 @@ impl Varvara {
     /// Builds a new instance of the Varvara peripherals (non-USB/wasm version).
     #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
     pub fn new() -> Self {
+        #[cfg(feature = "uses_gilrs")]
+        {
+            use controller_gilrs::ControllerGilrs;
+        }
         Self {
             console: console::Console::new(),
             system: system::System::new(),
@@ -256,7 +293,18 @@ impl Varvara {
             screen: screen::Screen::new(),
             mouse: mouse::Mouse::new(),
             file: file::File::new(),
-            controller: Box::new(controller::Controller::default()),
+            controller: {
+                #[cfg(feature = "uses_gilrs")]
+                {
+                    Box::new(ControllerGilrs::new(
+                        controller::Controller::default(),
+                    ))
+                }
+                #[cfg(not(feature = "uses_gilrs"))]
+                {
+                    Box::new(controller::Controller::default())
+                }
+            },
             tracker: tracker::Tracker::new(),
             already_warned: [false; 16],
             symbols: None,
@@ -265,9 +313,6 @@ impl Varvara {
     }
 
     /// Resets the CPU, loading extra data into expansion memory
-    ///
-    /// Note that the audio stream handles are unchanged, so any audio worker
-    /// threads can continue to run.
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn reset(&mut self, extra: &[u8]) {
         self.system.reset(extra);
@@ -276,25 +321,49 @@ impl Varvara {
         self.screen = screen::Screen::new();
         self.mouse = mouse::Mouse::new();
         self.file = file::File::new();
+        #[cfg(feature = "uses_gilrs")]
+        {}
         self.controller = if self.uses_usb {
-            Box::new(controller_usb::ControllerUsb {
-                rx: controller_usb::spawn_usb_controller_thread(
-                    controller_usb::UsbDeviceConfig::default(),
-                ),
-                last_pedal: None,
-                controller: controller::Controller::default(),
-            })
+            #[cfg(feature = "uses_gilrs")]
+            {
+                Box::new(controller_usb::ControllerUsb {
+                    rx: controller_usb::spawn_usb_controller_thread(
+                        controller_usb::UsbDeviceConfig::default(),
+                    ),
+                    last_pedal: None,
+                    controller: controller::Controller::default(),
+                    gilrs: Some(ControllerGilrs::new(
+                        controller::Controller::default(),
+                    )),
+                })
+            }
+            #[cfg(not(feature = "uses_gilrs"))]
+            {
+                Box::new(controller_usb::ControllerUsb {
+                    rx: controller_usb::spawn_usb_controller_thread(
+                        controller_usb::UsbDeviceConfig::default(),
+                    ),
+                    last_pedal: None,
+                    controller: controller::Controller::default(),
+                })
+            }
         } else {
-            Box::new(controller::Controller::default())
+            #[cfg(feature = "uses_gilrs")]
+            {
+                Box::new(
+                    ControllerGilrs::new(controller::Controller::default()),
+                )
+            }
+            #[cfg(not(feature = "uses_gilrs"))]
+            {
+                Box::new(controller::Controller::default())
+            }
         };
         self.tracker = tracker::Tracker::new();
         self.already_warned.fill(false);
     }
 
     /// Resets the CPU, loading extra data into expansion memory.
-    ///
-    /// This method resets all peripherals and state, including system, console, audio, screen, mouse, file, controller, and tracker.
-    /// The `extra` parameter is loaded into expansion memory.
     #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
     pub fn reset(&mut self, extra: &[u8]) {
         self.system.reset(extra);
@@ -303,7 +372,19 @@ impl Varvara {
         self.screen = screen::Screen::new();
         self.mouse = mouse::Mouse::new();
         self.file = file::File::new();
-        self.controller = Box::new(controller::Controller::default());
+
+        self.controller = {
+            #[cfg(feature = "uses_gilrs")]
+            {
+                Box::new(
+                    ControllerGilrs::new(controller::Controller::default()),
+                )
+            }
+            #[cfg(not(feature = "uses_gilrs"))]
+            {
+                Box::new(controller::Controller::default())
+            }
+        };
         self.tracker = tracker::Tracker::new();
         self.already_warned.fill(false);
     }

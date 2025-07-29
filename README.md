@@ -72,7 +72,8 @@ July 2025 Changes
 - [/notes/04.sym_file_vector_labeling](/notes/04.sym_file_vector_labeling/README.md) 
 - [/notes/05.cardinal-orcas](/notes/05.cardinal-orcas/README.md)
 - [/notes/06.hardware_verification](/notes/06.hardware_verification/readme.md)
- 
+- [/notes/07.xbox_controller_gilrs](/notes/07.xbox_controller_gilrs/README.md)
+
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)
 
