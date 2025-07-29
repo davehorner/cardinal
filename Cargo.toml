@@ -7,6 +7,9 @@ members = [
     #"cardinal-gui",
 ]
 exclude = ["fuzz"]
+include = [
+    "roms/**",
+]
 
 [profile.release]
 debug = true

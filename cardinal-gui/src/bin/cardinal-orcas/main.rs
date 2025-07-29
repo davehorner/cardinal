@@ -655,9 +655,9 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
 
 // Embed the ROM and .sym file as byte arrays
 const CARDINAL_ORCAS_ROM: &[u8] =
-    include_bytes!("../../../../roms/cardinal-orcas.rom");
+    include_bytes!("cardinal-orcas.rom");
 const CARDINAL_ORCAS_SYM: &[u8] =
-    include_bytes!("../../../../roms/cardinal-orcas.rom.sym");
+    include_bytes!("cardinal-orcas.rom.sym");
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
