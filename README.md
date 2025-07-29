@@ -57,6 +57,7 @@ trunk build --release --public-url=/projects/cardinal/demo/ # edit this path
 ```
 
 --------------------------------------------------------------------------------
+**technology from the past come to save the future from itself**
 
 July 2025 Changes
 - stdout and stderr callbacks
@@ -70,7 +71,7 @@ July 2025 Changes
 - [/notes/03.hidusb_controllers](/notes/03.hidusb_controllers/README.md)
 - [/notes/04.sym_file_vector_labeling](/notes/04.sym_file_vector_labeling/README.md) 
 - [/notes/05.cardinal-orcas](/notes/05.cardinal-orcas/README.md)
-- [/notes/06.hardware_verifcation](/notes/06.hardware_verifcation/README.md)
+- [/notes/06.hardware_verification](/notes/06.hardware_verification/readme.md)
  
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)
@@ -78,3 +79,5 @@ Released under the [Mozilla Public License 2.0](/LICENSE.txt)
 The repository includes ROMs compiled from the `uxnemu` reference
 implementation, which are © Devine Lu Linvega and released under the MIT
 license; see the [`roms/`](roms/) subfolder for details.
+
+**we do not know what exactly will come of it**

@@ -5,6 +5,9 @@
 
 `cardinal-varvara\tests` is the the result of a hardware verification.  A test will produce a `.failed.png` when things go awry.
 
+
+come up with a thing, that's interesting and amenable to proof.  true or not true, you've learned something.
+
 ## Summary
 
 This document summarizes the results of running `cargo test --release --verbose` for the current state of the `cardinal` project. All test failures and errors are listed below for hardware verification and regression tracking.  cardinal `controller_usb` is brand new and is affecting the 3 tests.
@@ -109,6 +112,7 @@ Also, while I'm telling you I'm turning off tests to make a release; I should al
 
 forgive me 65536 bytes.
 
+failure and success are both useful.
 ---
 **Last updated:** 2025-07-28
 David Horner
