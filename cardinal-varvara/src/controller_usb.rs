@@ -12,6 +12,10 @@ use std::any::Any;
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 use uxn::Uxn;
 
+/// Only import and use ControllerGilrs if uses_gilrs feature is enabled
+#[cfg(feature = "uses_gilrs")]
+use super::controller_gilrs::ControllerGilrs;
+
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 /// USB controller device for Varvara system.
 pub struct ControllerUsb {
@@ -21,25 +25,43 @@ pub struct ControllerUsb {
     pub last_pedal: Option<u8>,
     /// Internal controller state.
     pub controller: Controller,
+    /// Optional chained Gilrs controller (only if uses_gilrs)
+    #[cfg(feature = "uses_gilrs")]
+    pub gilrs: Option<ControllerGilrs>,
 }
 
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 impl ControllerDevice for ControllerUsb {
     /// Sends a single character event
     fn char(&mut self, vm: &mut Uxn, c: u8) -> Event {
-        self.controller.char(vm, c)
+        let event = self.controller.char(vm, c);
+        #[cfg(feature = "uses_gilrs")]
+        if let Some(gilrs) = &mut self.gilrs {
+            gilrs.char(vm, c);
+        }
+        event
     }
 
     /// Send the given key event, returning an event if needed
     fn pressed(&mut self, vm: &mut Uxn, k: Key, repeat: bool) -> Option<Event> {
-        self.controller.pressed(vm, k, repeat)
+        let event = self.controller.pressed(vm, k, repeat);
+        #[cfg(feature = "uses_gilrs")]
+        if let Some(gilrs) = &mut self.gilrs {
+            gilrs.pressed(vm, k, repeat);
+        }
+        event
     }
 
     /// Indicate that the given key has been released
     ///
     /// This may change our button state and return an event
     fn released(&mut self, vm: &mut Uxn, k: Key) -> Option<Event> {
-        self.controller.released(vm, k)
+        let event = self.controller.released(vm, k);
+        #[cfg(feature = "uses_gilrs")]
+        if let Some(gilrs) = &mut self.gilrs {
+            gilrs.released(vm, k);
+        }
+        event
     }
     fn as_any(&mut self) -> &mut dyn Any {
         self
@@ -50,7 +72,12 @@ impl ControllerDevice for ControllerUsb {
 impl ControllerUsb {
     /// Polls for pedal events and prints debug output for press/release changes.
     /// Call this in your main loop to process pedal events from the USB device.
-    pub fn poll_pedal_event(&mut self) {
+    pub fn poll_pedal_event(&mut self, vm: &mut Uxn) {
+        // Chain gilrs polling first, only if uses_gilrs
+        #[cfg(feature = "uses_gilrs")]
+        if let Some(gilrs) = &mut self.gilrs {
+            gilrs.poll_gilrs_event(vm);
+        }
         while let Ok(msg) = self.rx.try_recv() {
             // VEC Footpedal: pedal state is in the first byte of the message
             if let Some(&pedal_byte) = msg.data.first() {
@@ -82,6 +109,33 @@ impl ControllerUsb {
             } else {
                 println!("[USB] No pedal byte in message: {msg:?}");
             }
+        }
+    }
+
+    /// Helper to construct a ControllerUsb with optional gilrs chaining.
+    #[cfg(feature = "uses_gilrs")]
+    pub fn new(
+        controller: Controller,
+        rx: std::sync::mpsc::Receiver<UsbControllerMessage>,
+        gilrs: Option<ControllerGilrs>,
+    ) -> Self {
+        ControllerUsb {
+            rx,
+            last_pedal: None,
+            controller,
+            gilrs,
+        }
+    }
+
+    #[cfg(not(feature = "uses_gilrs"))]
+    pub fn new(
+        controller: Controller,
+        rx: std::sync::mpsc::Receiver<UsbControllerMessage>,
+    ) -> Self {
+        ControllerUsb {
+            rx,
+            last_pedal: None,
+            controller,
         }
     }
 
@@ -121,6 +175,23 @@ pub struct UsbDeviceConfig {
 impl Default for UsbDeviceConfig {
     /// Default to VEC Footpedal: idVendor = 0x05f3, idProduct = 0x00ff
     fn default() -> Self {
+        // Default to VEC Footpedal: idVendor = 0x05f3, idProduct = 0x00ff
+        // Alternative: Microsoft device: idVendor = 0x045e, idProduct = 0x0b13
+        // Change which is returned by commenting/uncommenting as needed
+
+        // VEC Footpedal (default)
+        // UsbDeviceConfig {
+        //     vendor_id: 0x05f3,
+        //     product_id: 0x00ff,
+        // }
+
+        // Microsoft device (alternative)
+        // UsbDeviceConfig {
+        //     vendor_id: 0x045e,
+        //     product_id: 0x0b13,
+        // }
+
+        // By default, return VEC Footpedal
         UsbDeviceConfig {
             vendor_id: 0x05f3,
             product_id: 0x00ff,

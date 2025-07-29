@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-uxn"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -9,6 +9,7 @@ authors = ["David Horner", "Matt Keeter <matt.j.keeter@gmail.com>"]
 readme = "../README.md"
 
 [dependencies]
+anyhow.workspace = true
 zerocopy.workspace = true
 
 [features]

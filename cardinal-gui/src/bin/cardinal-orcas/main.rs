@@ -419,7 +419,8 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         .downcast_mut::<varvara::controller_usb::ControllerUsb>(
                         )
                     {
-                        varvara_controller.poll_pedal_event();
+                        varvara_controller
+                            .poll_pedal_event(&mut panel.stage.vm);
                         if let Some(pedal) = varvara_controller.last_pedal {
                             self.last_usb_pedal = Some(pedal);
                             // Map pedal bits to panel focus: bits 1,2,4,8 -> panels 0-3, 7 (all pressed) -> panel 4
@@ -654,10 +655,8 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
 }
 
 // Embed the ROM and .sym file as byte arrays
-const CARDINAL_ORCAS_ROM: &[u8] =
-    include_bytes!("cardinal-orcas.rom");
-const CARDINAL_ORCAS_SYM: &[u8] =
-    include_bytes!("cardinal-orcas.rom.sym");
+const CARDINAL_ORCAS_ROM: &[u8] = include_bytes!("cardinal-orcas.rom");
+const CARDINAL_ORCAS_SYM: &[u8] = include_bytes!("cardinal-orcas.rom.sym");
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
