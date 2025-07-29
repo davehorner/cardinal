@@ -19,6 +19,8 @@ This index lists the main documentation and note files in the `notes` folder for
 - [05.cardinal-orcas.md](./05.cardinal-orcas/README.md)  
   extend orca in new ways.
 
+- [06.hardware_verification.md](./06.input_event_routing/README.md)  
+  did you break something?
 ---
 
 *Last updated: July 28, 2025*
