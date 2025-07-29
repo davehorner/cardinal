@@ -18,56 +18,78 @@ $date = Get-Date -Format 'yy/MM/dd'
 
 
 
-# Read and parse CHANGELOG.md
-$lines = Get-Content -Path CHANGELOG.md
+# List of crate directories
+$crates = @("cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli")
 
-# Find first version section
-$startIndex = $null
-for ($i = 0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -match '^## \[\d+\.\d+\.\d+\]') {
-        $startIndex = $i
-        break
+# Prepare LAST_RELEASE content with a global header
+$lastReleaseContent = "# Multi-crate LAST_RELEASE`n"
+
+foreach ($crate in $crates) {
+    $changelogPath = Join-Path $crate "CHANGELOG.md"
+    if (-not (Test-Path $changelogPath)) {
+        Write-Warning "No CHANGELOG.md found for $crate, skipping."
+        continue
     }
-}
-if ($startIndex -eq $null) {
-    Write-Error "Could not find version section in CHANGELOG.md"
-    exit 1
-}
 
-# Find end of the section
-$endIndex = $lines.Count
-for ($i = $startIndex + 1; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -match '^## \[\d+\.\d+\.\d+\]') {
-        $endIndex = $i
-        break
+    # Read and parse CHANGELOG.md for this crate
+    $lines = Get-Content -Path $changelogPath
+
+    # Find first version section
+    $startIndex = $null
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^## \[\d+\.\d+\.\d+\]') {
+            $startIndex = $i
+            break
+        }
     }
-}
-$changelogBodyLines = $lines[$startIndex..($endIndex - 1)]
-$changelogBody = $changelogBodyLines -join "`n"
+    if ($startIndex -eq $null) {
+        Write-Warning "Could not find version section in $changelogPath, skipping."
+        continue
+    }
 
-# Extract date
-if ($lines[$startIndex] -match '- (\d{4})-(\d{2})-(\d{2})') {
-    $year = $matches[1].Substring(2)
-    $month = $matches[2]
-    $day = $matches[3]
-    $date = "$year/$month/$day"
-} else {
-    $date = Get-Date -Format 'yy/MM/dd'
-}
-Write-Host "Using release date: $date"
+    # Find end of the section
+    $endIndex = $lines.Count
+    for ($i = $startIndex + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^## \[\d+\.\d+\.\d+\]') {
+            $endIndex = $i
+            break
+        }
+    }
+    $changelogBodyLines = $lines[$startIndex..($endIndex - 1)]
+    $changelogBody = $changelogBodyLines -join "`n"
 
-# Step 4: Write LAST_RELEASE
-$firstLine = "$date|$sha|$version"
-$lastReleaseContent = "$firstLine`n$changelogBody"
+    # Extract date
+    if ($lines[$startIndex] -match '- (\d{4})-(\d{2})-(\d{2})') {
+        $year = $matches[1].Substring(2)
+        $month = $matches[2]
+        $day = $matches[3]
+        $date = "$year/$month/$day"
+    } else {
+        $date = Get-Date -Format 'yy/MM/dd'
+    }
+
+    # Get version from Cargo.toml in this crate
+    $cargoPath = Join-Path $crate "Cargo.toml"
+    $version = (Select-String -Path $cargoPath -Pattern '^version\s*=\s*"([^"]+)"' |
+                ForEach-Object { $_.Matches[0].Groups[1].Value })
+
+    # Compose first line for this crate
+    $firstLine = "$date|$sha|$version"
+
+    # Add crate section to LAST_RELEASE
+    $lastReleaseContent += "`n## $crate`n$firstLine`n$changelogBody`n"
+}
+
+# Write LAST_RELEASE file
 [System.IO.File]::WriteAllText("LAST_RELEASE", $lastReleaseContent, [System.Text.UTF8Encoding]::new($true))
 
-Write-Host "Wrote LAST_RELEASE"
+Write-Host "Wrote multi-crate LAST_RELEASE"
 
 git add LAST_RELEASE
 
 Write-Host "Amended last commit to include LAST_RELEASE"
 $existing = git log -1 --pretty=%B
-$combined = "$existing`n`n$firstLine"
+$combined = "$existing`n`n# Multi-crate LAST_RELEASE"
 
 $commitMsgFile = "COMMIT_MSG.tmp"
 Set-Content -Path $commitMsgFile -Value $combined -Encoding UTF8

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.5...cardinal-varvara-v0.4.6) - 2025-07-29
+
+### Other
+
+- *(varvara)* add gilrs gamepad support via ControllerGilrs  - Adds gilrs support as an optional feature to cardinal-varvara and cardinal-gui - Chains ControllerGilrs with ControllerUsb when enabled - Updates poll_pedal_event to support Uxn VM injection - Enables gilrs by default in cardinal-varvara - Updates workspace Cargo.toml and lock file accordingly - Refactors release.ps1 to support multi-crate LAST_RELEASE generation  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE
+
 ## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.3...cardinal-varvara-v0.4.4) - 2025-07-28
 
 ### Added
