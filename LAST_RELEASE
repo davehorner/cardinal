@@ -1,0 +1,30 @@
+﻿# Multi-crate LAST_RELEASE
+
+## cardinal-uxn
+25/07/28|4e0f103|0.4.2
+## [0.4.2](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.1...cardinal-uxn-v0.4.2) - 2025-07-28
+
+### Added
+
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+
+
+## cardinal-varvara
+25/07/28|4e0f103|0.4.4
+## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.3...cardinal-varvara-v0.4.4) - 2025-07-28
+
+### Added
+
+- *(gui)* add USB pedal support and uxn panel grid to cardinal-orcas
+- *(tracker)* add Tracker device for parallel mouse input support - demonstration.
+
+
+## cardinal-gui
+25/07/28|4e0f103|0.3.5
+## [0.3.5](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.4...cardinal-gui-v0.3.5) - 2025-07-28
+
+### Added
+
+- *(gui)* add USB pedal support and uxn panel grid to cardinal-orcas
+
