@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["cardinal-uxn", "cardinal-varvara","cardinal-gui","cardinal-cli"]
+#members = ["cardinal-varvara"]
+#members = ["cardinal-uxn"]
 exclude = ["fuzz"]
 
 [profile.release]

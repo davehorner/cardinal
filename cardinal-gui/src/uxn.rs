@@ -129,7 +129,7 @@ pub mod uxn {
             #[allow(static_mut_refs)]
             let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
             let mut uxn = Uxn::new(ram, Backend::Interpreter);
-            let varvara = Varvara::default();
+            let mut varvara = Varvara::default();
 
             // varvara.screen.buffer.resize(1024 * 768 * 4, 0);
             // varvara.screen.changed = true;
@@ -137,6 +137,9 @@ pub mod uxn {
                 let rom = std::fs::read(path)
                     .map_err(|e| format!("Failed to read ROM: {e}"))?;
                 let _ = uxn.reset(&rom);
+                varvara.reset(&rom);
+
+                varvara.load_sym_with_rom_path(path);
             }
 
             Ok(UxnModule {
@@ -145,17 +148,21 @@ pub mod uxn {
             })
         }
 
-        /// Reset the Uxn VM (clears memory and state)
-        pub fn reset(&self, rom: &[u8]) {
-            let mut uxn = self.uxn.lock().unwrap();
-            let _ = uxn.reset(rom);
-        }
+        // /// Reset the Uxn VM (clears memory and state)
+        // pub fn reset(&self, rom: &[u8]) {
+        //     let mut uxn = self.uxn.lock().unwrap();
+        //     let _ = uxn.reset(rom);
+        // }
 
         /// Load a new ROM into the Uxn VM (resets VM)
-        pub fn load_rom(&self, rom_path: &Path) -> Result<(), String> {
+        pub fn load_rom(&mut self, rom_path: &Path) -> Result<(), String> {
             let rom = std::fs::read(rom_path)
                 .map_err(|e| format!("Failed to read ROM: {e}"))?;
-            self.reset(&rom);
+            let mut uxn = self.uxn.lock().unwrap();
+            let _ = uxn.reset(&rom);
+            if let Some(varvara) = self.varvara.as_mut() {
+                varvara.load_sym_with_rom_path(rom_path);
+            }
             Ok(())
         }
     }
@@ -184,11 +191,12 @@ impl UxnModule {
         #[allow(static_mut_refs)]
         let ram: &'static mut [u8; 65536] = unsafe { &mut RAM };
         let mut uxn = Uxn::new(ram, Backend::Interpreter);
-        let varvara = Varvara::default();
+        let mut varvara = Varvara::default();
         if let Some(path) = rom_path {
             let rom = std::fs::read(path)
                 .map_err(|e| format!("Failed to read ROM: {e}"))?;
             let _ = uxn.reset(&rom);
+            varvara.load_sym_with_rom_path(path);
         }
         Ok(UxnModule {
             uxn: Arc::new(Mutex::new(uxn)),
@@ -207,9 +215,12 @@ impl UxnModule {
     }
 
     /// Load a new ROM into the Uxn VM (resets VM)
-    pub fn load_rom(&self, rom_path: &Path) -> Result<(), String> {
+    pub fn load_rom(&mut self, rom_path: &Path) -> Result<(), String> {
         let rom = std::fs::read(rom_path)
             .map_err(|e| format!("Failed to read ROM: {e}"))?;
+        if let Some(varvara) = self.varvara.as_mut() {
+            varvara.load_sym_with_rom_path(rom_path);
+        }
         self.reset(&rom);
         Ok(())
     }
@@ -256,7 +267,7 @@ pub struct UxnApp<'a> {
     auto_rom_select: bool,
     auto_timer: f64,
     auto_index: usize,
-    auto_roms: Vec<Vec<u8>>,
+    auto_roms: Vec<varvara::RomData>,
     /// Parallel to auto_roms: labels or filenames for each ROM
     auto_rom_labels: Vec<String>,
     /// Callback for when the ROM changes (filename or label)
@@ -311,7 +322,7 @@ impl<'a> UxnApp<'a> {
         event_rx: mpsc::Receiver<Event>,
         ctx: &egui::Context,
         window_mode: String,
-        auto_roms: Vec<Vec<u8>>,
+        auto_roms: Vec<varvara::RomData>,
         auto_rom_labels: Vec<String>,
         auto_rom_select: bool,
         reload_rx: std::sync::mpsc::Receiver<()>,
@@ -319,6 +330,11 @@ impl<'a> UxnApp<'a> {
             std::sync::Mutex<Option<std::path::PathBuf>>,
         >,
     ) -> Self {
+        if let Some(path) = rom_path_arc.lock().unwrap().as_ref() {
+            if path.exists() {
+                dev.load_sym_with_rom_path(path);
+            }
+        }
         // Run the VM and redraw once to initialize the framebuffer
         vm.run(&mut dev, 0x100);
 
@@ -343,10 +359,11 @@ impl<'a> UxnApp<'a> {
             );
             // Load the first ROM immediately
             let rom = &auto_roms[0];
-            let _ = vm.reset(rom);
-            dev.reset(rom);
+            let _ = vm.reset(&rom.rom);
+            dev.reset(&rom.rom);
             vm.run(&mut dev, 0x100);
             dev.redraw(&mut vm);
+
             auto_index = 0;
             auto_timer = 0.0;
             // Use the provided label if available, else fallback
@@ -396,6 +413,15 @@ impl<'a> UxnApp<'a> {
         self.on_rom_change = Some(Box::new(f));
     }
 
+    pub fn load_symbols(
+        &mut self,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        println!("[UxnApp] Loading symbols from: {}", path.display());
+        let _ = self.dev.load_symbols_into_self(path.to_str().unwrap());
+        Ok(())
+    }
+
     /// Reload the ROM from the given path (for hot-reload)
     pub fn reload_rom(&mut self, path: &std::path::Path) -> Result<(), String> {
         println!("[UxnApp] Reloading ROM from: {}", path.display());
@@ -405,6 +431,9 @@ impl<'a> UxnApp<'a> {
         self.dev.reset(&rom);
         self.vm.run(&mut self.dev, 0x100);
         self.dev.redraw(&mut self.vm);
+
+        self.load_symbols(path)?;
+
         // Explicitly beep after reload
         #[cfg(windows)]
         {
@@ -640,7 +669,13 @@ impl eframe::App for UxnApp<'_> {
                     format!("ROM {}", self.auto_index + 1)
                 };
                 self.set_rom_label(label);
-                let _ = self.load_rom(&rom);
+                let _ = self.load_rom(&rom.rom);
+                if rom.sym.is_some() {
+                    // Load symbols if available
+                    if let Some(sym) = &rom.sym {
+                        let _ = self.dev.load_symbols_from_vec(sym);
+                    }
+                }
             }
         }
         while let Ok(e) = self.event_rx.try_recv() {
