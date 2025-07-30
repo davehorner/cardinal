@@ -34,12 +34,21 @@ pub struct ControllerUsb {
 impl ControllerDevice for ControllerUsb {
     /// Sends a single character event
     fn char(&mut self, vm: &mut Uxn, c: u8) -> Event {
-        let event = self.controller.char(vm, c);
+        let _event = self.controller.char(vm, c);
         #[cfg(feature = "uses_gilrs")]
         if let Some(gilrs) = &mut self.gilrs {
             gilrs.char(vm, c);
         }
-        event
+        let p = vm.dev::<crate::controller::ControllerPorts>();
+        Event {
+            vector: p.vector.get(),
+            data: Some(crate::EventData {
+                addr: crate::controller::ControllerPorts::KEY,
+                value: c,
+                clear: true,
+            }),
+        }
+        // event
     }
 
     /// Send the given key event, returning an event if needed
@@ -91,10 +100,17 @@ impl ControllerUsb {
                                     println!(
                                         "[USB] Pedal {i} pressed (bit {mask:02b})"
                                     );
+                                    self.controller.pressed(
+                                        vm,
+                                        Key::Right,
+                                        true,
+                                    );
                                 } else {
                                     println!(
                                         "[USB] Pedal {i} released (bit {mask:02b})"
                                     );
+
+                                    self.controller.released(vm, Key::Right);
                                 }
                             }
                         }
@@ -148,9 +164,7 @@ impl ControllerUsb {
 
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 use hidapi::HidApi;
-#[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 use std::sync::mpsc;
-#[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 use std::thread;
 
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
