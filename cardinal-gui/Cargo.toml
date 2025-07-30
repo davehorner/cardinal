@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -12,7 +12,7 @@ publish = true
 [features]
 uses_usb = ["dep:hidapi", "varvara/uses_usb"]
 uses_gilrs = ["dep:gilrs", "uses_usb", "varvara/uses_gilrs"]
-default = ["uses_usb"]
+default = ["uses_usb", "uses_gilrs"]
 gilrs = ["dep:gilrs"]
 
 [[bin]]
@@ -32,8 +32,9 @@ notify = "8.1.0"
 serde_json = "1.0.141"
 tempfile = "3.20.0"
 #e_window = "0.1.13"
-reqwest = { version = "0.12.22", features = ["blocking", "json"] }
-varvara = { package = "cardinal-varvara", version = "0.4.5", default-features = false }
+
+varvara = { package = "cardinal-varvara", version = "0.4.6", default-features = false }
+#varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
 gilrs = { version = "0.11.0", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -41,25 +42,28 @@ clap.workspace = true
 cpal.workspace = true
 getrandom = "0.3.3"
 display-info = "0.5.4"
+reqwest = { version = "0.12.22", features = ["blocking", "json"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures.workspace = true
 web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 #getrandom = { version = "0.3.3", features = ["wasm_js"] }
+reqwest-wasm = { version = "0.11.16", features = ["blocking"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["winuser"] }
 hidapi = { version = "2.6.3", optional = true, features = ["windows-native"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.4.3", features = ["native"] }
+uxn = { package = "cardinal-uxn", version = "0.4.4", features = ["native"] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.4.3" }
+uxn = { package = "cardinal-uxn", version = "0.4.4" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 hidapi = { version = "2.6.3", optional = true, features = [] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 hidapi = { version = "2.6.3", optional = true, features = ["macos-shared-device"] }
+

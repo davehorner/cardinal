@@ -160,6 +160,11 @@ impl<'a> Stage<'a> {
                     if c.is_ascii_graphic() || c == ' ' {
                         let byte = c as u8;
                         println!("[DEBUG][Stage] Forwarding char event: '{c}' (0x{byte:02x}) to VM (from egui::Event::Text)");
+                        self.dev.pressed(
+                            &mut self.vm,
+                            varvara::Key::Char(byte),
+                            false,
+                        );
                         self.dev.char(&mut self.vm, byte);
                     } else {
                         println!("[DEBUG][Stage] Ignored char event: '{}' (0x{:02x}) (not printable)", c, c as u8);
@@ -459,5 +464,16 @@ impl<'a> Stage<'a> {
             egui::Color32::WHITE,
         );
         ui.painter().add(egui::Shape::mesh(mesh));
+    }
+
+    pub fn handle_usb_input(&mut self) {
+        // let k = varvara::Key::Right;
+        // let repeat = false;
+        // self.dev.pressed(&mut self.vm, k, repeat);
+        // self.dev.released(&mut self.vm, k);
+        // let k = varvara::Key::Char(b'A');
+        self.dev
+            .pressed(&mut self.vm, varvara::Key::Char(b'a'), false);
+        self.dev.char(&mut self.vm, b'a');
     }
 }
