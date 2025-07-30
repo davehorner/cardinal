@@ -6,7 +6,7 @@
 `cardinal-varvara\tests` is the the result of a hardware verification.  A test will produce a `.failed.png` when things go awry.
 
 
-come up with a thing, that's interesting and amenable to proof.  true or not true, you've learned something.
+come up with a thing interesting and amenable to proof.  true or not true, **you've learned something**.
 
 ## Summary
 

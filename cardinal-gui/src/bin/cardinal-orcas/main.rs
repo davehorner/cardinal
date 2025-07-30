@@ -410,7 +410,11 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
         {
             // Try to poll pedal state from the first panel's controller if available
             if let Some(uxn_panels) = self.uxn_panels.as_mut() {
+                // Get the currently focused panel, if any
+                // let focused_panel = self.focused_panel.and_then(|idx| uxn_panels.get_mut(idx));
+                // if let Some(panel) = focused_panel {
                 if let Some(panel) = uxn_panels.get_mut(0) {
+                    //panel.stage.handle_usb_input();
                     if let Some(varvara_controller) = panel
                         .stage
                         .dev
@@ -419,6 +423,13 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         .downcast_mut::<varvara::controller_usb::ControllerUsb>(
                         )
                     {
+                        use varvara::controller::inject_pedal_keys;
+                        inject_pedal_keys(
+                            &mut varvara_controller.controller,
+                            &mut panel.stage.vm,
+                            varvara_controller.last_pedal.unwrap_or(0),
+                            varvara_controller.last_pedal.unwrap_or(0),
+                        );
                         varvara_controller
                             .poll_pedal_event(&mut panel.stage.vm);
                         if let Some(pedal) = varvara_controller.last_pedal {
@@ -451,6 +462,8 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                     }
                                 }
                             }
+                        } else {
+                            //println!("[DEBUG][pedal] No pedal events received yet.");
                         }
                         // Optionally print debug info
                         // println!("[DEBUG][orcas] poll_pedal_event: changed={:?}, last_pedal={:?}", changed, varvara_controller.last_pedal);
@@ -623,14 +636,14 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                 if matches!(event, egui::Event::MouseMoved(_)) {
                                     continue;
                                 }
-                                println!("[DEBUG] Panel {i} egui event: {event:?}");
+                                // println!("[DEBUG] Panel {i} egui event: {event:?}");
                                 if let egui::Event::Text(s) = event {
                                     println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
                                 }
                             }
-                            panel.handle_input(&filtered_input, &response, rect);
+                            panel.stage.handle_input(&filtered_input, &response, rect);
                             // Step the VM and update the texture so UI reflects input
-                            panel.stage.vm.run(&mut panel.stage.dev, 0x100);
+                            // panel.stage.vm.run(&mut panel.stage.dev, 0x100);
                             panel.stage.dev.redraw(&mut panel.stage.vm);
                             panel.stage.update_texture();
                         }

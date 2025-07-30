@@ -104,7 +104,7 @@ impl Controller {
                 clear: true,
             }),
         };
-        println!("[CONTROLLER][char] char: '{}' (0x{:02x}), vector: 0x{:04x}, addr: 0x{:02x}", c as char, c, event.vector, ControllerPorts::KEY);
+        println!("[og CONTROLLER][char] char: '{}' (0x{:02x}), vector: 0x{:04x}, addr: 0x{:02x}", c as char, c, event.vector, ControllerPorts::KEY);
         event
     }
 
