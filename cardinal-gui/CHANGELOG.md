@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.6...cardinal-gui-v0.3.7) - 2025-07-30
+
+### Added
+
+- support loading and using .sym symbol files alongside ROMs.  orcas is not yet functional in terms of input.  it is in an interesting state where the letters and numbers show up;  but it is flashing blank frames and clearing the state.
+
 ## [0.3.5](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.4...cardinal-gui-v0.3.5) - 2025-07-28
 
 ### Added
