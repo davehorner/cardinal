@@ -3,7 +3,12 @@ use cardinal_gui::uxn::audio_setup;
 use cardinal_gui::uxn::InjectEvent;
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::NativeOptions;
+#[cfg(not(target_arch = "wasm32"))]
 use reqwest::Url;
+#[cfg(target_arch = "wasm32")]
+use reqwest_wasm::Client;
+#[cfg(target_arch = "wasm32")]
+use reqwest_wasm::Url;
 use std::thread;
 use varvara::Key;
 
@@ -286,7 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (label, url) in &static_rom_urls {
         let path = download_static_rom(label, url)?;
         static_rom_names.push(label.to_string());
-        static_rom_paths.push(path);
+        static_rom_paths.push(path.clone());
     }
 
     // If no ROM is selected, fetch ROM list and prompt user
@@ -296,6 +301,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut roms = static_rom_names.clone();
         let github_roms = fetch_rom_list()?;
         roms.extend(github_roms.iter().cloned());
+
+        // let cwd_roms = std::env::current_dir()
+        //     .ok()
+        //     .map(|mut dir| {
+        //         dir.push("roms");
+        //         dir
+        //     })
+        //     .filter(|dir| dir.is_dir());
+
+        // if let Some(roms_dir) = cwd_roms {
+        //     if let Ok(entries) = std::fs::read_dir(&roms_dir) {
+        //         for entry in entries.flatten() {
+        //             let path = entry.path();
+        //             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        //                 if ext.eq_ignore_ascii_case("rom") {
+        //                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        //                         roms.push(name.to_string());
+        //                         static_rom_paths.push(path.clone());
+        //                         static_rom_names.push(name.to_string());
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }2
+
         let selected = prompt_rom_selection(&roms)?;
         if selected == "__AUTO__" {
             // User hit return: enable auto ROM cycling
@@ -309,6 +340,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 let github_idx = idx - static_rom_paths.len();
                 let rom_file = download_rom(&github_roms[github_idx])?;
+                println!("[DEBUG] Downloaded ROM: {}", rom_file.display());
+                let _bytes = std::fs::read(&rom_file)?;
+                // Try to find a .sym file for this ROM in github_roms
+                let rom_name = &github_roms[github_idx];
+                let sym_name = if rom_name.ends_with(".rom") {
+                    let base = rom_name.trim_end_matches(".rom");
+                    // Look for base.rom.sym or base.sym in github_roms
+                    let sym1 = format!("{base}.rom.sym");
+                    let sym2 = format!("{base}.sym");
+                    github_roms
+                        .iter()
+                        .find(|n| *n == &sym1 || *n == &sym2)
+                        .cloned()
+                } else {
+                    None
+                };
+                if let Some(sym_file) = sym_name {
+                    if let Ok(sym_path) = download_sym(&sym_file) {
+                        let sym = std::fs::read(&sym_path)?;
+                        // Write the .sym to a temp file with the same base as the ROM temp file, adding ".sym" extension
+                        let sym_path = rom_file.clone();
+                        let sym_path = sym_path.with_extension(format!(
+                            "{}.sym",
+                            sym_path
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("")
+                        ));
+                        std::fs::write(&sym_path, &sym)
+                            .map_err(|e| e.to_string())?;
+                        println!(
+                            "[DEBUG] Downloaded .sym file: {}",
+                            sym_path.display()
+                        );
+                    }
+                }
                 title = format!("cardinal-demo - {}", github_roms[github_idx]);
                 rom_path = Some(rom_file);
             }
@@ -321,13 +388,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Build all_roms and all_labels if needed (for auto ROM cycling)
-    let mut all_roms: Vec<Vec<u8>> = Vec::new();
+    let mut all_roms: Vec<varvara::RomData> = Vec::new();
     let mut all_labels: Vec<String> = Vec::new();
     if auto_rom_select {
         // Add static ROMs first
         for (i, path) in static_rom_paths.iter().enumerate() {
             let bytes = std::fs::read(path)?;
-            all_roms.push(bytes);
+            println!("[DEBUG] Loaded static ROM: {}", path.display());
+
+            all_roms.push(varvara::RomData {
+                rom: bytes,
+                sym: None,
+            });
             all_labels.push(static_rom_names[i].clone());
         }
         // Then add GitHub ROMs
@@ -335,7 +407,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for name in &github_roms {
             let rom_file = download_rom(name)?;
             let bytes = std::fs::read(&rom_file)?;
-            all_roms.push(bytes);
+            println!("[DEBUG] Downloaded ROM: {}", rom_file.display());
+            if let Ok(_sym) = download_sym(name) {
+                let sym = std::fs::read(&rom_file)?;
+                all_roms.push(varvara::RomData {
+                    rom: bytes,
+                    sym: Some(sym),
+                });
+            } else {
+                all_roms.push(varvara::RomData {
+                    rom: bytes,
+                    sym: None,
+                });
+            }
             all_labels.push(name.clone());
         }
     }
@@ -346,6 +430,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         url: &str,
     ) -> Result<std::path::PathBuf, String> {
         if let Some(stripped) = url.strip_prefix("file://") {
+            println!("[DEBUG] Using local file path: {stripped}");
             // Use the local file path directly
             #[cfg(windows)]
             let mut path_str = stripped;
@@ -368,14 +453,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(format!("Local file not found: {}", path.display()))
             }
         } else {
+            println!("[DEBUG] Downloading static ROM from: {url}");
+
+            #[cfg(target_arch = "wasm32")]
+            let client = reqwest_wasm::Client::builder()
+                .user_agent("cardinal-demo")
+                .build()
+                .map_err(|e| e.to_string())?;
+            #[cfg(not(target_arch = "wasm32"))]
             let client = reqwest::blocking::Client::builder()
                 .user_agent("cardinal-demo")
                 .build()
                 .map_err(|e| e.to_string())?;
+
             let resp = client.get(url).send().map_err(|e| e.to_string())?;
             let bytes = resp.bytes().map_err(|e| e.to_string())?;
-            let mut file =
-                tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+            // let mut file =
+            //     tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+            //     let label_filename = _label.rsplit('/').next().unwrap_or(_label);
+            let label_filename = _label.rsplit('/').next().unwrap_or(_label);
+            let mut file = tempfile::Builder::new()
+                .prefix(label_filename)
+                .suffix("")
+                .rand_bytes(3)
+                .tempfile_in(".")
+                .expect("Failed to create tempfile for static ROM");
+
             file.write_all(&bytes).map_err(|e| e.to_string())?;
             let path =
                 file.into_temp_path().keep().map_err(|e| e.to_string())?;
@@ -435,6 +538,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut vm = vm.lock().unwrap();
     let mut dev = uxn_mod.varvara.take().expect("Varvara device missing");
     let _audio = audio_setup(dev.audio_streams());
+
+    // --- Load .sym file if it exists next to the ROM ---
+    println!("[DEBUG] Checking for .sym file next to ROM...");
+    if let Some(ref rom_path) = rom_path {
+        let mut sym_path = rom_path.clone();
+        sym_path.set_extension("sym");
+        println!("[DEBUG] Looking for .sym file at: {}", sym_path.display());
+        if sym_path.exists() {
+            match std::fs::read_to_string(&sym_path) {
+                Ok(_sym_contents) => {
+                    if let Some(ref mut varvara) = uxn_mod.varvara {
+                        let _ = varvara
+                            .load_symbols_into_self(sym_path.to_str().unwrap());
+                        println!("[DEBUG] Loaded symbols from {sym_path:?}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[DEBUG] Failed to read .sym file: {e}");
+                }
+            }
+        }
+    }
 
     // Use selected_rom_label for matching, not temp file name
     println!("[DEBUG] selected_rom_label: {selected_rom_label:?}");
@@ -614,6 +739,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(not(target_arch = "wasm32"))]
 fn fetch_rom_list() -> Result<Vec<String>, String> {
     let url = "https://api.github.com/repos/davehorner/cardinal/contents/roms";
+    println!("[DEBUG] Fetching ROM list from: {url}");
     let client = Client::builder()
         .user_agent("cardinal-demo")
         .build()
@@ -628,7 +754,7 @@ fn fetch_rom_list() -> Result<Vec<String>, String> {
     if let Some(arr) = resp.as_array() {
         for entry in arr {
             if let Some(name) = entry.get("name").and_then(|n| n.as_str()) {
-                if name.ends_with(".rom") {
+                if name.ends_with(".rom") || name.ends_with(".sym") {
                     roms.push(name.to_string());
                 }
             }
@@ -683,6 +809,43 @@ fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
         .get(Url::parse(&url).map_err(|e| e.to_string())?)
         .send()
         .map_err(|e| e.to_string())?;
+    let bytes = resp.bytes().map_err(|e| e.to_string())?;
+    let label_filename = rom_name.rsplit('/').next().unwrap_or(rom_name);
+    let _file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+    let mut file = tempfile::Builder::new()
+        .prefix(label_filename)
+        .suffix(".rom")
+        .rand_bytes(6)
+        .tempfile()
+        .map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    let path = file.into_temp_path().keep().map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+fn download_sym(sym_name: &str) -> Result<PathBuf, String> {
+    let url = format!(
+        "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{sym_name}");
+    println!("[DEBUG] Downloading .sym file from: {url}");
+    #[cfg(target_arch = "wasm32")]
+    use reqwest_wasm::Client;
+
+    #[cfg(target_arch = "wasm32")]
+    let body = reqwest_wasm::blocking::get(url)?.text()?;
+    #[cfg(target_arch = "wasm32")]
+    let bytes = body.as_bytes();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("cardinal-demo")
+        .build()
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let resp = client
+        .get(Url::parse(&url).map_err(|e| e.to_string())?)
+        .send()
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_arch = "wasm32"))]
     let bytes = resp.bytes().map_err(|e| e.to_string())?;
     let mut file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;

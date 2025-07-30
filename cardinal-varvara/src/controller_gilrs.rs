@@ -1,26 +1,19 @@
 #[cfg(not(feature = "uses_gilrs"))]
 compile_error!("controller_gilrs.rs should not be compiled unless the 'uses_gilrs' feature is enabled");
 
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use super::controller::Controller;
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use super::controller::{ControllerDevice, Key};
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use crate::Event;
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use std::any::Any;
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use uxn::Uxn;
 
 use gilrs::EventType;
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 use gilrs::{Axis, Button, Event as GilrsEvent, Gilrs};
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use std::sync::mpsc;
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 use std::thread;
 
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 /// Message from Gilrs controller thread
 #[derive(Debug)]
 pub struct GilrsControllerMessage {
@@ -28,7 +21,7 @@ pub struct GilrsControllerMessage {
     pub event: Option<GilrsEvent>,
 }
 
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 /// Gilrs controller device for Varvara system.
 pub struct ControllerGilrs {
     /// Receiver for Gilrs controller messages.
@@ -37,7 +30,7 @@ pub struct ControllerGilrs {
     pub controller: Controller,
 }
 
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 impl ControllerDevice for ControllerGilrs {
     fn char(&mut self, vm: &mut Uxn, c: u8) -> Event {
         self.controller.char(vm, c)
@@ -53,7 +46,7 @@ impl ControllerDevice for ControllerGilrs {
     }
 }
 
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 impl ControllerGilrs {
     /// Polls for Gilrs events and prints debug output for button/axis changes.
     pub fn poll_gilrs_event(&mut self, vm: &mut Uxn) {
@@ -180,7 +173,7 @@ impl ControllerGilrs {
 
 /// the thread that spawns the Gilrs controller listener
 /// This function is only available when the `uses_gilrs` feature is enabled
-#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+#[cfg(feature = "uses_gilrs")]
 pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage>
 {
     let (tx, rx) = mpsc::channel();

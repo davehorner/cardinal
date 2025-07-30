@@ -65,14 +65,14 @@ July 2025 Changes
 - refactor(deps): update to the latest and greatest 7/25 for all dependencies!
 - feat(cardinal-gui): add cardinal-demo binary with hot reload, inject, and rom cycling; cardinal-orcas binary added, wip.
 - wasm notice: cardinal-gui supports wasm.  the others do not.  PRs welcome.
-- [/notes/01.debug](/notes/01.debug/README.md) basic debug start.
-- [/notes/02.duplicate_mouse_device](/notes/02.duplicate_mouse_device/README.md) demonstrate custom Tracker Mouse device.
+- [/notes/01.debug](https://github.com/davehorner/cardinal/tree/main/notes/01.debug/README.md) basic debug start.
+- [/notes/02.duplicate_mouse_device](https://github.com/davehorner/cardinal/tree/main/notes/02.duplicate_mouse_device/README.md) demonstrate custom Tracker Mouse device.
 - resolved 100+ clippy lints.  wasm, ubuntu, windows, and macos all show green.
-- [/notes/03.hidusb_controllers](/notes/03.hidusb_controllers/README.md)
-- [/notes/04.sym_file_vector_labeling](/notes/04.sym_file_vector_labeling/README.md) 
-- [/notes/05.cardinal-orcas](/notes/05.cardinal-orcas/README.md)
-- [/notes/06.hardware_verification](/notes/06.hardware_verification/readme.md)
-- [/notes/07.xbox_controller_gilrs](/notes/07.xbox_controller_gilrs/README.md)
+- [/notes/03.hidusb_controllers](https://github.com/davehorner/cardinal/tree/main/notes/03.hidusb_controllers/README.md)
+- [/notes/04.sym_file_vector_labeling](https://github.com/davehorner/cardinal/tree/main/notes/04.sym_file_vector_labeling/README.md) 
+- [/notes/05.cardinal-orcas](https://github.com/davehorner/cardinal/tree/main/notes/05.cardinal-orcas/README.md)
+- [/notes/06.hardware_verification](https://github.com/davehorner/cardinal/tree/main/notes/06.hardware_verification/readme.md)
+- [/notes/07.xbox_controller_gilrs](https://github.com/davehorner/cardinal/tree/main/notes/07.xbox_controller_gilrs/README.md)
 
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)

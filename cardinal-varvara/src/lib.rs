@@ -39,6 +39,15 @@ pub use tracker::TrackerState;
 
 use uxn::{Device, Ports, Uxn};
 
+/// Holds ROM data and optional symbol information for Uxn.
+#[derive(Clone)]
+pub struct RomData {
+    /// The ROM data as a vector of bytes.
+    pub rom: Vec<u8>,
+    /// Optional symbol information as a vector of bytes.
+    pub sym: Option<Vec<u8>>,
+}
+
 /// Write to execute before calling the event vector
 #[derive(Copy, Clone, Debug)]
 pub struct EventData {
@@ -210,6 +219,53 @@ impl Varvara {
         Ok(())
     }
 
+    /// Load a ROM from a file path and attempt to load a .sys symbol file if present
+    pub fn load_sym_with_rom_path<P: AsRef<std::path::Path>>(
+        &mut self,
+        path: P,
+    ) {
+        let path = path.as_ref();
+        println!("[DEBUG][VARVARA] Loading symbols from {path:?}");
+        if path.exists() {
+            println!("[DEBUG][VARVARA] Found ROM at {path:?}");
+            // Look for a .sys file with the same file name as the ROM, e.g. orca.rom -> orca.rom.sys
+            if let Some(file_name) = path.file_name() {
+                use std::ffi::OsString;
+                use std::path::PathBuf;
+                let mut sys_file = OsString::from(file_name);
+                sys_file.push(".sym");
+                let mut sys_path = PathBuf::from(path);
+                sys_path.set_file_name(sys_file);
+                #[cfg(windows)]
+                let mut sys_path_str = sys_path.to_string_lossy().to_string();
+                #[cfg(windows)]
+                {
+                    sys_path_str = sys_path_str.replace("/", "\\");
+                }
+                #[cfg(not(windows))]
+                let sys_path_str = sys_path.to_string_lossy().to_string();
+                println!(
+                    "[DEBUG][VARVARA] Attempting to load symbols from {sys_path_str}");
+                if sys_path.exists() {
+                    let _ = self.load_symbols_into_self(&sys_path_str);
+                    println!(
+                        "[DEBUG][VARVARA] Loaded symbols from {sys_path_str}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Loads a .sym file from a byte vector and returns a map of address -> label
+    pub fn load_symbols_from_vec(
+        &mut self,
+        data: &[u8],
+    ) -> io::Result<HashMap<u16, String>> {
+        let map = Self::parse_symbols_from_bytes(data)?;
+        self.symbols = Some(map.clone());
+        Ok(map)
+    }
+
     /// Looks up a label for a given vector address
     pub fn vector_to_label(&self, vector: u16) -> &str {
         if let Some(ref map) = self.symbols {
@@ -283,6 +339,7 @@ impl Varvara {
     pub fn new() -> Self {
         #[cfg(feature = "uses_gilrs")]
         {
+            #[allow(unused_imports)]
             use controller_gilrs::ControllerGilrs;
         }
         Self {
@@ -321,8 +378,7 @@ impl Varvara {
         self.screen = screen::Screen::new();
         self.mouse = mouse::Mouse::new();
         self.file = file::File::new();
-        #[cfg(feature = "uses_gilrs")]
-        {}
+
         self.controller = if self.uses_usb {
             #[cfg(feature = "uses_gilrs")]
             {
@@ -515,22 +571,29 @@ impl Varvara {
     fn process_event(&mut self, vm: &mut Uxn, e: Event) {
         if e.vector != 0 {
             let label = self.vector_to_label(e.vector);
-            if self.last_vector != e.vector {
+            let skip_labels = ["timer/on-play", "on-mouse"];
+            let skip_print = skip_labels.contains(&label);
+
+            if self.last_vector != e.vector && !skip_print {
                 println!("[VARVARA][process_event] vector: 0x{:04x} [{}], data: {:?}", e.vector, label, e.data);
                 self.last_vector = e.vector;
             }
 
             if let Some(d) = e.data {
-                println!("[VARVARA][process_event] write_dev_mem addr: 0x{:02x}, value: 0x{:02x} ('{}')", d.addr, d.value, d.value as char);
+                if !skip_print {
+                    println!("[VARVARA][process_event] write_dev_mem addr: 0x{:02x}, value: 0x{:02x} ('{}')", d.addr, d.value, d.value as char);
+                }
                 vm.write_dev_mem(d.addr, d.value);
             }
             vm.run(self, e.vector);
             if let Some(d) = e.data {
                 if d.clear {
-                    println!(
-                        "[VARVARA][process_event] clear addr: 0x{:02x}",
-                        d.addr
-                    );
+                    if !skip_print {
+                        println!(
+                            "[VARVARA][process_event] clear addr: 0x{:02x}",
+                            d.addr
+                        );
+                    }
                     vm.write_dev_mem(d.addr, 0);
                 }
             }
@@ -552,6 +615,10 @@ impl Varvara {
         let mut file = File::open(path)?;
         let mut buf = Vec::new();
         file.read_to_end(&mut buf)?;
+        println!(
+            "[DEBUG] Loaded symbols from {path:?}, length: {}",
+            buf.len()
+        );
         let mut map = HashMap::new();
         let mut i = 0;
         while i + 2 < buf.len() {
