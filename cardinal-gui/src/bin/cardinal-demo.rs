@@ -204,6 +204,22 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[cfg(feature = "uses_e_midi")]
+use cardinal_gui::e_midi::MidiPlayerThread;
+
+#[allow(dead_code)]
+struct AppState {
+    // ...existing fields...
+    #[cfg(feature = "uses_e_midi")]
+    midi_thread: Option<MidiPlayerThread>,
+    #[cfg(feature = "uses_e_midi")]
+    should_exit: Arc<Mutex<bool>>,
+}
+
+fn egui_close_requested(ctx: &egui::Context) -> bool {
+    ctx.input(|i| i.viewport().close_requested())
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -664,7 +680,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let app_auto_rom_select = auto_rom_select;
 
-    eframe::run_native(
+    // Start the MIDI player thread when the GUI starts
+    #[cfg(feature = "uses_e_midi")]
+    let midi_thread = Some(MidiPlayerThread::start());
+
+
+    let result = eframe::run_native(
         &title,
         options,
         Box::new(move |cc| {
@@ -729,9 +750,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            Ok(Box::new(app) as Box<dyn eframe::App>)
+            // Wrap the app in a struct that checks for close and signals MIDI thread shutdown
+            struct AppWithClose<A> {
+                inner: A,
+                #[cfg(feature = "uses_e_midi")]
+                midi_thread: Option<MidiPlayerThread>,
+            }
+
+            impl<A: eframe::App> eframe::App for AppWithClose<A> {
+                fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+                    self.inner.update(ctx, frame);
+                    println!("[DEBUG] AppWithClose update called");
+                    #[cfg(feature = "uses_e_midi")]
+                    if egui_close_requested(ctx) {
+                        if let Some(thread) = self.midi_thread.take() {
+                            thread.shutdown();
+                        }
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                }
+                // ...other trait methods can delegate to self.inner...
+            }
+
+            Ok(Box::new(AppWithClose {
+                inner: app,
+                #[cfg(feature = "uses_e_midi")]
+                midi_thread,
+            }) as Box<dyn eframe::App>)
         }),
-    )?;
+    );
+
+    result?;
     Ok(())
 }
 

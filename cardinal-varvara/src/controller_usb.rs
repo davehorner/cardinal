@@ -76,6 +76,8 @@ impl ControllerDevice for ControllerUsb {
         self
     }
 }
+
+/// Trait for polling USB events
 pub trait ControllerPollEvents: Send {
     /// Polls for USB events and returns a vector of events.
     fn poll_usb_events(&mut self, vm: &mut Uxn) -> Vec<Event>;
@@ -93,7 +95,7 @@ impl ControllerPollEvents for ControllerUsb {
             events.extend(gilrs.poll_gilrs_event(vm).into_iter().flatten());
         }
 
-        println!("[USB] Polling for pedal events...");
+        //println!("[USB] Polling for pedal events...");
         // Poll USB messages
         while let Ok(msg) = self.rx.try_recv() {
             println!("[USB] Received message: {:?}", msg);
@@ -146,7 +148,9 @@ impl ControllerPollEvents for ControllerUsb {
                 println!("[USB] No pedal byte in message: {msg:?}");
             }
         }
-        println!("[USB] Polling complete, returning {} events", events.len());
+        if !events.is_empty() {
+            println!("[USB] Polling complete, returning {} events", events.len());
+        }
         events
     }
     // pub fn poll_usb_events(&mut self, vm: &mut Uxn) -> Vec<Event> {
