@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["cardinal-uxn", "cardinal-varvara","cardinal-gui","cardinal-cli"]
-#members = ["cardinal-varvara"]
+#members = ["cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli"]
+members = ["cardinal-varvara"]
 #members = ["cardinal-uxn"]
 exclude = ["fuzz"]
 
@@ -31,4 +31,4 @@ web-sys = { version = "0.3.77", features = [
 
 #[patch.crates-io]
 #varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
-#uxn = { path = "cardinal-uxn", package = "cardinal-uxn" } #, features = ["native"] 
+#uxn = { path = "cardinal-uxn", package = "cardinal-uxn" }             #, features = ["native"]

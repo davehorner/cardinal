@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1.4
+
+ARG RUST_VERSION=1.86
+
+FROM rust:bookworm
+
+ENV RUST_VERSION=${RUST_VERSION}
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+ENV GO_TASK_VERSION=3.44.0
+
+RUN dpkg --add-architecture arm64 \
+    && apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
+        binutils-aarch64-linux-gnu \
+        libc6-dev-arm64-cross \
+        pkg-config \
+        libssl-dev:arm64 \
+        libudev-dev:arm64 \
+        libasound2-dev:arm64 \
+        clang \
+        libclang-dev \
+        libxcb1-dev:arm64
+
+RUN rustup target install \
+        aarch64-unknown-linux-gnu \
+        x86_64-unknown-linux-gnu \
+    && rustup toolchain install ${RUST_VERSION} nightly \
+    && rustup component add \
+        clippy \
+        llvm-tools-preview
+
+# RUN cargo install --locked \
+#         cargo-deny \
+#         cargo-hack \
+#         cargo-llvm-cov \
+#         cargo-mutants \
+#         cargo-nextest \
+#         cargo-llvm-cov \
+#     && cargo install --locked cargo-udeps \
+#     && rm -rf $CARGO_HOME/git $CARGO_HOME/registry \
+#     && strip $CARGO_HOME/bin/*
+
+
+RUN set -e && \
+    curl -LO https://github.com/go-task/task/releases/download/v${GO_TASK_VERSION}/task_linux_amd64.deb && \
+    echo "cdd55b9908d3ef0889bb2270132f7bdb90e50d85b645c57434385cb8ea80cc42  task_linux_amd64.deb" | sha256sum -c - && \
+    dpkg -i task_linux_amd64.deb && \
+    rm -f task_linux_amd64.deb
+
+RUN apt-get autoremove -y \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup default ${RUST_VERSION}
+
+ENV \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+
+COPY . /src
+WORKDIR /src
+
+RUN cargo build --release --target aarch64-unknown-linux-gnu \
+    && aarch64-linux-gnu-strip target/aarch64-unknown-linux-gnu/release/cardinal-orcas
+
+# --- Add after your build stage ---
+FROM debian:bookworm-slim AS export-stage
+COPY --from=0 /src/target/aarch64-unknown-linux-gnu/release/cardinal-orcas /cardinal-orcas.aarch64.bin
