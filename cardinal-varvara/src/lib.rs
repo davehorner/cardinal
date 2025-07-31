@@ -51,8 +51,11 @@ pub struct RomData {
 /// Write to execute before calling the event vector
 #[derive(Copy, Clone, Debug)]
 pub struct EventData {
+    /// The device address associated with the event.
     pub addr: u8,
+    /// The value associated with the event (e.g., key code or pedal state).
     pub value: u8,
+    /// Whether to clear the event after handling.
     pub clear: bool,
 }
 
@@ -265,6 +268,7 @@ impl Varvara {
         self.symbols = Some(map.clone());
         Ok(map)
     }
+    /// Returns a mutable reference to the USB controller, if it exists.
     pub fn controller_usb_mut(
         &mut self,
     ) -> Option<&mut controller_usb::ControllerUsb> {
