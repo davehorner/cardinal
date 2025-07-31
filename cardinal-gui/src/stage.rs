@@ -429,7 +429,7 @@ impl<'a> Stage<'a> {
         self.size = out.size;
     }
     pub fn step(&mut self) {
-        self.vm.run(&mut self.dev, 0x100);
+        // self.vm.run(&mut self.dev, 0x100);
         self.dev.redraw(&mut self.vm);
     }
     pub fn update_texture(&mut self) {
@@ -467,13 +467,21 @@ impl<'a> Stage<'a> {
     }
 
     pub fn handle_usb_input(&mut self) {
+
+
+        if let Some(controller_usb) = self.dev.controller_usb_mut() {
+            let events = varvara::controller_usb::ControllerPollEvents::poll_usb_events(controller_usb, &mut self.vm);
+            for event in events {
+                self.dev.process_event(&mut self.vm, event);
+            }
+        }
         // let k = varvara::Key::Right;
         // let repeat = false;
         // self.dev.pressed(&mut self.vm, k, repeat);
         // self.dev.released(&mut self.vm, k);
         // let k = varvara::Key::Char(b'A');
-        self.dev
-            .pressed(&mut self.vm, varvara::Key::Char(b'a'), false);
-        self.dev.char(&mut self.vm, b'a');
+        //  self.dev
+        //      .pressed(&mut self.vm, varvara::Key::Char(b'a'), false);
+        // self.dev.char(&mut self.vm, b'a');
     }
 }

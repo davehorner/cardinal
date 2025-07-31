@@ -49,113 +49,105 @@ impl ControllerDevice for ControllerGilrs {
 #[cfg(feature = "uses_gilrs")]
 impl ControllerGilrs {
     /// Polls for Gilrs events and prints debug output for button/axis changes.
-    pub fn poll_gilrs_event(&mut self, vm: &mut Uxn) {
+    pub fn poll_gilrs_event(&mut self, vm: &mut Uxn) -> Option<Vec<Event>> {
+        let mut events = Vec::new();
         while let Ok(msg) = self.rx.try_recv() {
             if let Some(event) = msg.event {
-                println!("[GILRS] Event: {event:?}");
-                // You can add more detailed event handling here
-                // Example mapping: map Gilrs button events to internal controller keys
-
-                match event.event {
-                    EventType::ButtonPressed(button, _) => {
-                        // Map Gilrs button to internal Key
-                        if let Some(key) = match button {
-                            Button::South => Some(Key::Char(b'A')),
-                            Button::East => Some(Key::Char(b'B')),
-                            Button::North => Some(Key::Char(b'X')),
-                            Button::West => Some(Key::Char(b'Y')),
-                            Button::DPadUp => Some(Key::Up),
-                            Button::DPadDown => Some(Key::Down),
-                            Button::DPadLeft => Some(Key::Left),
-                            Button::DPadRight => Some(Key::Right),
-                            Button::LeftTrigger => Some(Key::Char(b'L')),
-                            Button::RightTrigger => Some(Key::Char(b'R')),
-                            Button::Start => Some(Key::Char(b'S')),
-                            Button::Select => Some(Key::Char(b'E')),
-                            _ => None,
-                        } {
-                            let _ = self.controller.pressed(vm, key, false);
+            println!("[GILRS] Event: {event:?}");
+            match event.event {
+                EventType::ButtonPressed(button, _) => {
+                let maybe_event = match button {
+                    Button::South => self.controller.pressed(vm, Key::Char(b'A'), false),
+                    Button::East => self.controller.pressed(vm, Key::Char(b'B'), false),
+                    Button::North => self.controller.pressed(vm, Key::Char(b'X'), false),
+                    Button::West => self.controller.pressed(vm, Key::Char(b'Y'), false),
+                    Button::DPadUp => self.controller.pressed(vm, Key::Up, true),
+                    Button::DPadDown => self.controller.pressed(vm, Key::Down, true),
+                    Button::DPadLeft => self.controller.pressed(vm, Key::Left, true),
+                    Button::DPadRight => self.controller.pressed(vm, Key::Right, true),
+                    Button::LeftTrigger => self.controller.pressed(vm, Key::Char(b'L'), false),
+                    Button::RightTrigger => self.controller.pressed(vm, Key::Char(b'R'), false),
+                    Button::Start => self.controller.pressed(vm, Key::Char(b'S'), false),
+                    Button::Select => self.controller.pressed(vm, Key::Char(b'E'), false),
+                    _ => None,
+                };
+                if let Some(ev) = maybe_event {
+                    events.push(ev);
+                }
+                }
+                EventType::ButtonReleased(button, _) => {
+                let maybe_event = match button {
+                    Button::South => self.controller.released(vm, Key::Char(b'A')),
+                    Button::East => self.controller.released(vm, Key::Char(b'B')),
+                    Button::North => self.controller.released(vm, Key::Char(b'X')),
+                    Button::West => self.controller.released(vm, Key::Char(b'Y')),
+                    Button::DPadUp => self.controller.released(vm, Key::Up),
+                    Button::DPadDown => self.controller.released(vm, Key::Down),
+                    Button::DPadLeft => self.controller.released(vm, Key::Left),
+                    Button::DPadRight => self.controller.released(vm, Key::Right),
+                    Button::LeftTrigger => self.controller.released(vm, Key::Char(b'L')),
+                    Button::RightTrigger => self.controller.released(vm, Key::Char(b'R')),
+                    Button::Start => self.controller.released(vm, Key::Char(b'S')),
+                    Button::Select => self.controller.released(vm, Key::Char(b'E')),
+                    _ => None,
+                };
+                if let Some(ev) = maybe_event {
+                    events.push(ev);
+                }
+                }
+                EventType::AxisChanged(axis, value, _) => {
+                let threshold = 0.5;
+                match axis {
+                    Axis::DPadX => {
+                    if value > threshold {
+                        if let Some(ev) = self.controller.pressed(vm, Key::Right, false) {
+                        events.push(ev);
+                        }
+                        if let Some(ev) = self.controller.released(vm, Key::Left) {
+                        events.push(ev);
+                        }
+                    } else if value < -threshold {
+                        if let Some(ev) = self.controller.pressed(vm, Key::Left, false) {
+                        events.push(ev);
+                        }
+                        if let Some(ev) = self.controller.released(vm, Key::Right) {
+                        events.push(ev);
+                        }
+                    } else {
+                        if let Some(ev) = self.controller.released(vm, Key::Left) {
+                        events.push(ev);
+                        }
+                        if let Some(ev) = self.controller.released(vm, Key::Right) {
+                        events.push(ev);
                         }
                     }
-                    EventType::ButtonReleased(button, _) => {
-                        if let Some(key) = match button {
-                            Button::South => Some(Key::Char(b'A')),
-                            Button::East => Some(Key::Char(b'B')),
-                            Button::North => Some(Key::Char(b'X')),
-                            Button::West => Some(Key::Char(b'Y')),
-                            Button::DPadUp => Some(Key::Up),
-                            Button::DPadDown => Some(Key::Down),
-                            Button::DPadLeft => Some(Key::Left),
-                            Button::DPadRight => Some(Key::Right),
-                            Button::LeftTrigger => Some(Key::Char(b'L')),
-                            Button::RightTrigger => Some(Key::Char(b'R')),
-                            Button::Start => Some(Key::Char(b'S')),
-                            Button::Select => Some(Key::Char(b'E')),
-                            _ => None,
-                        } {
-                            let _ = self.controller.released(vm, key);
-                        }
                     }
-                    EventType::AxisChanged(axis, value, _) => {
-                        // Map DPad axes to arrow keys (for controllers that use axes for DPad)
-                        let threshold = 0.5;
-                        match axis {
-                            Axis::DPadX => {
-                                if value > threshold {
-                                    let _ = self.controller.pressed(
-                                        vm,
-                                        Key::Right,
-                                        false,
-                                    );
-                                    let _ =
-                                        self.controller.released(vm, Key::Left);
-                                } else if value < -threshold {
-                                    let _ = self.controller.pressed(
-                                        vm,
-                                        Key::Left,
-                                        false,
-                                    );
-                                    let _ = self
-                                        .controller
-                                        .released(vm, Key::Right);
-                                } else {
-                                    let _ =
-                                        self.controller.released(vm, Key::Left);
-                                    let _ = self
-                                        .controller
-                                        .released(vm, Key::Right);
-                                }
-                            }
-                            Axis::DPadY => {
-                                if value > threshold {
-                                    let _ = self.controller.pressed(
-                                        vm,
-                                        Key::Down,
-                                        false,
-                                    );
-                                    let _ =
-                                        self.controller.released(vm, Key::Up);
-                                } else if value < -threshold {
-                                    let _ = self.controller.pressed(
-                                        vm,
-                                        Key::Up,
-                                        false,
-                                    );
-                                    let _ =
-                                        self.controller.released(vm, Key::Down);
-                                } else {
-                                    let _ =
-                                        self.controller.released(vm, Key::Up);
-                                    let _ =
-                                        self.controller.released(vm, Key::Down);
-                                }
-                            }
-                            _ => {}
+                    Axis::DPadY => {
+                    if value > threshold {
+                        if let Some(ev) = self.controller.pressed(vm, Key::Down, false) {
+                        events.push(ev);
                         }
+                        // Optionally handle release of Up
+                    } else if value < -threshold {
+                        if let Some(ev) = self.controller.pressed(vm, Key::Up, false) {
+                        events.push(ev);
+                        }
+                        // Optionally handle release of Down
+                    } else {
+                        // Optionally handle release of Up/Down
+                    }
                     }
                     _ => {}
                 }
+                }
+                _ => {}
             }
+            }
+        }
+        if events.is_empty() {
+            None
+        } else {
+            Some(events)
         }
     }
 
