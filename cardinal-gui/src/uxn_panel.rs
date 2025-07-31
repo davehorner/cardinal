@@ -90,6 +90,7 @@ impl<'a> UxnPanel<'a> {
         // If focused, process keyboard input (including char/text events)
         if self.focused {
             self.stage.handle_input(&input, &response, rect);
+            self.stage.handle_usb_input();
         }
 
         // Step VM, update texture, draw

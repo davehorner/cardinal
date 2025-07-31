@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.7...cardinal-gui-v0.3.8) - 2025-07-31
+
+### Added
+
+- *(input)* hot pluggable xbox controller support and letters/numbers now work.  shared variables are also working between the grids.  the cardinal-demo supports the buttons on the xbox but the dpad doesn't work.  analog pads and repeat are not yet working.  this is functional enough that someone could actually use it.
+
 ## [0.3.7](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.6...cardinal-gui-v0.3.7) - 2025-07-30
 
 ### Added

@@ -693,45 +693,46 @@ impl eframe::App for UxnApp<'_> {
                 }
             }
         }
-        if let Some(ref mut varvara_controller) =
-            self.dev
-                .controller
-                .as_any()
-                .downcast_mut::<varvara::controller::Controller>()
-        {
-            // Example pedal event mapping (replace with your actual pedal state logic)
-            // Assume pedal_state is a u8 bitmask from your input source
-            let pedal_state: u8 = 0; // TODO: get real pedal state
-            static mut PREV_PEDAL: u8 = 0;
-            let _prev;
-            unsafe {
-                _prev = PREV_PEDAL;
-                PREV_PEDAL = pedal_state;
-            }
-            // Use canonical helper from varvara::controller
-            varvara::controller::inject_pedal_keys(
-                varvara_controller,
-                &mut self.vm,
-                _prev,
-                pedal_state,
-            );
-        }
+        // if let Some(ref mut varvara_controller) =
+        //     self.dev
+        //         .controller
+        //         .as_any()
+        //         .downcast_mut::<varvara::controller::Controller>()
+        // {
+        //     // Example pedal event mapping (replace with your actual pedal state logic)
+        //     // Assume pedal_state is a u8 bitmask from your input source
+        //     let pedal_state: u8 = 0; // TODO: get real pedal state
+        //     static mut PREV_PEDAL: u8 = 0;
+        //     let _prev;
+        //     unsafe {
+        //         _prev = PREV_PEDAL;
+        //         PREV_PEDAL = pedal_state;
+        //     }
+        //     // Use canonical helper from varvara::controller
+        //     varvara::controller::inject_pedal_keys(
+        //         varvara_controller,
+        //         &mut self.vm,
+        //         _prev,
+        //         pedal_state,
+        //     );
+        // }
+        let mut events = Vec::new();
         #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
-        if let Some(ref mut varvara_controller) =
-            self.dev
+        {
+            // Only borrow self.dev.controller mutably once in this block
+            let mut last_pedal = None;
+            if let Some(controller_usb) = self
+                .dev
                 .controller
                 .as_any()
                 .downcast_mut::<varvara::controller_usb::ControllerUsb>()
-        {
-            // Poll pedal event and inject mapped key events into the VM
-
+            {
+                events = varvara::controller_usb::ControllerPollEvents::poll_usb_events(controller_usb, &mut self.vm);
+                last_pedal = controller_usb.last_pedal;
+            }
+            // Now, after the mutable borrow is done, update last_usb_event, etc.
             static mut PREV_PEDAL: u8 = 0;
-            varvara_controller.poll_pedal_event(&mut self.vm);
-            // println!(
-            //     "[DEBUG][poll_pedal_event] called, changed=(), last_pedal={:?}",
-            //     varvara_controller.last_pedal
-            // );
-            if let Some(pedal) = varvara_controller.last_pedal {
+            if let Some(pedal) = last_pedal {
                 // Update last_usb_event for debug panel
                 self.last_usb_event = Some((pedal, vec![]));
                 let _prev;
@@ -742,6 +743,11 @@ impl eframe::App for UxnApp<'_> {
                 // Use shared controller pedal key injection logic
                 // Controller::inject_pedal_keys(&mut self.vm, prev, pedal);
             }
+        }
+        let pedal_data: Vec<u8> = events.iter().flat_map(|e| e.data.iter().map(|b| b.value)).collect();
+        for value in pedal_data {
+            self.dev.pressed(&mut self.vm, varvara::Key::Char(value), true);
+            self.dev.char(&mut self.vm, value);
         }
 
         ctx.request_repaint();
