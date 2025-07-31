@@ -76,22 +76,32 @@ impl ControllerDevice for ControllerUsb {
         self
     }
 }
+pub trait ControllerPollEvents: Send {
+    /// Polls for USB events and returns a vector of events.
+    fn poll_usb_events(&mut self, vm: &mut Uxn) -> Vec<Event>;
+}
 
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
-impl ControllerUsb {
-    /// Polls for pedal events and prints debug output for press/release changes.
-    /// Call this in your main loop to process pedal events from the USB device.
-    pub fn poll_pedal_event(&mut self, vm: &mut Uxn) {
+impl ControllerPollEvents for ControllerUsb {
+    /// Polls for USB events and returns a vector of events.
+    fn poll_usb_events(&mut self, vm: &mut Uxn) -> Vec<Event> {
+        let mut events = Vec::new();
+
         // Chain gilrs polling first, only if uses_gilrs
         #[cfg(feature = "uses_gilrs")]
         if let Some(gilrs) = &mut self.gilrs {
-            gilrs.poll_gilrs_event(vm);
+            events.extend(gilrs.poll_gilrs_event(vm).into_iter().flatten());
         }
+
+        println!("[USB] Polling for pedal events...");
+        // Poll USB messages
         while let Ok(msg) = self.rx.try_recv() {
+            println!("[USB] Received message: {:?}", msg);
             // VEC Footpedal: pedal state is in the first byte of the message
             if let Some(&pedal_byte) = msg.data.first() {
                 match self.last_pedal {
                     Some(prev) => {
+                        println!("[USB] Pedal state changed: 0x{pedal_byte:02x} (was 0x{prev:02x})");
                         let changed = pedal_byte ^ prev;
                         for i in 0..8 {
                             let mask = 1 << i;
@@ -100,17 +110,27 @@ impl ControllerUsb {
                                     println!(
                                         "[USB] Pedal {i} pressed (bit {mask:02b})"
                                     );
-                                    self.controller.pressed(
+                                    if let Some(e) = self.controller.pressed(
                                         vm,
                                         Key::Right,
                                         true,
-                                    );
+                                    ) {
+                                        events.push(e);
+                                    }
+                                    if let Some(event) =
+                                        self.controller.released(vm, Key::Right)
+                                    {
+                                        events.push(event);
+                                    }
                                 } else {
                                     println!(
                                         "[USB] Pedal {i} released (bit {mask:02b})"
                                     );
-
-                                    self.controller.released(vm, Key::Right);
+                                    if let Some(event) =
+                                        self.controller.released(vm, Key::Right)
+                                    {
+                                        events.push(event);
+                                    }
                                 }
                             }
                         }
@@ -126,8 +146,23 @@ impl ControllerUsb {
                 println!("[USB] No pedal byte in message: {msg:?}");
             }
         }
+        println!("[USB] Polling complete, returning {} events", events.len());
+        events
     }
+    // pub fn poll_usb_events(&mut self, vm: &mut Uxn) -> Vec<Event> {
+    //     let mut events = Vec::new();
 
+    //     // Chain gilrs polling first, only if uses_gilrs
+    //     #[cfg(feature = "uses_gilrs")]
+    //     if let Some(gilrs) = &mut self.gilrs {
+    //         events.extend(gilrs.poll_gilrs_event(vm).into_iter().flatten());
+    //     }
+    //     events
+    // }
+}
+
+#[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
+impl ControllerUsb {
     /// Helper to construct a ControllerUsb with optional gilrs chaining.
     #[cfg(feature = "uses_gilrs")]
     pub fn new(

@@ -51,9 +51,9 @@ pub struct RomData {
 /// Write to execute before calling the event vector
 #[derive(Copy, Clone, Debug)]
 pub struct EventData {
-    addr: u8,
-    value: u8,
-    clear: bool,
+    pub addr: u8,
+    pub value: u8,
+    pub clear: bool,
 }
 
 /// Internal events, accumulated by devices then applied to the CPU
@@ -264,6 +264,14 @@ impl Varvara {
         let map = Self::parse_symbols_from_bytes(data)?;
         self.symbols = Some(map.clone());
         Ok(map)
+    }
+    pub fn controller_usb_mut(
+        &mut self,
+    ) -> Option<&mut controller_usb::ControllerUsb> {
+        self.controller
+            .as_mut()
+            .as_any()
+            .downcast_mut::<controller_usb::ControllerUsb>()
     }
 
     /// Looks up a label for a given vector address
@@ -521,8 +529,9 @@ impl Varvara {
     pub fn pressed(&mut self, vm: &mut Uxn, k: Key, repeat: bool) {
         // Only send pressed events for non-character keys
         println!("Pressed key: {k:?}");
-        if let Key::Char(_) = k {
+        if let Key::Char(k) = k {
             // Do nothing, character keys are handled by char()
+            self.char(vm, k as u8);
         } else if let Some(e) = self.controller.pressed(vm, k, repeat) {
             println!("Processing event: {e:?}");
             self.process_event(vm, e);
@@ -568,7 +577,7 @@ impl Varvara {
     /// Processes a single vector event
     ///
     /// Events with an unassigned vector (i.e. 0) are ignored
-    fn process_event(&mut self, vm: &mut Uxn, e: Event) {
+    pub fn process_event(&mut self, vm: &mut Uxn, e: Event) {
         if e.vector != 0 {
             let label = self.vector_to_label(e.vector);
             let skip_labels = ["timer/on-play", "on-mouse"];
