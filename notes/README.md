@@ -25,6 +25,9 @@ This index lists the main documentation and note files in the `notes` folder for
 - [07.xbox_controller_gilrs](https://github.com/davehorner/cardinal/tree/main/notes/07.xbox_controller_gilrs/README.md)  
   gilrs (gamepad) support, mapping, and usage notes.
 
+- [08.e_midi](https://github.com/davehorner/cardinal/tree/main/notes/08.e_midi/README.md)  
+  MIDI event handling, integration, and design notes for cardinal.
+
 ---
 
 *Last updated: July 29, 2025*
