@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.4...cardinal-uxn-v0.4.5) - 2025-07-31
+
+### Other
+
+- *(gui+build)* add e_midi support and aarch64 cross-compilation via Docker  - Enabled `uses_e_midi` feature in `cardinal-demo` (enabled by default). - Added `e_midi.rs` module with MidiPlayerThread lifecycle management. - Cleanly shuts down MIDI thread on GUI close via `AppWithClose` wrapper.  NOT TRUE - CTRL+C to EXIT.  TODO. - Reduced USB controller logging noise for cleaner output. - Added `Dockerfile.aarch64` and Windows `build_aarch64.cmd` to support   cross-compilation of cardinal-orcas for `aarch64-unknown-linux-gnu`.
+
 ## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.3...cardinal-uxn-v0.4.4) - 2025-07-30
 
 ### Added
