@@ -357,8 +357,8 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn",
- "cardinal-varvara",
+ "cardinal-uxn 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "env_logger",
  "log",
@@ -366,11 +366,11 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
- "cardinal-uxn",
- "cardinal-varvara",
+ "cardinal-uxn 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "cpal",
  "display-info",
@@ -402,14 +402,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "cardinal-varvara"
-version = "0.4.6"
+name = "cardinal-uxn"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fab4aeba76650089ab905c7b8af15a9e751149efe56a58cae4521750e84c1d8"
 dependencies = [
- "cardinal-uxn",
+ "anyhow",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.7"
+dependencies = [
+ "cardinal-uxn 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "gilrs",
  "hidapi",
  "image",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64aae2bb0adcf57fe092aeaee66d344d8f9279d1c921a53b59681dc9934f904b"
+dependencies = [
+ "cardinal-uxn 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
+ "gilrs",
+ "hidapi",
  "log",
  "static_assertions",
  "zerocopy",
