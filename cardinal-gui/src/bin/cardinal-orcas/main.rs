@@ -423,15 +423,15 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         .downcast_mut::<varvara::controller_usb::ControllerUsb>(
                         )
                     {
-                        use varvara::controller::inject_pedal_keys;
-                        inject_pedal_keys(
-                            &mut varvara_controller.controller,
-                            &mut panel.stage.vm,
-                            varvara_controller.last_pedal.unwrap_or(0),
-                            varvara_controller.last_pedal.unwrap_or(0),
-                        );
-                        varvara_controller
-                            .poll_pedal_event(&mut panel.stage.vm);
+                        // use varvara::controller::inject_pedal_keys;
+                        // inject_pedal_keys(
+                        //     &mut varvara_controller.controller,
+                        //     &mut panel.stage.vm,
+                        //     varvara_controller.last_pedal.unwrap_or(0),
+                        //     varvara_controller.last_pedal.unwrap_or(0),
+                        // );
+                        // varvara_controller
+                        //     .poll_pedal_event(&mut panel.stage.vm);
                         if let Some(pedal) = varvara_controller.last_pedal {
                             self.last_usb_pedal = Some(pedal);
                             // Map pedal bits to panel focus: bits 1,2,4,8 -> panels 0-3, 7 (all pressed) -> panel 4
@@ -549,6 +549,9 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
         if let Some(uxn_panels) = self.uxn_panels.as_mut() {
             for panel in uxn_panels.iter_mut() {
                 panel.stage.scale = panel_scale;
+                if !panel.is_focused() {
+                    panel.stage.step();
+                }
             }
             egui::CentralPanel::default().show(ctx, |ui| {
                 egui::Grid::new("uxn_grid").num_columns(self.grid_cols).show(ui, |ui| {

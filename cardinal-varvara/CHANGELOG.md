@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.6...cardinal-varvara-v0.4.7) - 2025-07-31
+
+### Added
+
+- *(input)* hot pluggable xbox controller support and letters/numbers now work.  shared variables are also working between the grids.  the cardinal-demo supports the buttons on the xbox but the dpad doesn't work.  analog pads and repeat are not yet working.  this is functional enough that someone could actually use it.
+
+### Other
+
+- support loading and using .sym symbol files alongside ROMs.  orcas is not yet functional in terms of input.  it is in an interesting state where the letters and numbers show up;  but it is flashing blank frames and clearing the state.  - Automatically detects and loads .sym files matching downloaded or static ROMs. - Added RomData struct to pair ROMs with optional symbol metadata. - Enhanced cardinal-demo to fetch, persist, and use symbol files from GitHub. - Updated auto ROM cycling to preserve and load associated .sym files. - Integrated symbol loading into Varvara and UxnApp lifecycle. - Added detailed debug output for ROM and symbol file handling. - Improved controller USB char handling to emit complete events. - Added handle_usb_input method and refined input event forwarding.
+
 ## [0.4.6](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.5...cardinal-varvara-v0.4.6) - 2025-07-30
 
 ### Added
