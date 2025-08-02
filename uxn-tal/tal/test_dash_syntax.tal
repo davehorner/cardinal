@@ -1,0 +1,5 @@
+|20 @Screen &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+
+|0100 @main
+    [ LIT2 00 -Screen/auto ] DEO
+    BRK

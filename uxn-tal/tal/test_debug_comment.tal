@@ -1,0 +1,4 @@
+|0100 @main
+    ( octave )
+    [ LIT "a ] NEQk NIP
+    BRK

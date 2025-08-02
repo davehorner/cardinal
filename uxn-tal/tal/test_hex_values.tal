@@ -1,0 +1,8 @@
+( Test hex byte sequences like asset data )
+
+@hex-data
+    c3c7 dcf0 ff1f 0707
+    e0e0 0303 f0f8 1f0f
+
+@main
+    BRK

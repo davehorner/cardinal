@@ -65,9 +65,12 @@ ENV \
 COPY . /src
 WORKDIR /src
 
-RUN cargo build --release --target aarch64-unknown-linux-gnu \
-    && aarch64-linux-gnu-strip target/aarch64-unknown-linux-gnu/release/cardinal-orcas
+RUN cargo build --release --target aarch64-unknown-linux-gnu
+
+RUN aarch64-linux-gnu-strip target/aarch64-unknown-linux-gnu/release/cardinal-orcas
+RUN aarch64-linux-gnu-strip target/aarch64-unknown-linux-gnu/release/cardinal-demo
 
 # --- Add after your build stage ---
 FROM debian:bookworm-slim AS export-stage
 COPY --from=0 /src/target/aarch64-unknown-linux-gnu/release/cardinal-orcas /cardinal-orcas.aarch64.bin
+COPY --from=0 /src/target/aarch64-unknown-linux-gnu/release/cardinal-demo /cardinal-demo.aarch64.bin

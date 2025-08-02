@@ -98,7 +98,7 @@ impl ControllerPollEvents for ControllerUsb {
         //println!("[USB] Polling for pedal events...");
         // Poll USB messages
         while let Ok(msg) = self.rx.try_recv() {
-            println!("[USB] Received message: {:?}", msg);
+            println!("[USB] Received message: {msg:?}");
             // VEC Footpedal: pedal state is in the first byte of the message
             if let Some(&pedal_byte) = msg.data.first() {
                 match self.last_pedal {

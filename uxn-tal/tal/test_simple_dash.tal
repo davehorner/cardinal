@@ -1,0 +1,6 @@
+|0000
+@direction $1
+
+|0100
+-direction
+BRK

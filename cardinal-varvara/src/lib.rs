@@ -535,7 +535,7 @@ impl Varvara {
         println!("Pressed key: {k:?}");
         if let Key::Char(k) = k {
             // Do nothing, character keys are handled by char()
-            self.char(vm, k as u8);
+            self.char(vm, k);
         } else if let Some(e) = self.controller.pressed(vm, k, repeat) {
             println!("Processing event: {e:?}");
             self.process_event(vm, e);

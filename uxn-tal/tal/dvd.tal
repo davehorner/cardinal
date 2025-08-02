@@ -1,0 +1,56 @@
+( DVD Bounce )
+
+|00 @System/vector $2 &wst $1 &rst $1 &eaddr $2 &ecode $1 &pad $1 &r $2 &g $2 &b $2 &debug $1 &halt $1
+|20 @Screen/vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+
+|100
+
+@on-reset ( -> )
+	( | theme )
+	#4cfd .System/r DEO2
+	#4cf3 .System/g DEO2
+	#dcf2 .System/b DEO2
+	;dvd/on-frame .Screen/vector DEO2
+	( collision x* ) .Screen/width DEI2 DUP2 #0020 SUB2 ,dvd/cox STR2
+	#01 SFT2
+	( collision y* ) .Screen/height DEI2 DUP2 #0010 SUB2 ,dvd/coy STR2
+	#01 SFT2 dvd/<set-pos>
+	BRK
+
+@dvd/on-frame ( -> )
+	( | x )
+	,&x LDR2
+	( left ) ORAk ?{ LIT2 ADD2 _&opx STR }
+	( right ) DUP2 LIT2 &cox $2 NEQ2 ?{ LIT2 SUB2 _&opx STR }
+	#0001 [ &opx ADD2 ]
+	( | y )
+	,&y LDR2
+	( top ) ORAk ?{ LIT2 ADD2 _&opy STR }
+	( bottom ) DUP2 LIT2 &coy $2 NEQ2 ?{ LIT2 SUB2 _&opy STR }
+	#0001 [ &opy ADD2 ] dvd/<move>
+	BRK
+
+@dvd/<move> ( x* y* -- )
+	#00 /<draw>
+	( >> )
+
+@dvd/<set-pos> ( x* y* -- )
+	,&y STR2
+	,&x STR2
+	#01
+	( >> )
+
+@dvd/<draw> ( color -- )
+	[ LIT2 36 -Screen/auto ] DEO
+	;&sprite-icn .Screen/addr DEO2
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	.Screen/sprite DEOk DEO
+	JMP2r
+
+@dvd/sprite-icn [
+	001f 3f38 3838 787f 00fe fe7e 7777 e3c3
+	000f 1f3b 7b77 e7c7 00fc fe8f 8707 0efc
+	7f00 000f ff7f 0700 0301 00ff f0f8 ff00
+	8700 00ff 7f7f ff00 f000 00e0 fcfc 8000 ]
+

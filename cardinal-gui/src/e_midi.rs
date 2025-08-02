@@ -31,7 +31,7 @@ impl MidiPlayerThread {
                 }
             };
             let numsongs = player.get_total_song_count();
-            println!("Total songs: {}", numsongs);
+            println!("Total songs: {numsongs}");
 
             'outer: for i in 0..numsongs {
                 println!("Playing song {}", i + 1);
@@ -42,11 +42,11 @@ impl MidiPlayerThread {
                 // Wait until the song finishes or shutdown is requested
                 loop {
                     // Check for shutdown signal
-                    if let Ok(_) = shutdown_rx.try_recv() {
+                    if shutdown_rx.try_recv().is_ok() {
                         running_clone.store(false, Ordering::SeqCst);
                         // Stop playback immediately if playing
                         // if player.is_playing() {
-                        let _ = player.stop_playback();
+                        player.stop_playback();
                         // }
                         break 'outer;
                     }
@@ -59,7 +59,7 @@ impl MidiPlayerThread {
             }
             // Optionally: stop playback if still playing
             if player.is_playing() {
-                let _ = player.stop_playback();
+                player.stop_playback();
             }
         });
 

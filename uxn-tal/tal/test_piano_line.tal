@@ -1,0 +1,8 @@
+|0100 @main
+    .Controller/key DEI
+    ( octave )
+    [ LIT "a ] NEQk NIP ?&no-c #30 .octave LDZ #0c MUL ADD play &no-c
+    BRK
+
+&no-c
+    BRK

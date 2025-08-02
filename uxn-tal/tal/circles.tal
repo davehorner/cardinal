@@ -1,0 +1,45 @@
+( draw a circle at the center of the screen )
+
+|00 @System &vector $2 &expansion $2 &wst $1 &rst $1 &metadata $2 &r $2 &g $2 &b $2 &debug $1 &state $1
+|20 @Screen &vector $2 &width $2 &height $2 &auto $2 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+
+|100
+
+@on-reset ( -> )
+	#f0ff .System/r DEO2
+	#f0f6 .System/g DEO2
+	#f0f2 .System/b DEO2
+	#300c
+	&>l ( -- )
+		STHk
+		( x ) #00 STHkr DUP2 MUL2 #03 SFT2 #00c0 ADD2
+		( y ) #00a0
+		( radius ) #00 #30 STHkr SUB #20 SFT
+		( color ) STHr #01 AND INC <draw-circle>
+		INC GTHk ?&>l
+	POP2 BRK
+
+@<draw-circle> ( x* y* r* color -- )
+	,&color STR
+	DUP2k MUL2 ,&r STR2
+	[ LIT2r 0000 ] STH2
+	,&y STR2
+	,&x STR2
+	STH2kr SUB2kr STH2r INC2
+	&>y ( -- )
+		DUP2 [ LIT2 &y $2 ] ADD2 .Screen/y DEO2
+		STH2kr SUB2kr STH2r INC2
+		&>x ( -- )
+			( x ) ROT2k ABS2-SQ
+			( y ) SWP2 ABS2-SQ
+			( + ) ADD2 NIP2 [ LIT2 &r $2 ] GTH2 ?{
+				DUP2 [ LIT2 &x $2 ] ADD2 .Screen/x DEO2
+				[ LIT2 &color 02 -Screen/pixel ] DEO }
+			( ) INC2 NEQ2k ?&>x
+		POP2 POP2
+		( ) INC2 NEQ2k ?&>y
+	POP2 POP2 POP2r POP2r JMP2r
+
+@ABS2-SQ ( a* -- res* )
+	DUP2k #1f SFT2 MUL2 SUB2 DUP2 MUL2 JMP2r
+

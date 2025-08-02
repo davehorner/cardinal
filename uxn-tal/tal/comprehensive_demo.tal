@@ -1,0 +1,26 @@
+( Complete TAL Feature Demonstration )
+
+|00 @System &vector $2 &wst $1 
+|10 @Console &write $1
+
+( Macro definitions )
+%EMIT { .Console/write DEO }
+%DOUBLE { DUP ADD }
+
+|0100 @main
+    ( Test basic features )
+    #41 EMIT             ( Emit 'A' using macro )
+    #42 DOUBLE EMIT      ( Test macro expansion )
+    
+    ( Test inline assembly )
+    [ #43 EMIT ]         ( Emit 'C' using inline assembly )
+    
+    ( Test device access )
+    .Console/write #20 STA ( Write space )
+    
+    ( Test string and raw hex )
+    ;message LDA EMIT    ( Load and emit first char of message )
+    
+    BRK
+
+@message "Hello" 20 "World!" 00

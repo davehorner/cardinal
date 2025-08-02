@@ -760,9 +760,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             impl<A: eframe::App> eframe::App for AppWithClose<A> {
                 fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
                     self.inner.update(ctx, frame);
-                    println!("[DEBUG] AppWithClose update called");
                     #[cfg(feature = "uses_e_midi")]
                     if egui_close_requested(ctx) {
+                    println!("[DEBUG] AppWithClose update called");
                         if let Some(thread) = self.midi_thread.take() {
                             thread.shutdown();
                         }
