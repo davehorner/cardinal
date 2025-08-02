@@ -1,0 +1,14 @@
+( Simple test file for symbol generation )
+
+|0100 @main
+    #48 #65 #6c #6c #6f
+    @loop
+        #20 #57 #6f #72 #6c #64
+        #21 #0a
+        ,loop JMP
+    
+@data
+    $10
+
+@end
+    BRK

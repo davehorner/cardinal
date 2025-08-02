@@ -1,0 +1,14 @@
+( Simple Working Example - Compatible with our assembler )
+
+|0100 
+
+@main
+    #12 #34        ( Push two bytes )
+    ADD            ( Add them: 12 + 34 = 46 )
+    #18 DEO        ( Output to device )
+
+@end
+    BRK            ( Break )
+
+( Hello string data )
+@message "Hello" $00

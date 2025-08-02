@@ -1,0 +1,145 @@
+( pond.tal )
+
+|00 @System &vector $2 &expansion $2 &wst $1 &rst $1 &metadata $2 &r $2 &g $2 &b $2 &debug $1 &state $1
+|20 @Screen &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+|90 @Mouse &vector $2 &x $2 &y $2 &state $1 &pad $3 &modx $2 &mody $2
+
+|000
+
+	@circle &xc $2 &yc $2 &x $2 &y $2 &r $2 &d $2
+
+|100
+
+@on-reset ( -> )
+	( | theme )
+	#2c2c DUP2 .System/r DEO2
+	DUP2 .System/g DEO2
+	.System/b DEO2
+	;on-mouse .Mouse/vector DEO2
+	;on-frame .Screen/vector DEO2
+	BRK
+
+@on-mouse ( -> )
+	#c1 ;touch-chr/down ;touch-chr .Mouse/state DEI ?{ SWP2 }
+	POP2 <update-cursor>
+	BRK
+
+@on-frame ( -> )
+	( | 30 fps )
+	[ LIT &f $1 ] INCk ,&f STR
+	?{ BRK }
+	( | clear )
+	#0000 DUP2 .Screen/x DEO2
+	.Screen/y DEO2
+	[ LIT2 80 -Screen/pixel ] DEO
+	( | draw )
+	;particles/end ;particles
+	&>l ( -- )
+		( | animate particle )
+		DUP2 <draw-particle>
+		( | increase size )
+		DUP2 #0004 ADD2 LDA2k INC2 SWP2 STA2
+		#0006 ADD2 GTH2k ?&>l
+	POP2 POP2
+	( | add particle )
+	[ LIT &lock $1 ] DUP ?{
+		.Mouse/state DEI ?{ POP BRK }
+		( | touch )
+		.Mouse/x DEI2 #0004 ADD2 .Mouse/y DEI2 #0004 ADD2 <add-particle>
+		[ LIT2 08 _&lock ] STR
+		POP BRK }
+	#01 SUB ,&lock STR
+	BRK
+
+@<add-particle> ( x* y* -- )
+	SWP2 [ LIT2r &ptr =particles ] STH2kr INC2r INC2r STA2
+	STH2kr INC2r INC2r STA2
+	#0001 STH2kr INC2r INC2r STA2
+	STH2r DUP2 ;particles/end LTH2 ?{ POP2 ;particles }
+	,&ptr STR2
+	JMP2r
+
+@<update-cursor> ( color addr* -- )
+	;fill-icn .Screen/addr DEO2
+	#40 <draw-cursor>
+	.Screen/addr DEO2
+	.Mouse/x DEI2 ,<draw-cursor>/x STR2
+	.Mouse/y DEI2 ,<draw-cursor>/y STR2
+	( >> )
+
+@<draw-cursor> ( color -- )
+	[ LIT2 16 -Screen/auto ] DEO
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	.Screen/sprite DEOk DEO
+	JMP2r
+
+@<draw-particle> ( addr* -- )
+	LDA2k ,&x STR2
+	INC2 INC2 LDA2k ,&y STR2
+	INC2 INC2 LDA2 [ LIT2 &x $2 ] [ LIT2 &y $2 ] ROT2
+	( >> )
+
+@<draw-circle> ( xc* yc* r* -- )
+	.circle/r STZ2
+	.circle/yc STZ2
+	.circle/xc STZ2
+	#0000 .circle/x STZ2
+	.circle/r LDZ2 .circle/y STZ2
+	.circle/r LDZ2 #10 SFT2 .circle/d STZ2
+	( draw ) <draw-seg>
+	&>loop ( -- )
+		( incr ) .circle/x LDZ2 INC2 .circle/x STZ2
+		.circle/d LDZ2 #0001 LTS2 ?{
+			( decr ) .circle/y LDZ2 #0001 SUB2 .circle/y STZ2
+			.circle/x LDZ2 .circle/y LDZ2 SUB2 #20 SFT2 .circle/d LDZ2 ADD2 .circle/d STZ2 !&end }
+		.circle/x LDZ2 #20 SFT2 .circle/d LDZ2 ADD2 .circle/d STZ2
+		&end ( draw )
+		<draw-seg>
+		.circle/y LDZ2 .circle/x LDZ2 #0001 SUB2 GTS2 ?&>loop
+	JMP2r
+
+@LTS2 ( a* b* -- f )
+	#8000 ADD2 SWP2 #8000 ADD2 GTH2 JMP2r
+
+@GTS2 ( a* b* -- f )
+	#8000 ADD2 SWP2 #8000 ADD2 LTH2 JMP2r
+
+@<draw-seg> ( -- )
+	.circle/xc LDZ2 .circle/x LDZ2 ADD2 .circle/yc LDZ2 .circle/y LDZ2 ADD2 <draw-pixel>
+	.circle/xc LDZ2 .circle/x LDZ2 SUB2 .circle/yc LDZ2 .circle/y LDZ2 ADD2 <draw-pixel>
+	.circle/xc LDZ2 .circle/x LDZ2 ADD2 .circle/yc LDZ2 .circle/y LDZ2 SUB2 <draw-pixel>
+	.circle/xc LDZ2 .circle/x LDZ2 SUB2 .circle/yc LDZ2 .circle/y LDZ2 SUB2 <draw-pixel>
+	.circle/xc LDZ2 .circle/y LDZ2 ADD2 .circle/yc LDZ2 .circle/x LDZ2 ADD2 <draw-pixel>
+	.circle/xc LDZ2 .circle/y LDZ2 SUB2 .circle/yc LDZ2 .circle/x LDZ2 ADD2 <draw-pixel>
+	.circle/xc LDZ2 .circle/y LDZ2 ADD2 .circle/yc LDZ2 .circle/x LDZ2 SUB2 <draw-pixel>
+	.circle/xc LDZ2 .circle/y LDZ2 SUB2 .circle/yc LDZ2 .circle/x LDZ2 SUB2
+	( >> )
+
+@<draw-pixel> ( x* y* -- )
+	DUP2 .Screen/height DEI2 GTH2 ?{
+		.Screen/y DEO2
+		DUP2 .Screen/width DEI2 GTH2 ?{
+			.Screen/x DEO2
+			[ LIT2r 01 -Screen/pixel ] DEOr
+			JMP2r }
+		POP2 JMP2r }
+	POP2 POP2 JMP2r
+
+@touch-chr [
+	0000 0000 0814 1417 0000 0000 0008 0808
+	0000 0000 0000 00c0 0000 0000 0000 0000
+	1010 2010 1008 0700 0f0f 1f0f 0f07 0000
+	2010 1010 2020 c000 c0e0 e0e0 c0c0 0000 ]
+	&down [
+	0000 0000 0000 0817 0000 0000 0000 0008
+	0000 0000 0000 00c0 0000 0000 0000 0000
+	1010 2010 1008 0700 0f0f 1f0f 0f07 0000
+	2010 1010 2020 c000 c0e0 e0e0 c0c0 0000 ]
+
+@fill-icn [
+	ffff ffff ffff ffff ffff ffff ffff ffff
+	ffff ffff ffff ffff ffff ffff ffff ffff ]
+
+@particles $60 &end
+

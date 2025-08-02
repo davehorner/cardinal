@@ -1,0 +1,32 @@
+[package]
+name = "uxn-tal"
+version = "0.1.0"
+edition = "2021"
+authors = ["David Horner"]
+description = "A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
+license = "MIT"
+repository = "https://github.com/yourusername/uxn-tal"
+keywords = ["uxn", "tal", "assembler", "virtual-machine", "rom"]
+categories = ["development-tools", "parsing", "compilers"]
+
+[dependencies]
+thiserror = "1.0"
+regex = "1.0"
+walkdir = "2.5.0"
+once_cell = "1.21.3"
+
+varvara = { package = "cardinal-varvara", version = "0.4.8" }
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
+env_logger.workspace = true
+log.workspace = true
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+uxn = { package = "cardinal-uxn", version = "0.4.4", features = [
+   "native",
+] }
+
+[target.'cfg(not(target_arch = "aarch64"))'.dependencies]
+uxn = { package = "cardinal-uxn", version = "0.4.4" }
+
+

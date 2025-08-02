@@ -1,0 +1,8 @@
+( Test nested comments (inner comment) and variable access )
+
+|0000 @color $1 @timer $1
+
+@main
+    #ff .color STZ  ( set color (red = #ff) to variable )
+    #01 .timer STZ  ( set timer to 1 )
+    BRK

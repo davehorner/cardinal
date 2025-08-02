@@ -1,0 +1,166 @@
+( a simple button )
+
+|00 @System &vector $2 &expansion $2 &wst $1 &rst $1 &metadata $2 &r $2 &g $2 &b $2 &debug $1 &state $1
+|20 @Screen &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+|90 @Mouse &vector $2 &x $2 &y $2 &state $1 &chord $1 &pad $4 &scrolly &scrolly-hb $1 &scrolly-lb $1
+
+|100
+
+@on-reset ( -> )
+	;meta #06 DEO2
+	( | theme )
+	#5c0f DUP2 .System/r DEO2
+	DUP2 .System/g DEO2
+	.System/b DEO2
+	( | size )
+	#0058 DUP2 .Screen/width DEO2
+	.Screen/height DEO2
+	( >> )
+
+@on-mouse ( -> )
+	focus/<update>
+	BRK
+
+@meta $1
+	( name ) "Button 0a
+	( desc ) "A 20 "Simple 20 "Button 0a
+	( auth ) "By 20 "Devine 20 "Lu 20 "Linvega 0a
+	( date ) "15 20 "Jan 20 "2025 $2
+
+(
+@|focus )
+
+@focus/<update> ( -- )
+	cursor/<redraw>
+	.Mouse/x DEI2 .Mouse/y DEI2
+	( test button ) button/is-within ?{ ;on-mouse !focus/<set> }
+	;button/on-mouse
+	( >> )
+
+@focus/<set> ( vector* -- )
+	DUP2 [ LIT2 &last $2 ] NEQ2 ?{ POP2 JMP2r }
+	DUP2 .Mouse/vector DEO2
+	,&last STR2 !button/<redraw>
+
+(
+@|button )
+
+@button/on-mouse ( -> )
+	focus/<update>
+	.Mouse/state DEI ?{ BRK }
+	/<press>
+	BRK
+
+@button/on-mouse-lock ( -> )
+	cursor/<redraw>
+	BRK
+
+@button/on-frame ( -> )
+	[ LIT &timer $1 ] INCk ,&timer STR
+	?{ /<release> }
+	BRK
+
+@button/<press> ( -- )
+	;&on-frame .Screen/vector DEO2
+	;&on-mouse-lock focus/<set>
+	[ LIT2 e8 _&timer ] STR
+	( emit ) [ LIT2 "! 18 ] DEO
+	JMP2r
+
+@button/<release> ( -- )
+	#0000 .Screen/vector DEO2
+	focus/<update>
+	[ LIT2 00 -Mouse/state ] DEO
+	JMP2r
+
+@button/<redraw> ( -- )
+	.Mouse/vector DEI2
+	( | handlers )
+	DUP2 ;&on-mouse-lock NEQ2 ?{ POP2 ;&down-chr !/<draw> }
+	DUP2 ;&on-mouse NEQ2 ?{ POP2 ;&hover-chr !/<draw> }
+	POP2 ;&up-chr
+	( >> )
+
+@button/<draw> ( addr* -- )
+	[ LIT2 26 -Screen/auto ] DEO
+	#0020 DUP2 .Screen/x DEO2
+	.Screen/y DEO2
+	.Screen/addr DEO2
+	[ LIT2 81 -Screen/sprite ] DEOk DEOk DEO
+	JMP2r
+
+@button/is-within ( x* y* -- f )
+	#0020 SUB2 #0018 LTH2 STH
+	#0020 SUB2 #0018 LTH2 STHr AND JMP2r
+
+(
+@|cursor )
+
+@cursor/<redraw> ( -- )
+	( | clear )
+	;fill-icn .Screen/addr DEO2
+	#40 /<draw>
+	( | paint )
+	#ca ;&sprite-chr .Mouse/state DEI ?{ #0040 ADD2 }
+	.Screen/addr DEO2
+	.Mouse/x DEI2 #0004 SUB2 ,&x STR2
+	.Mouse/y DEI2 #0005 SUB2 ,&y STR2
+	( >> )
+
+@cursor/<draw> ( color -- )
+	[ LIT2 16 -Screen/auto ] DEO
+	[ LIT2 &x $2 ] .Screen/x DEO2
+	[ LIT2 &y $2 ] .Screen/y DEO2
+	.Screen/sprite DEOk DEO
+	JMP2r
+
+(
+@|assets )
+
+@cursor/sprite-chr [
+	0000 0000 0000 0817 0000 0000 0000 0008
+	0000 0000 0000 00c0 0000 0000 0000 0000
+	1010 2010 1008 0700 0f0f 1f0f 0f07 0000
+	2010 1010 2020 c000 c0e0 e0e0 c0c0 0000
+	0000 0000 0814 1417 0000 0000 0008 0808
+	0000 0000 0000 00c0 0000 0000 0000 0000
+	1010 2010 1008 0700 0f0f 1f0f 0f07 0000
+	2010 1010 2020 c000 c0e0 e0e0 c0c0 0000 ]
+
+@button/up-chr [
+	0000 1f3f 3f3f 3f3f 001f 3f7f 7f7f 7f7f
+	0000 ffff ffff ffff 00ff ffff ffff ffff
+	0000 f8fc fcfc fcfc 00f8 fcfe fefe fefe
+	3f3f 3f3f 3f3f 3f3f 7f7f 7f7f 7f7f 7f7f
+	e7e7 e781 c3e7 ffff ffff ffff ffff ffff
+	fcfc fcfc fcfc fcfc fefe fefe fefe fefe
+	3f3f 3f3f 3f1f 0000 7f7f 7f5f 4020 1f00
+	ffff ffff ffff 0000 ffff ffff 0000 ff00
+	fcfc fcfc fcf8 0000 fefe fefa 0204 f800 ]
+
+@button/hover-chr [
+	0000 001f 3f3f 3f3f 0000 1f3f 7f7f 7f7f
+	0000 00ff ffff ffff 0000 ffff ffff ffff
+	0000 00f8 fcfc fcfc 0000 f8fc fefe fefe
+	3f3f 3f3f 3f3f 3f3f 7f7f 7f7f 7f7f 7f7f
+	ffe7 e7e7 81c3 e7ff ffff ffff ffff ffff
+	fcfc fcfc fcfc fcfc fefe fefe fefe fefe
+	3f3f 3f3f 3f1f 0000 7f7f 7f7f 5f20 1f00
+	ffff ffff ffff 0000 ffff ffff ff00 ff00
+	fcfc fcfc fcf8 0000 fefe fefe fa04 f800 ]
+
+@button/down-chr [
+	0000 001f 3f3f 3f3f 0000 1f20 5f7f 7f7f
+	0000 00ff ffff ffff 0000 ff00 ffff ffff
+	0000 00f8 fcfc fcfc 0000 f804 fafe fefe
+	3f3f 3f3f 3f3f 3f3f 7f7f 7f7f 7f7f 7f7f
+	ffff ffff ffff ffff ffff e7e7 e781 c3e7
+	fcfc fcfc fcfc fcfc fefe fefe fefe fefe
+	3f3f 3f3f 3f1f 0000 7f7f 7f7f 7f3f 1f00
+	ffff ffff ffff 0000 ffff ffff ffff ff00
+	fcfc fcfc fcf8 0000 fefe fefe fefc f800 ]
+
+@fill-icn [
+	ffff ffff ffff ffff ffff ffff ffff ffff
+	ffff ffff ffff ffff ffff ffff ffff ffff ]
+

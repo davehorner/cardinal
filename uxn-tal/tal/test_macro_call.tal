@@ -1,0 +1,7 @@
+( Test macro calls with angle brackets )
+
+%HELPER { #10 #20 ADD }
+
+@main
+    <HELPER>
+    BRK

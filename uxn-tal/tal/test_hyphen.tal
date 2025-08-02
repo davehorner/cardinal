@@ -1,0 +1,12 @@
+( Test hyphen identifiers and raw address refs )
+
+@rabbits
+    #ff #00 #ff #00
+
+@-direction
+    #01
+
+@main
+    =rabbits POP2
+    #01 .-direction STZ
+    BRK
