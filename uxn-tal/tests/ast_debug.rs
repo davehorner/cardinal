@@ -18,8 +18,7 @@ fn main() {
 
     println!("\n=== Parsing ===");
     let path = "<test>".to_string();
-    let mut parser =
-        Parser::new_with_source(tokens, path.clone(), source.to_string());
+    let mut parser = Parser::new_with_source(tokens, path.clone(), source.to_string());
     let ast = parser.parse().expect("Parsing failed");
 
     for (i, node) in ast.iter().enumerate() {

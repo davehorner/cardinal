@@ -2,5 +2,5 @@
 
 @test-label
     #10 #20 ADD
-    ~included_file.tal
+    ~test_include.tal
     BRK

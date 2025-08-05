@@ -1,6 +1,4 @@
-use uxn_tal::opcode_table::{
-    decode_opcode, encode_opcode, get_opcode_name, verify_opcode_table,
-};
+use uxn_tal::opcode_table::{decode_opcode, encode_opcode, get_opcode_name, verify_opcode_table};
 use uxn_tal::{Assembler, AssemblerError};
 
 fn main() -> Result<(), AssemblerError> {
@@ -41,8 +39,8 @@ fn main() -> Result<(), AssemblerError> {
     // Test some key opcodes
     let test_cases = [
         ("BRK", 0x00, false, false, false),
-        ("LIT", 0x00, false, false, true), // 0x80
-        ("LIT2", 0x00, true, false, true), // 0xA0
+        ("LIT", 0x00, false, false, true),  // 0x80
+        ("LIT2", 0x00, true, false, true),  // 0xA0
         ("DEO", 0x17, false, false, false), // 0x17
         ("ADD2k", 0x18, true, false, true), // 0xB8
         ("STH2kr", 0x0F, true, true, true), // 0xEF
@@ -50,8 +48,7 @@ fn main() -> Result<(), AssemblerError> {
 
     for (name, base, short, ret, keep) in test_cases {
         let encoded = encode_opcode(base, short, ret, keep);
-        let (decoded_base, decoded_short, decoded_ret, decoded_keep) =
-            decode_opcode(encoded);
+        let (decoded_base, decoded_short, decoded_ret, decoded_keep) = decode_opcode(encoded);
         let opcode_name = get_opcode_name(encoded);
 
         println!("Instruction: {}", name);

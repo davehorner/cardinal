@@ -9,8 +9,7 @@ fn main() -> Result<(), AssemblerError> {
     "#;
 
     let mut assembler = Assembler::new();
-    let rom =
-        assembler.assemble(minimal_source, Some("(minimal)".to_owned()))?;
+    let rom = assembler.assemble(minimal_source, Some("(minimal)".to_owned()))?;
     std::fs::write("minimal.rom", &rom)?;
 
     println!("Created minimal.rom ({} bytes)", rom.len());

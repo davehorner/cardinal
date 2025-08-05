@@ -8,8 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Assemble
     let mut assembler = Assembler::new();
-    let rom =
-        assembler.assemble(&content, Some("test_include.rs".to_owned()))?;
+    let rom = assembler.assemble(&content, Some("test_include.rs".to_owned()))?;
 
     println!("Assembly successful! ROM size: {} bytes", rom.len());
 

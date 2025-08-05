@@ -102,8 +102,7 @@ fn main() -> Result<(), AssemblerError> {
 
     // Run both ROMs using uxncli via WSL and compare their outputs
     let run_rom = |rom_path: &str| -> Result<String, std::io::Error> {
-        let output =
-            Command::new("wsl").arg("uxncli").arg(rom_path).output()?;
+        let output = Command::new("wsl").arg("uxncli").arg(rom_path).output()?;
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     };
 

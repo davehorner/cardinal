@@ -9,8 +9,7 @@ fn main() -> Result<(), AssemblerError> {
     "#;
 
     let mut assembler = Assembler::new();
-    match assembler.assemble(source1, Some("debug_test.rs:char_lit".to_owned()))
-    {
+    match assembler.assemble(source1, Some("debug_test.rs:char_lit".to_owned())) {
         Ok(rom) => {
             println!("Character test OK, ROM length: {}", rom.len());
             println!(
@@ -32,9 +31,7 @@ fn main() -> Result<(), AssemblerError> {
     "#;
 
     let mut assembler2 = Assembler::new();
-    match assembler2
-        .assemble(source2, Some("debug_test.rs:simple_label".to_owned()))
-    {
+    match assembler2.assemble(source2, Some("debug_test.rs:simple_label".to_owned())) {
         Ok(rom) => {
             println!("Simple label test OK, ROM length: {}", rom.len());
             println!("First 6 bytes:");
@@ -58,14 +55,9 @@ fn main() -> Result<(), AssemblerError> {
     "#;
 
     let mut assembler3 = Assembler::new();
-    match assembler3
-        .assemble(source3, Some("debug_test.rs:label_instr".to_owned()))
-    {
+    match assembler3.assemble(source3, Some("debug_test.rs:label_instr".to_owned())) {
         Ok(rom) => {
-            println!(
-                "Label with instruction test OK, ROM length: {}",
-                rom.len()
-            );
+            println!("Label with instruction test OK, ROM length: {}", rom.len());
             println!("First 8 bytes:");
             for (i, byte) in rom.iter().take(8).enumerate() {
                 println!("  [{:04x}] = {:02x}", 0x100 + i, byte);

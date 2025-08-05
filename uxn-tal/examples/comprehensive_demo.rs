@@ -10,8 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo 1: Single file assembly with symbols
     println!("📝 Demo 1: Single File Assembly");
-    let (rom_path, sym_path, size) =
-        assemble_file_with_symbols("demo_hello.tal")?;
+    let (rom_path, sym_path, size) = assemble_file_with_symbols("demo_hello.tal")?;
     println!("✅ Assembled {} bytes to {}", size, rom_path.display());
     println!("📍 Generated symbols to {}", sym_path.display());
 
@@ -40,10 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 size
             );
             if let Some(sym_path) = sym_path {
-                println!(
-                    "  + {}",
-                    sym_path.file_name().unwrap().to_string_lossy()
-                );
+                println!("  + {}", sym_path.file_name().unwrap().to_string_lossy());
             }
         }
     }

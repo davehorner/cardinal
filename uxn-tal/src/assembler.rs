@@ -34,24 +34,19 @@ pub struct Assembler {
     device_map: HashMap<String, Device>, // device name -> Device
     line_number: usize,
     position_in_line: usize,
+    effective_length: usize, // Track effective length like uxnasm.c
+    lambda_counter: u16, // Add lambda counter as a field
 }
 
 /// Represents a forward reference that needs to be resolved
 #[derive(Debug, Clone)]
 struct Reference {
+    name: String,
+    rune: char,
     address: u16,
-    label: String,
-    ref_type: ReferenceType,
-    is_short: bool,
-    context_label: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-enum ReferenceType {
-    Absolute,
-    Relative,
-    Sublabel,
-    ZeroPage, // Zero-page reference (low byte only)
+    line: usize,
+    path: String,
+    scope: Option<String>, // Add scope context
 }
 
 impl Assembler {
@@ -62,6 +57,24 @@ impl Assembler {
         symbols.sort_by_key(|(_, symbol)| symbol.address);
         let mut output = Vec::new();
         for (name, symbol) in symbols {
+            // Write address as big-endian u16 (C code: hb first, then lb)
+            output.push((symbol.address >> 8) as u8); // high byte
+            output.push((symbol.address & 0xff) as u8); // low byte
+                                                        // Write name as null-terminated string
+            output.extend_from_slice(name.as_bytes());
+            output.push(0); // null terminator
+        }
+        output
+    }
+
+    /// Generate symbol file content in binary format
+    /// Format: [address:u16][name:null-terminated string] repeating
+    pub fn generate_symbol_file_binary(&self) -> Vec<u8> {
+        let mut symbols: Vec<_> = self.symbols.iter().collect();
+        symbols.sort_by_key(|(_, symbol)| symbol.address);
+
+        let mut output = Vec::new();
+        for (name, symbol) in symbols {
             // Write address as little-endian u16
             output.extend_from_slice(&symbol.address.to_le_bytes());
             // Write name as null-terminated string
@@ -70,6 +83,18 @@ impl Assembler {
         }
         output
     }
+
+    /// Generate symbol file content in textual format (address and name per line)
+    pub fn generate_symbol_file_txt(&self) -> String {
+        let mut symbols: Vec<_> = self.symbols.iter().collect();
+        symbols.sort_by_key(|(_, symbol)| symbol.address);
+        let mut output = String::new();
+        for (name, symbol) in symbols {
+            output.push_str(&format!("{:04X} {}\n", symbol.address, name));
+        }
+        output
+    }
+
     /// Create a new assembler instance
     pub fn new() -> Self {
         Self {
@@ -81,15 +106,18 @@ impl Assembler {
             device_map: HashMap::new(),
             line_number: 0,
             position_in_line: 0,
+            effective_length: 0,
+            lambda_counter: 0, // Initialize lambda counter
         }
     }
 
+    /// Update effective length if current position has non-zero content
+    fn update_effective_length(&mut self, rom: &Rom) {
+        self.effective_length = self.effective_length.max(rom.position().into());
+    }
+
     /// Assemble TAL source code into a ROM
-    pub fn assemble(
-        &mut self,
-        source: &str,
-        path: Option<String>,
-    ) -> Result<Vec<u8>> {
+    pub fn assemble(&mut self, source: &str, path: Option<String>) -> Result<Vec<u8>> {
         // Clear previous state
         self.symbols.clear();
         self.current_label = None;
@@ -97,6 +125,8 @@ impl Assembler {
         self.device_map.clear();
         self.line_number = 0;
         self.position_in_line = 0;
+        self.effective_length = 0; // Reset effective length
+        self.lambda_counter = 0; // Reset lambda counter
 
         // Tokenize
         let mut lexer = Lexer::new(source.to_string(), path.clone());
@@ -104,11 +134,8 @@ impl Assembler {
 
         // Parse
         // Use "(input)" as the default path if none is provided
-        let mut parser = Parser::new_with_source(
-            tokens,
-            path.clone().unwrap_or_default(),
-            source.to_string(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, path.clone().unwrap_or_default(), source.to_string());
         let ast = parser.parse()?;
 
         // First pass: collect labels and generate code
@@ -121,89 +148,132 @@ impl Assembler {
 
         // Second pass: resolve references
         self.second_pass(&mut rom)?;
+        println!("DEBUG: Resolved {} references", self.references.len());
 
-        // Get the final ROM data, excluding zero page if needed
+        // Get the final ROM data using effective length (like uxnasm.c)
         let rom_data = rom.data();
+
+        // Count ALL labels like uxnasm.c does (don't filter out device fields)
+        let total_label_count = self.symbols.len();
 
         // If the ROM has content starting at 0x0100 or later, exclude the first 256 bytes
         // This matches the behavior of ruxnasm and uxnasm.c
-        if rom_data.len() > 256 {
+        if self.effective_length > 256 {
             // Check if there's any non-zero data in the first 256 bytes
             let has_zero_page_data = rom_data[..256].iter().any(|&b| b != 0);
 
             if !has_zero_page_data {
-                // No zero page data, return ROM starting from page 1 (0x0100)
-                return Ok(rom_data[256..].to_vec());
+                println!(
+                    "Assembled {} in {} bytes({:.2}% used), {} labels, {} macros.",
+                    path.clone().unwrap_or_else(|| "(input)".to_string()),
+                    self.effective_length - 256,
+                    (self.effective_length - 256) as f64 / 652.80,
+                    total_label_count,
+                    self.macros.len()
+                );
+                return Ok(rom_data[256..self.effective_length].to_vec());
             }
         }
-
-        Ok(rom_data.to_vec())
+        Ok(rom_data[..self.effective_length].to_vec())
     }
 
     fn first_pass(&mut self, ast: &[AstNode], rom: &mut Rom) -> Result<()> {
-        // Scan the source for device headers and build device_map
-        // Also register all device/field addresses as symbols for robust reference resolution
-        if let Some(source) = rom.source() {
-            let devmaps = parse_device_maps(source);
-            for dev in &devmaps {
-                // Store DeviceMap by device name
-                self.device_map.insert(dev.name.clone(), dev.clone());
-                // Register base device address as symbol
-                self.symbols.insert(
-                    dev.name.clone(),
-                    Symbol {
-                        address: dev.address,
-                        is_sublabel: false,
-                        parent_label: None,
-                    },
-                );
-                // Register each field as symbol with correct offset and size
-                let mut offset = 0u16;
-                for field in &dev.fields {
-                    let key = format!("{}/{}", dev.name, field.name);
-                    let field_addr = dev.address + offset;
-                    self.symbols.insert(
-                        key.clone(),
-                        Symbol {
-                            address: field_addr,
-                            is_sublabel: false,
-                            parent_label: Some(dev.name.clone()),
-                        },
-                    );
-                    offset += field.size as u16;
+        let mut i = 0;
+        while i < ast.len() {
+            match &ast[i] {
+                AstNode::SublabelDef(sublabel) => {
+                    // Register sublabel at current ROM position (before string/skip)
+                    let full_name = if let Some(ref parent) = self.current_label {
+                        format!("{}/{}", parent, sublabel)
+                    } else {
+                        return Err(AssemblerError::SyntaxError {
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            line: self.line_number,
+                            position: self.position_in_line,
+                            message: "Sublabel defined outside of label scope".to_string(),
+                            source_line: rom
+                                .source()
+                                .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
+                                .unwrap_or_default(),
+                        });
+                    };
+                    let address = rom.position();
+                    if !self.symbols.contains_key(&full_name) {
+                        self.symbols.insert(
+                            full_name.clone(),
+                            Symbol {
+                                address,
+                                is_sublabel: true,
+                                parent_label: self.current_label.clone(),
+                            },
+                        );
+                    }
+                    // Now process any following string/skip nodes
+                    let mut j = i + 1;
+                    while j < ast.len() {
+                        match &ast[j] {
+                            AstNode::RawString(_) | AstNode::Skip(_) => {
+                                self.process_node(&ast[j], rom)?;
+                                j += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    i = j;
+                    continue;
+                }
+                _ => {
+                    self.process_node(&ast[i], rom)?;
+                    i += 1;
                 }
             }
-        }
-        for node in ast {
-            self.process_node(node, rom)?;
         }
         Ok(())
     }
 
     fn process_node(&mut self, node: &AstNode, rom: &mut Rom) -> Result<()> {
-        // Add path argument to process_node
-        // fn process_node(&mut self, node: &AstNode, rom: &mut Rom, path: Option<String>) -> Result<()> {
-        // For now, get path from rom.source_path() if available, else None
-        let path = rom.source_path().cloned();
+        let path = rom.source_path().cloned().unwrap_or_default();
+        let _start_address = rom.position();
+
         match node {
+            AstNode::Ignore => {
+                // Do nothing - brackets are completely ignored like in uxnasm.c
+                
+            }
             AstNode::Byte(byte) => {
                 rom.write_byte(*byte)?;
+                if *byte != 0 {
+                    self.update_effective_length(rom);
+                }
             }
             AstNode::Short(short) => {
                 rom.write_short(*short)?;
+                if *short != 0 {
+                    self.update_effective_length(rom);
+                }
             }
             AstNode::LiteralByte(byte) => {
-                rom.write_byte(0x80)?; // LIT opcode
+                rom.write_byte(0x80)?; // LIT opcode (always non-zero)
+                self.update_effective_length(rom);
                 rom.write_byte(*byte)?;
+                // Always update effective length for literal bytes, even if zero
+                self.update_effective_length(rom);
             }
             AstNode::LiteralShort(short) => {
-                rom.write_byte(0xa0)?; // LIT2 opcode
+                rom.write_byte(0xa0)?; // LIT2 opcode (always non-zero)
+                self.update_effective_length(rom);
                 rom.write_short(*short)?;
+                // Always update effective length for literal shorts, even if zero
+                self.update_effective_length(rom);
             }
             AstNode::Instruction(inst) => {
+                eprintln!(
+                    "DEBUG: Processing instruction: '{}' at address {:04X}",
+                    inst.opcode,
+                    rom.position()
+                );
                 // Check if this is actually a macro call first
-                if let Some(macro_def) = self.macros.get(&inst.opcode).cloned()
-                {
+                if let Some(macro_def) = self.macros.get(&inst.opcode).cloned() {
                     // Expand macro inline
                     for macro_node in &macro_def.body {
                         self.process_node(macro_node, rom)?;
@@ -211,7 +281,15 @@ impl Assembler {
                 } else {
                     // Handle special LIT instructions that have mode flags built in
                     let opcode = match inst.opcode.as_str() {
-                        "LIT" => 0x80,   // LIT (BRK + keep flag)
+                        "LIT" => {
+                            // Handle LIT with mode flags - this is for cases where parser 
+                            // breaks down LIT2r into LIT + flags
+                            let mut base_opcode = 0x80; // Base LIT opcode (0x80 = BRK + keep)
+                            if inst.short_mode { base_opcode |= 0x20; } // Add short flag
+                            if inst.return_mode { base_opcode |= 0x40; } // Add return flag
+                            // keep_mode is already included in base LIT opcode
+                            base_opcode
+                        }
                         "LIT2" => 0xA0,  // LIT2 (BRK + short + keep flags)
                         "LITr" => 0xC0,  // LITr (BRK + return + keep flags)
                         "LIT2r" => 0xE0, // LIT2r (BRK + short + return + keep flags)
@@ -220,60 +298,66 @@ impl Assembler {
                             match self.opcodes.get_opcode(&inst.opcode) {
                                 Ok(base_opcode) => {
                                     // It's a regular instruction - apply mode flags
-                                    Opcodes::apply_modes(
+                                    let final_opcode = Opcodes::apply_modes(
                                         base_opcode,
                                         inst.short_mode,
                                         inst.return_mode,
                                         inst.keep_mode,
-                                    )
+                                    );
+
+                                    // Check if this is a STR instruction that should create storage for pending comma references
+                                    if inst.opcode.starts_with("STR") {
+                                        // Create storage for any pending comma reference that would target this position
+                                        // This mimics uxnasm.c behavior where STR creates the storage location
+                                        eprintln!("DEBUG: STR instruction at {:04X} - this creates storage", rom.position());
+                                    }
+
+                                    final_opcode
                                 }
                                 Err(_) => {
                                     // Unknown opcode - treat as implicit JSR call
-                                    // First emit JSR opcode (0x8d)
-                                    rom.write_byte(0x8d)?;
-                                    // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                                    if inst.opcode == "_" {
-                                        if let Some(ref parent) =
-                                            self.current_label
-                                        {
-                                            let scoped =
-                                                format!("{}/_", parent);
-                                            if !self
-                                                .symbols
-                                                .contains_key(&scoped)
-                                            {
-                                                self.symbols.insert(
-                                                    scoped.clone(),
-                                                    Symbol {
-                                                        address: rom.position(),
-                                                        is_sublabel: true,
-                                                        parent_label: Some(
-                                                            parent.clone(),
-                                                        ),
-                                                    },
-                                                );
-                                            }
-                                        }
-                                    }
-                                    // Then add reference for the label
-                                    let full_label = inst.opcode.clone();
+                                    eprintln!(
+                                        "DEBUG: Creating JSR reference for unknown opcode: '{}'",
+                                        inst.opcode
+                                    );
+                                    // From uxnasm.c: return makeref(w, ' ', ptr + 1, ctx) && writebyte(0x60, ctx) && writeshort(0xffff);
                                     self.references.push(Reference {
-                                        address: rom.position(),
-                                        label: full_label,
-                                        ref_type: ReferenceType::Absolute,
-                                        is_short: true,
-                                        context_label: self
-                                            .current_label
-                                            .clone(),
+                                        name: inst.opcode.clone(),
+                                        rune: ' ',
+                                        address: rom.position() + 1,
+                                        line: self.line_number,
+                                        path: path.clone(),
+                                        scope: self.current_label.clone(), // Save current scope
                                     });
-                                    rom.write_byte(0)?; // Placeholder high byte
-                                    rom.write_byte(0)?; // Placeholder low byte
+                                    rom.write_byte(0x60)?; // JSR opcode
+                                    eprintln!(
+                                        "DEBUG: Wrote JSR opcode 0x60 at {:04X}",
+                                        rom.position() - 1
+                                    );
+                                    self.update_effective_length(rom);
+                                    rom.write_short(0xffff)?; // Placeholder
+                                    eprintln!(
+                                        "DEBUG: Wrote JSR placeholder 0xFFFF at {:04X}-{:04X}",
+                                        rom.position() - 2,
+                                        rom.position() - 1
+                                    );
+                                    self.update_effective_length(rom);
                                     return Ok(());
                                 }
                             }
                         }
                     };
                     rom.write_byte(opcode)?;
+                    eprintln!(
+                        "DEBUG: Wrote opcode 0x{:02X} ({}) at {:04X}",
+                        opcode,
+                        inst.opcode,
+                        rom.position() - 1
+                    );
+                    // Only update effective length if opcode is non-zero (following uxnasm.c exactly)
+                    if opcode != 0 {
+                        self.update_effective_length(rom);
+                    }
                 }
             }
             AstNode::LabelDef(label) => {
@@ -288,429 +372,229 @@ impl Assembler {
                         },
                     );
                 }
-                // If label is in <name> form, also register plain name
-                if label.starts_with('<')
-                    && label.ends_with('>')
-                    && label.len() > 2
-                {
-                    let plain = label[1..label.len() - 1].to_string();
-                    if !self.symbols.contains_key(&plain) {
-                        self.symbols.insert(
-                            plain,
-                            Symbol {
-                                address: rom.position(),
-                                is_sublabel: false,
-                                parent_label: None,
-                            },
-                        );
-                    }
-                }
+                // DON'T create both bracketed/unbracketed versions - only create the exact label specified
+                // This was causing us to have extra symbols compared to uxnasm.c
+                
                 self.current_label = Some(label.clone());
+                eprintln!(
+                    "DEBUG: Defined label '{}' at address {:04X}",
+                    label,
+                    rom.position()
+                );
+                // NOTE: Labels don't advance the ROM position - the next instruction writes at the same address
             }
             AstNode::LabelRef(label) => {
-                // ;label should generate LIT2 + address
-                let full_label = label.clone();
-                // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                if full_label == "_" {
-                    if let Some(ref parent) = self.current_label {
-                        let scoped = format!("{}/_", parent);
-                        if !self.symbols.contains_key(&scoped) {
-                            self.symbols.insert(
-                                scoped.clone(),
-                                Symbol {
-                                    address: rom.position(),
-                                    is_sublabel: true,
-                                    parent_label: Some(parent.clone()),
-                                },
-                            );
-                        }
-                    }
-                }
-                rom.write_byte(0xa0)?; // LIT2 opcode
+                // Label reference without prefix - treat as implicit JSR (space rune)
                 self.references.push(Reference {
-                    address: rom.position(),
-                    label: full_label,
-                    ref_type: ReferenceType::Absolute,
-                    is_short: true,
-                    context_label: self.current_label.clone(),
+                    name: label.clone(),
+                    rune: ' ',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_short(0)?; // Placeholder for address
+                rom.write_byte(0x60)?; // JSR opcode
+                rom.write_short(0xffff)?; // Placeholder
             }
             AstNode::SublabelDef(sublabel) => {
-                let source_line = if let Some(source) = rom.source() {
-                    source
-                        .lines()
-                        .nth(self.line_number)
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
                 let full_name = if let Some(ref parent) = self.current_label {
                     format!("{}/{}", parent, sublabel)
                 } else {
                     return Err(AssemblerError::SyntaxError {
-                        path: path.clone().unwrap_or_default(),
+                        path: path.clone(),
                         line: self.line_number,
                         position: self.position_in_line,
-                        message: "Sublabel defined outside of label scope"
-                            .to_string(),
-                        source_line,
+                        message: "Sublabel defined outside of label scope".to_string(),
+                        source_line: rom
+                            .source()
+                            .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
+                            .unwrap_or_default(),
                     });
                 };
-                //eprintln!("[DEBUG] Registering sublabel: '{}' (len: {})", full_name, full_name.len());
-                // Register <scope>/<sublabel>
+                // Register sublabel at the current ROM position (not at parent label address)
+                let address = rom.position();
                 if !self.symbols.contains_key(&full_name) {
                     self.symbols.insert(
                         full_name.clone(),
                         Symbol {
-                            address: rom.position(),
+                            address,
                             is_sublabel: true,
                             parent_label: self.current_label.clone(),
                         },
                     );
                 }
-                // Also register global <sublabel>
-                if !self.symbols.contains_key(sublabel) {
-                    self.symbols.insert(
-                        sublabel.clone(),
-                        Symbol {
-                            address: rom.position(),
-                            is_sublabel: true,
-                            parent_label: self.current_label.clone(),
-                        },
-                    );
-                }
+                // CRUCIAL: Do NOT advance ROM position here!
+                // The sublabel is just a marker at the current position.
             }
             AstNode::SublabelRef(sublabel) => {
-                let source_line = if let Some(source) = rom.source() {
-                    source
-                        .lines()
-                        .nth(self.line_number)
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
                 let full_name = if let Some(ref parent) = self.current_label {
                     format!("{}/{}", parent, sublabel)
                 } else {
                     return Err(AssemblerError::SyntaxError {
-                        path: path.clone().unwrap_or_default(),
+                        path: path.clone(),
                         line: self.line_number,
                         position: self.position_in_line,
-                        message: "Sublabel reference outside of label scope"
-                            .to_string(),
-                        source_line,
+                        message: "Sublabel reference outside of label scope".to_string(),
+                        source_line: rom
+                            .source()
+                            .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
+                            .unwrap_or_default(),
                     });
                 };
-                // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                if sublabel == "_" {
-                    if let Some(ref parent) = self.current_label {
-                        let scoped = format!("{}/_", parent);
-                        if !self.symbols.contains_key(&scoped) {
-                            self.symbols.insert(
-                                scoped.clone(),
-                                Symbol {
-                                    address: rom.position(),
-                                    is_sublabel: true,
-                                    parent_label: Some(parent.clone()),
-                                },
-                            );
-                        }
-                    }
-                }
                 self.references.push(Reference {
+                    name: full_name,
+                    rune: '_', // Sublabel references use underscore rune for relative addressing
                     address: rom.position(),
-                    label: full_name.clone(),
-                    ref_type: ReferenceType::Sublabel,
-                    is_short: false,
-                    context_label: self.current_label.clone(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder
+                rom.write_byte(0xff)?; // Placeholder
             }
             AstNode::RelativeRef(label) => {
-                // Check if this is a sublabel reference (starts with &)
-                let source_line = if let Some(source) = rom.source() {
-                    source
-                        .lines()
-                        .nth(self.line_number)
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
-                let resolved_label = if label.starts_with('&') {
-                    let sublabel_name = &label[1..]; // Remove & prefix
-                    if let Some(ref parent) = self.current_label {
-                        format!("{}/{}", parent, sublabel_name)
-                    } else {
-                        return Err(AssemblerError::SyntaxError {
-                            path: path.clone().unwrap_or_default(),
-                            line: self.line_number,
-                            position: self.position_in_line,
-                            message:
-                                "Sublabel reference outside of label scope"
-                                    .to_string(),
-                            source_line,
-                        });
-                    }
-                } else {
-                    label.clone()
-                };
-
-                // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                if resolved_label == "_" {
-                    if let Some(ref parent) = self.current_label {
-                        let scoped = format!("{}/_", parent);
-                        if !self.symbols.contains_key(&scoped) {
-                            self.symbols.insert(
-                                scoped.clone(),
-                                Symbol {
-                                    address: rom.position(),
-                                    is_sublabel: true,
-                                    parent_label: Some(parent.clone()),
-                                },
-                            );
-                        }
-                    }
-                }
+                // Store the reference with the '/' rune and let find_symbol handle resolution
+                // This matches uxnasm.c behavior where '/' rune triggers special scope handling
+                // Note: uxnasm.c uses writebyte(0xff) but resolve writes 2 bytes, creating a buffer overrun
+                // We need to match this exact behavior for compatibility
                 self.references.push(Reference {
+                    name: label.clone(), // Store original label (without leading slash if present)
+                    rune: '/', // Use '/' rune to trigger special handling in find_symbol
                     address: rom.position(),
-                    label: resolved_label,
-                    ref_type: ReferenceType::Relative,
-                    is_short: false,
-                    context_label: self.current_label.clone(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder
+                rom.write_byte(0xff)?; // Use 1-byte placeholder to match uxnasm.c makeref behavior
             }
             AstNode::ConditionalRef(label) => {
                 // Conditional reference generates JCN followed by relative address
-                rom.write_byte(0x0d)?; // JCN opcode
-
-                // Check if this is a sublabel reference (starts with &)
-                let source_line = if let Some(source) = rom.source() {
-                    source
-                        .lines()
-                        .nth(self.line_number)
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
-                let resolved_label = if label.starts_with('&') {
-                    let sublabel_name = &label[1..]; // Remove & prefix
-                    if let Some(ref parent) = self.current_label {
-                        format!("{}/{}", parent, sublabel_name)
-                    } else {
-                        return Err(AssemblerError::SyntaxError {
-                            path: path.clone().unwrap_or_default(),
-                            line: self.line_number,
-                            position: self.position_in_line,
-                            message:
-                                "Sublabel reference outside of label scope"
-                                    .to_string(),
-                            source_line,
-                        });
-                    }
-                } else {
-                    label.clone()
-                };
-
-                // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                if resolved_label == "_" {
-                    if let Some(ref parent) = self.current_label {
-                        let scoped = format!("{}/_", parent);
-                        if !self.symbols.contains_key(&scoped) {
-                            self.symbols.insert(
-                                scoped.clone(),
-                                Symbol {
-                                    address: rom.position(),
-                                    is_sublabel: true,
-                                    parent_label: Some(parent.clone()),
-                                },
-                            );
-                        }
-                    }
-                }
                 self.references.push(Reference {
-                    address: rom.position(),
-                    label: resolved_label,
-                    ref_type: ReferenceType::Relative,
-                    is_short: false,
-                    context_label: self.current_label.clone(),
+                    name: label.clone(),
+                    rune: '?',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder
+                rom.write_byte(0x20)?; // JCN opcode
+                rom.write_short(0xffff)?; // Placeholder
             }
             AstNode::ConditionalBlock(block_nodes) => {
-                // Conditional block ?{ ... } - execute block if top of stack is non-zero
-                // Compile as: JCN (skip) ... (block content) ... (skip target)
-
+                // WSL creates lambda labels for conditional blocks like uxnasm.c
+                // Generate a unique lambda label name
+                let lambda_name = format!("λ{:02}", self.lambda_counter);
+                self.lambda_counter += 1;
+                
                 // Emit JCN (conditional jump - jumps if top of stack is zero)
-                rom.write_byte(0x0d)?; // JCN opcode
-
-                // We need to calculate the offset to skip the block
-                // For now, emit a placeholder and resolve later
-                let jump_address = rom.position();
-                rom.write_byte(0)?; // Placeholder for jump offset
+                rom.write_byte(0x20)?; // JCN opcode
+                
+                // Create a reference to the lambda label for the jump target
+                self.references.push(Reference {
+                    name: lambda_name.clone(),
+                    rune: '?',
+                    address: rom.position(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_short(0xffff)?; // Placeholder
 
                 // Assemble the block content
                 for node in block_nodes {
                     self.process_node(node, rom)?;
                 }
-                let block_end = rom.position();
-
-                // Calculate the offset to jump over the block
-                let offset = (block_end - jump_address - 1) as u8;
-
-                // Write the actual offset back to the placeholder
-                rom.write_byte_at(jump_address, offset)?;
+                
+                // Define the lambda label at the end of the block (like WSL does)
+                if !self.symbols.contains_key(&lambda_name) {
+                    self.symbols.insert(
+                        lambda_name.clone(),
+                        Symbol {
+                            address: rom.position(),
+                            is_sublabel: false,
+                            parent_label: self.current_label.clone(),
+                        },
+                    );
+                }
+                
+                eprintln!("DEBUG: Created lambda label '{}' at address {:04X}", lambda_name, rom.position());
             }
             AstNode::JSRRef(label) => {
-                // JSR call generates JSR followed by absolute address
-                rom.write_byte(0x8d)?; // JSR opcode
-
-                // Check if this is a sublabel reference (starts with &)
-                let source_line = if let Some(source) = rom.source() {
-                    source
-                        .lines()
-                        .nth(self.line_number)
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
-                let resolved_label = if label.starts_with('&') {
-                    let sublabel_name = &label[1..]; // Remove & prefix
-                    if let Some(ref parent) = self.current_label {
-                        format!("{}/{}", parent, sublabel_name)
-                    } else {
-                        return Err(AssemblerError::SyntaxError {
-                            path: path.clone().unwrap_or_default(),
-                            line: self.line_number,
-                            position: self.position_in_line,
-                            message:
-                                "Sublabel reference outside of label scope"
-                                    .to_string(),
-                            source_line,
-                        });
-                    }
-                } else {
-                    label.clone()
-                };
-
-                // If referencing '_', register <current_label>/_ as a sublabel if not already present
-                if resolved_label == "_" {
-                    if let Some(ref parent) = self.current_label {
-                        let scoped = format!("{}/_", parent);
-                        if !self.symbols.contains_key(&scoped) {
-                            self.symbols.insert(
-                                scoped.clone(),
-                                Symbol {
-                                    address: rom.position(),
-                                    is_sublabel: true,
-                                    parent_label: Some(parent.clone()),
-                                },
-                            );
-                        }
-                    }
-                }
+                // JSR call generates JSR followed by relative address
                 self.references.push(Reference {
-                    address: rom.position(),
-                    label: resolved_label,
-                    ref_type: ReferenceType::Absolute,
-                    is_short: true,
-                    context_label: self.current_label.clone(),
+                    name: label.clone(),
+                    rune: '!',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder high byte
-                rom.write_byte(0)?; // Placeholder low byte
+                rom.write_byte(0x60)?; // JSR opcode (changed from 0x8d to 0x60)
+                rom.write_short(0xffff)?; // Placeholder
             }
             AstNode::RawAddressRef(label) => {
-                // Raw address access - LIT2 + absolute address
-                rom.write_byte(0xa0)?; // LIT2 opcode
+                // Raw address access - use equals rune for 16-bit address
                 self.references.push(Reference {
+                    name: label.clone(),
+                    rune: '=',
                     address: rom.position(),
-                    label: label.clone(),
-                    ref_type: ReferenceType::Absolute,
-                    is_short: true,
-                    context_label: self.current_label.clone(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder high byte
-                rom.write_byte(0)?; // Placeholder low byte
+                rom.write_short(0xffff)?; // Placeholder
             }
             AstNode::HyphenRef(identifier) => {
-                // Hyphen reference has two forms:
-                // 1. -Device/field: device field access (single byte address)
-                // 2. -label: zero-page reference (low byte of label address)
-                if identifier.contains('/') {
-                    // Parse as device/field reference
-                    let parts: Vec<&str> = identifier.split('/').collect();
-                    if parts.len() == 2 {
-                        let device = parts[0];
-                        let field = parts[1];
-                        let full_label = format!("{}/{}", device, field);
-                        self.references.push(Reference {
-                            address: rom.position(),
-                            label: full_label,
-                            ref_type: ReferenceType::ZeroPage, // Use zero-page reference
-                            is_short: false,
-                            context_label: self.current_label.clone(),
-                        });
-                        rom.write_byte(0)?; // Placeholder for address
-                    } else {
-                        let source_line = if let Some(source) = rom.source() {
-                            source
-                                .lines()
-                                .nth(self.line_number)
-                                .unwrap_or("")
-                                .to_string()
-                        } else {
-                            String::new()
-                        };
-                        return Err(AssemblerError::SyntaxError {
-                            path: path.clone().unwrap_or_default(),
-                            line: self.line_number,
-                            position: self.position_in_line,
-                            message: format!(
-                                "Invalid hyphen reference: -{}",
-                                identifier
-                            ),
-                            source_line,
-                        });
-                    }
-                } else {
-                    // Zero-page reference to regular label (low byte only)
-                    self.references.push(Reference {
-                        address: rom.position(),
-                        label: identifier.clone(),
-                        ref_type: ReferenceType::ZeroPage,
-                        is_short: false,
-                        context_label: self.current_label.clone(),
-                    });
-                    rom.write_byte(0)?; // Placeholder
-                }
+                // Hyphen reference uses the '-' rune for direct byte addressing
+                self.references.push(Reference {
+                    name: identifier.clone(),
+                    rune: '-',
+                    address: rom.position(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0xff)?; // Placeholder
             }
             AstNode::Padding(addr) => {
                 rom.pad_to(*addr)?;
             }
+            AstNode::PaddingLabel(ref label) => {
+                if let Some(symbol) = self.symbols.get(label) {
+                    rom.pad_to(symbol.address)?;
+                } else {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: self.line_number,
+                        position: self.position_in_line,
+                        message: format!("Padding label '{}' not found", label),
+                        source_line: rom
+                            .source()
+                            .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
+                            .unwrap_or_default(),
+                    });
+                }
+            }
             AstNode::Skip(count) => {
                 for _ in 0..*count {
                     rom.write_byte(0)?;
+                    // Don't update effective length for zero bytes
                 }
             }
             AstNode::DeviceAccess(device, field) => {
                 // Device access like .Screen/width should generate LIT + address
-                // This references the sublabel device/field
                 let full_label = format!("{}/{}", device, field);
-                rom.write_byte(0x80)?; // LIT opcode for byte access
                 self.references.push(Reference {
-                    address: rom.position(),
-                    label: full_label,
-                    ref_type: ReferenceType::Absolute,
-                    is_short: false,
-                    context_label: self.current_label.clone(),
+                    name: full_label,
+                    rune: '.',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
                 });
-                rom.write_byte(0)?; // Placeholder
+                rom.write_byte(0x80)?; // LIT opcode (always non-zero)
+                self.update_effective_length(rom);
+                rom.write_byte(0xff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
             }
             AstNode::MacroDef(name, body) => {
                 // Store macro definition
@@ -722,7 +606,7 @@ impl Assembler {
                     },
                 );
             }
-            AstNode::MacroCall(name) => {
+            AstNode::MacroCall(name, macro_line, macro_position) => {
                 // Expand macro inline
                 // If referencing '_', register <current_label>/_ as a sublabel if not already present
                 if name == "_" {
@@ -755,305 +639,418 @@ impl Assembler {
                         String::new()
                     };
                     return Err(AssemblerError::SyntaxError {
-                        path: path.clone().unwrap_or_default(),
+                        path: path.clone(),
                         line: self.line_number,
                         position: self.position_in_line,
-                        message: format!("Undefined macro: {}", name),
+                        message: format!(
+                            "Undefined macro: {} {}:{}",
+                            name, macro_line, macro_position
+                        ),
                         source_line,
                     });
                 }
             }
             AstNode::RawString(bytes) => {
                 rom.write_bytes(bytes)?;
-            }
-            AstNode::InlineAssembly(nodes) => {
-                // Process inline assembly nodes directly
-                for inline_node in nodes {
-                    self.process_node(inline_node, rom)?;
+                // Update effective length if any non-zero bytes were written
+                if bytes.iter().any(|&b| b != 0) {
+                    self.update_effective_length(rom);
                 }
             }
             AstNode::Include(path) => {
                 // Read and process the included file
                 self.process_include(path, rom)?;
             }
+            AstNode::DotRef(label) => {
+                // Generate LIT + 8-bit address (like uxnasm's '.' rune)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: '.',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0x80)?; // LIT opcode (always non-zero)
+                self.update_effective_length(rom);
+                rom.write_byte(0xff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::SemicolonRef(label) => {
+                // Generate LIT2 + 16-bit address (like uxnasm's ';' rune)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: ';',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0xa0)?; // LIT2 opcode (always non-zero)
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::EqualsRef(label) => {
+                // Generate 16-bit address directly (like uxnasm's '=' rune)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: '=',
+                    address: rom.position(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_short(0xffff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::CommaRef(label) => {
+                // Generate LIT + relative 8-bit address (like uxnasm's ',' rune)
+                // In uxnasm.c: return makeref(w + 1, w[0], ptr + 1, ctx) && writebyte(0x80, ctx) && writebyte(0xff, ctx);
+                // The reference address should point to the second byte (after LIT opcode)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: ',',
+                    address: rom.position() + 1, // Point to the byte after LIT opcode
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0x80)?; // LIT opcode (always non-zero)
+                self.update_effective_length(rom);
+                rom.write_byte(0xff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::UnderscoreRef(label) => {
+                // Generate relative 8-bit address (like uxnasm's '_' rune)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: '_',
+                    address: rom.position(),
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0xff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::QuestionRef(label) => {
+                // Generate conditional jump (like uxnasm's '?' rune)
+                self.references.push(Reference {
+                    name: label.clone(),
+                    rune: '?',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0x20)?; // JCN opcode (always non-zero)
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
+            AstNode::ExclamationRef(label) => {
+                // Generate JSR call (like uxnasm's '!' rune)
+                // If the label starts with '/', treat it as a relative reference and apply scope resolution
+                let resolved_name = if label.starts_with('/') {
+                    // Handle relative reference within JSR - remove leading '/' and apply scope resolution
+                    let clean_label = &label[1..];
+                    if let Some(ref scope) = self.current_label {
+                        // Extract the main label part (before any '/')
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope
+                        };
+                        format!("{}/{}", main_scope, clean_label)
+                    } else {
+                        clean_label.to_string()
+                    }
+                } else {
+                    label.clone()
+                };
+                
+                self.references.push(Reference {
+                    name: resolved_name,
+                    rune: '!',
+                    address: rom.position() + 1,
+                    line: self.line_number,
+                    path: path.clone(),
+                    scope: self.current_label.clone(),
+                });
+                rom.write_byte(0x40)?; // JSR opcode - uxnasm.c uses 0x40, not 0x60
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?; // Placeholder (non-zero)
+                self.update_effective_length(rom);
+            }
         }
         Ok(())
     }
 
     fn second_pass(&mut self, rom: &mut Rom) -> Result<()> {
+        // Debug: print available symbols like WSL does
+        if true { // Enable debug output
+            println!("DEBUG: Available labels ({}):", self.symbols.len());
+            let mut symbols: Vec<_> = self.symbols.iter().collect();
+            symbols.sort_by_key(|(_, symbol)| symbol.address);
+            for (i, (name, symbol)) in symbols.iter().enumerate() {
+                println!("  [{}] '{}' -> 0x{:04X}", i, name, symbol.address);
+            }
+        }
+
         for reference in &self.references {
-            // Try exact match, then with/without angle brackets
-            let mut symbol = {
-                // For any relative or sublabel reference, always try <scope>/<label> using context_label first, even if not angle-bracketed
-                let mut found = None;
-                if matches!(
-                    reference.ref_type,
-                    ReferenceType::Relative | ReferenceType::Sublabel
-                ) {
-                    if let Some(ref context) = reference.context_label {
-                        // Try context_label/label first
-                        let label = if reference.label.starts_with('<')
-                            && reference.label.ends_with('>')
-                            && reference.label.len() > 2
-                        {
-                            &reference.label[1..reference.label.len() - 1]
-                        } else {
-                            reference.label.as_str()
-                        };
-                        let scoped = format!("{}/{}", context, label);
-                        found = self.symbols.get(&scoped);
-                        if found.is_none() {
-                            // Also try context_label/label without angle brackets
-                            found = self.symbols.get(&format!(
-                                "{}/{}",
-                                context, reference.label
-                            ));
-                        }
-                    }
-                }
-                if found.is_some() {
-                    found
-                } else {
-                    let direct = self.symbols.get(&reference.label);
-                    if direct.is_some() {
-                        direct
-                    } else if reference.label.starts_with('<')
-                        && reference.label.ends_with('>')
-                        && reference.label.len() > 2
-                    {
-                        self.symbols
-                            .get(&reference.label[1..reference.label.len() - 1])
+            // Handle '/' rune by resolving scope like uxnasm.c
+            let resolved_name = if reference.rune == '/' {
+                if let Some(ref scope) = reference.scope {
+                    // Extract the main label part (before any '/')
+                    let main_scope = if let Some(slash_pos) = scope.find('/') {
+                        &scope[..slash_pos]
                     } else {
-                        let bracketed = format!("<{}>", reference.label);
-                        let bracketed_found = self.symbols.get(&bracketed);
-                        if bracketed_found.is_some() {
-                            bracketed_found
-                        } else if let Some(pos) = reference.label.rfind('/') {
-                            let last = &reference.label[pos + 1..];
-                            self.symbols.get(last)
-                        } else {
-                            None
-                        }
-                    }
-                }
-            };
-
-            // Macro resolution: if not found as label, check for macro
-            // If symbol is still not found, try to resolve macro reference as a label
-            if symbol.is_none() {
-                // Try direct macro name as label
-                if let Some(sym) = self.symbols.get(&reference.label) {
-                    symbol = Some(sym);
+                        scope
+                    };
+                    // Preserve angle brackets and add scope - don't strip them
+                    format!("{}/{}", main_scope, reference.name)
                 } else {
-                    // Try with numeric suffix (e.g., ABS2)
-                    for k in self.macros.keys() {
-                        if k.starts_with(&reference.label) {
-                            if let Some(sym) = self.symbols.get(k) {
-                                symbol = Some(sym);
-                                break;
-                            }
-                        }
-                    }
-                    // Try any label that starts with the reference name (C assembler fallback)
-                    if symbol.is_none() {
-                        for k in self.symbols.keys() {
-                            if k.starts_with(&reference.label) {
-                                symbol = self.symbols.get(k);
-                                break;
-                            }
-                        }
-                    }
+                    reference.name.clone()
                 }
-            }
-
-            // Hierarchical sublabel resolution for angle-bracketed references
-            if symbol.is_none()
-                && reference.label.starts_with('<')
-                && reference.label.ends_with('>')
-                && reference.label.len() > 2
-            {
-                let sublabel_name =
-                    &reference.label[1..reference.label.len() - 1];
-                // Try current scope
-                if let Some(ref current_label) = self.current_label {
-                    let hierarchical =
-                        format!("{}/{}", current_label, sublabel_name);
-                    symbol = self.symbols.get(&hierarchical);
-                    // Try parent scope (e.g., button/<press>)
-                    if symbol.is_none() {
-                        if let Some(pos) = current_label.rfind('/') {
-                            let parent = &current_label[..pos];
-                            let hierarchical =
-                                format!("{}/{}", parent, sublabel_name);
-                            symbol = self.symbols.get(&hierarchical);
-                        }
-                    }
-                }
-            }
-
-            // Special handling for '_' references: search up the scope chain from reference.context_label
-            if symbol.is_none() && reference.label == "_" {
-                if let Some(ref context) = reference.context_label {
-                    let mut scope = context.as_str();
-                    loop {
-                        let scoped = format!("{}/_", scope);
-                        if let Some(sym) = self.symbols.get(&scoped) {
-                            symbol = Some(sym);
-                            break;
-                        }
-                        if let Some(pos) = scope.rfind('/') {
-                            scope = &scope[..pos];
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Device field resolution using device_map
-            let mut device_field_addr: Option<u16> = None;
-            if symbol.is_none() {
-                if let Some(slash_pos) = reference.label.find('/') {
-                    let device = &reference.label[..slash_pos];
-                    let field = &reference.label[slash_pos + 1..];
-                    if let Some(devmap) = self.device_map.get(device) {
-                        if let Some(addr) = devmap.get_field_address(field) {
-                            device_field_addr = Some(addr);
-                        } else {
-                            eprintln!(
-                                "[DEBUG] device_map for device '{}': {:?}",
-                                device, devmap
-                            );
-                        }
-                    }
-                    if device_field_addr.is_none() {
-                        //
-                        if let Some(dev) = crate::devicemap::DEVICES_DEFAULT
-                            .iter()
-                            .find(|d| d.name == device)
-                        {
-                            if let Some(addr) = dev.get_field_address(field) {
-                                eprintln!("[DEBUG] Found default device '{}' with field '{}': address {}", device, field, addr);
-                                device_field_addr = Some(addr);
-                                self.device_map
-                                    .insert(device.to_string(), dev.clone());
-                            } else {
-                                eprintln!("[DEBUG] device_map does not contain device '{}'. device_map: {:?}", device, self.device_map);
-                            }
-                        } else {
-                            eprintln!("[DEBUG] Device '{}' not found in default devices", device);
-                        }
-                    }
-                }
-            }
-
-            // Robust resolution: opcode, device/field, or subroutine label (JSR)
-            if symbol.is_none() && device_field_addr.is_none() {
-                // Try opcode resolution (case-insensitive, all mode variants)
-                let label = &reference.label;
-                let variants = [
-                    label.to_string(),
-                    label.to_ascii_uppercase(),
-                    label.to_ascii_lowercase(),
-                    format!("{}2", label),
-                    format!("{}r", label),
-                    format!("{}k", label),
-                    format!("{}2r", label),
-                    format!("{}2k", label),
-                    format!("{}kr", label),
-                    format!("{}2kr", label),
-                ];
-                let mut found_opcode = None;
-                for variant in &variants {
-                    if let Ok(opcode) = self.opcodes.get_opcode(variant) {
-                        found_opcode = Some(opcode);
-                        break;
-                    }
-                }
-                if let Some(opcode) = found_opcode {
-                    rom.write_byte_at(reference.address, opcode)?;
-                    continue;
-                }
-                // Try device/field resolution
-                if let Some(slash_pos) = reference.label.find('/') {
-                    let device = &reference.label[..slash_pos];
-                    let field = &reference.label[slash_pos + 1..];
-                    if let Some(devmap) = self.device_map.get(device) {
-                        if let Some(addr) = devmap.get_field_address(field) {
-                            rom.write_byte_at(reference.address, addr as u8)?;
-                            continue;
-                        }
-                    }
-                }
-                // Treat as subroutine label (JSR): leave placeholder for JSR resolution
-                // Instead of erroring, leave the placeholder for JSR resolution (do nothing)
-                // This matches the C assembler's fallback behavior
-                continue;
-            }
-
-            let address = if let Some(symbol) = symbol {
-                symbol.address
-            } else if let Some(addr) = device_field_addr {
-                addr
             } else {
-                unreachable!();
+                reference.name.clone()
             };
 
-            match reference.ref_type {
-                ReferenceType::Absolute => {
-                    if reference.is_short {
-                        rom.write_short_at(reference.address, address)?;
-                    } else {
-                        rom.write_byte_at(reference.address, address as u8)?;
+            let symbol = self.find_symbol(&resolved_name, reference.scope.as_ref());
+            println!("DEBUG: Processing reference: {:?}", reference);
+            println!(
+                "DEBUG: Resolving reference '{}' -> '{}' at {:04X} (scope: {:?})",
+                reference.name, resolved_name, reference.address, reference.scope
+            );
+            println!("DEBUG: Found symbol: {:?}", symbol);
+
+            if symbol.is_none() {
+                // Debug: print all available symbols when we can't find one
+                eprintln!("Available symbols:");
+                for (name, sym) in &self.symbols {
+                    eprintln!("  {} -> {:04X}", name, sym.address);
+                }
+                eprintln!(
+                    "Looking for: '{}' in scope: {:?}",
+                    resolved_name, reference.scope
+                );
+
+                return Err(AssemblerError::SyntaxError {
+                    path: reference.path.clone(),
+                    line: reference.line,
+                    position: 0,
+                    message: format!("Label unknown: {}", resolved_name),
+                    source_line: String::new(),
+                });
+            }
+
+            let symbol = symbol.unwrap();
+
+            // Apply the reference based on the rune type (following uxnasm.c exactly)
+            // From uxnasm.c resolve() function
+            match reference.rune {
+                '_' | ',' => {
+                    // case '_': case ',': *rom = rel = l->addr - r->addr - 2;
+                    let rel = (symbol.address as i32 - reference.address as i32 - 2) as i8;
+                    rom.write_byte_at(reference.address, rel as u8)?;
+                    eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative offset 0x{:02X} ({})", 
+                             resolved_name, reference.address, rel as u8, rel);
+                    // Update effective length if resolved value is non-zero
+                    if rel as u8 != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 1);
+                    }
+                    // Range check like uxnasm.c: if((Sint8)data[r->addr] != rel)
+                    if rel != (rel as u8 as i8) {
+                        return Err(AssemblerError::SyntaxError {
+                            path: reference.path.clone(),
+                            line: reference.line,
+                            position: 0,
+                            message: "Reference too far".to_string(),
+                            source_line: String::new(),
+                        });
                     }
                 }
-                ReferenceType::Relative | ReferenceType::Sublabel => {
-                    let current_addr = reference.address.wrapping_add(1);
-                    let target_addr = address;
-                    let offset = target_addr.wrapping_sub(current_addr) as i16;
-                    if offset < -128 || offset > 127 {
-                        // Out of range: emit absolute jump (JMP2r)
-                        // Overwrite the relative jump opcode and placeholder with JMP2r and absolute address
-                        // JMP2r opcode is 0x1d
-                        rom.write_byte_at(
-                            reference.address.wrapping_sub(1),
-                            0x1d,
-                        )?;
-                        rom.write_short_at(reference.address, address)?;
-                    } else {
-                        rom.write_byte_at(reference.address, offset as u8)?;
+                '-' | '.' => {
+                    // case '-': case '.': *rom = l->addr;
+                    rom.write_byte_at(reference.address, symbol.address as u8)?;
+                    eprintln!(
+                        "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:02X}",
+                        reference.name, reference.address, symbol.address as u8
+                    );
+                    // Update effective length if resolved value is non-zero
+                    if symbol.address as u8 != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 1);
                     }
                 }
-                ReferenceType::ZeroPage => {
-                    // Zero-page reference: emit only the low byte of the address
-                    rom.write_byte_at(reference.address, address as u8)?;
+                ':' | '=' | ';' => {
+
+                    //                     // Write absolute ROM address (uxnasm.c starts ROM at PAGE)
+                    // let absolute_addr = symbol.address + 0x0100;
+                    // rom.write_byte_at(reference.address, (absolute_addr >> 8) as u8)?;
+                    // rom.write_byte_at(reference.address + 1, (absolute_addr & 0xff) as u8)?;
+                    // eprintln!(
+                    //     "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:04X} (absolute)",
+                    //     reference.name, reference.address, absolute_addr
+                    // );
+                    // // Update effective length - address references are typically non-zero
+                    // if absolute_addr != 0 {
+                    //     self.effective_length =
+                    //         self.effective_length.max(reference.address as usize + 2);
+                    // }
+
+                    // Write raw ROM address (no offset)
+                    rom.write_byte_at(reference.address, (symbol.address >> 8) as u8)?;
+                    rom.write_byte_at(reference.address + 1, (symbol.address & 0xff) as u8)?;
+                    eprintln!(
+                        "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:04X} (raw)",
+                        reference.name, reference.address, symbol.address
+                    );
+                    // Update effective length - address references are typically non-zero
+                    if symbol.address != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 2);
+                    }
+                }
+                '?' | '!' | ' ' | '/' => {
+                    // case '?': case '!': default: rel = l->addr - r->addr - 2; *rom++ = rel >> 8, *rom = rel;
+                    // The '/' rune falls through to default case in uxnasm.c
+                    let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
+                    rom.write_byte_at(reference.address, (rel >> 8) as u8)?;
+                    rom.write_byte_at(reference.address + 1, (rel & 0xff) as u8)?;
+                    eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
+                             reference.name, reference.address, rel as u16, rel);
+                    // Update effective length if resolved value is non-zero
+                    if rel != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 2);
+                    }
+                }
+                _ => {
+                    return Err(AssemblerError::SyntaxError {
+                        path: reference.path.clone(),
+                        line: reference.line,
+                        position: 0,
+                        message: format!("Unknown reference rune: {}", reference.rune),
+                        source_line: String::new(),
+                    });
                 }
             }
         }
         Ok(())
     }
 
-    /// Generate symbol file content in binary format
-    /// Format: [address:u16][name:null-terminated string] repeating
-    pub fn generate_symbol_file_binary(&self) -> Vec<u8> {
-        let mut symbols: Vec<_> = self.symbols.iter().collect();
-        symbols.sort_by_key(|(_, symbol)| symbol.address);
+    fn find_symbol(&self, name: &str, reference_scope: Option<&String>) -> Option<&Symbol> {
+        eprintln!(
+            "DEBUG: find_symbol called with name='{}', reference_scope={:?}",
+            name, reference_scope
+        );
+        eprintln!("DEBUG: current_label={:?}", self.current_label);
 
-        let mut output = Vec::new();
-        for (name, symbol) in symbols {
-            // Write address as little-endian u16
-            output.extend_from_slice(&symbol.address.to_le_bytes());
-            // Write name as null-terminated string
-            output.extend_from_slice(name.as_bytes());
-            output.push(0); // null terminator
+        // Handle sublabel references with & prefix
+        if name.starts_with('&') {
+            let sublabel_name = &name[1..];
+            eprintln!("DEBUG: Looking for sublabel '{}'", sublabel_name);
+
+            // First try with the reference's scope context
+            if let Some(scope) = reference_scope {
+                // Extract the main label part (before any '/')
+                let main_scope = if let Some(slash_pos) = scope.find('/') {
+                    &scope[..slash_pos]
+                } else {
+                    scope
+                };
+                let scoped = format!("{}/{}", main_scope, sublabel_name);
+                eprintln!("DEBUG: Trying main scope lookup: '{}'", scoped);
+                if let Some(symbol) = self.symbols.get(&scoped) {
+                    eprintln!("DEBUG: Found main scope symbol: {:?}", symbol);
+                    return Some(symbol);
+                }
+            }
+
+            // Fallback to current label scope
+            if let Some(ref current) = self.current_label {
+                // Extract the main label part (before any '/')
+                let main_current = if let Some(slash_pos) = current.find('/') {
+                    &current[..slash_pos]
+                } else {
+                    current
+                };
+                let scoped = format!("{}/{}", main_current, sublabel_name);
+                eprintln!("DEBUG: Trying current main scope lookup: '{}'", scoped);
+                if let Some(symbol) = self.symbols.get(&scoped) {
+                    eprintln!("DEBUG: Found current main scope symbol: {:?}", symbol);
+                    return Some(symbol);
+                }
+            }
+
+            // Try global scope (just the sublabel name without &)
+            eprintln!("DEBUG: Trying global lookup: '{}'", sublabel_name);
+            if let Some(symbol) = self.symbols.get(sublabel_name) {
+                eprintln!("DEBUG: Found global symbol: {:?}", symbol);
+                return Some(symbol);
+            }
         }
-        output
+
+        // Direct lookup for non-sublabel references
+        if let Some(symbol) = self.symbols.get(name) {
+            return Some(symbol);
+        }
+
+        // Try with angle brackets for hierarchical lookups
+        if !name.starts_with('<') && !name.ends_with('>') {
+            let bracketed = format!("<{}>", name);
+            if let Some(symbol) = self.symbols.get(&bracketed) {
+                return Some(symbol);
+            }
+        }
+
+        // Try without angle brackets
+        if name.starts_with('<') && name.ends_with('>') && name.len() > 2 {
+            let unbracketed = &name[1..name.len() - 1];
+            if let Some(symbol) = self.symbols.get(unbracketed) {
+                return Some(symbol);
+            }
+        }
+
+        // Check for references with / rune (special handling)
+        if name.contains('/') {
+            let parts: Vec<_> = name.split('/').collect();
+            if parts.len() == 2 {
+                let main_label = parts[0];
+                let sub_label = parts[1];
+
+                // First, try to find the main label
+                if let Some(main_symbol) = self.symbols.get(main_label) {
+                    // If the main label is found, check for the sublabel within the same scope
+                    let scoped_sublabel = format!("{}/{}", main_label, sub_label);
+                    if let Some(sublabel_symbol) = self.symbols.get(&scoped_sublabel) {
+                        return Some(sublabel_symbol);
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     /// Process an include directive by reading and assembling the included file
     fn process_include(&mut self, path: &str, rom: &mut Rom) -> Result<()> {
         // Read the included file
-        let content = fs::read_to_string(path)?;
+        let content = match fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => {
+                return Err(AssemblerError::SyntaxError {
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    line: self.line_number,
+                    position: self.position_in_line,
+                    message: format!("Failed to read include file '{}': {}", path, e),
+                    source_line: String::new(),
+                });
+            }
+        };
 
         // Scan the included file for device headers and merge into device_map
         for line in content.lines() {
@@ -1069,8 +1066,7 @@ impl Assembler {
                             // Device name is before '/', first field is after
                             device = device[..slash_pos].to_string();
                         }
-                        let base_addr =
-                            u16::from_str_radix(&addr[1..], 16).unwrap_or(0);
+                        let base_addr = u16::from_str_radix(&addr[1..], 16).unwrap_or(0);
                         let mut fields = Vec::new();
                         let mut _offset = 0u16;
                         let mut iter = parts;
@@ -1085,28 +1081,19 @@ impl Assembler {
                                 if size_str.starts_with('$') {
                                     let label_name = &size_str[1..];
                                     let mut resolved = None;
-                                    if let Some(ref parent) = self.current_label
-                                    {
-                                        let scoped = format!(
-                                            "{}/{}",
-                                            parent, label_name
-                                        );
-                                        if let Some(symbol) =
-                                            self.symbols.get(&scoped)
-                                        {
+                                    if let Some(ref parent) = self.current_label {
+                                        let scoped = format!("{}/{}", parent, label_name);
+                                        if let Some(symbol) = self.symbols.get(&scoped) {
                                             resolved = Some(symbol.address);
                                         }
                                     }
                                     if resolved.is_none() {
-                                        if let Some(symbol) =
-                                            self.symbols.get(label_name)
-                                        {
+                                        if let Some(symbol) = self.symbols.get(label_name) {
                                             resolved = Some(symbol.address);
                                         }
                                     }
                                     resolved.unwrap_or_else(|| {
-                                        u16::from_str_radix(label_name, 16)
-                                            .unwrap_or(1)
+                                        u16::from_str_radix(label_name, 16).unwrap_or(1)
                                     }) as u8
                                 } else {
                                     1
@@ -1127,9 +1114,7 @@ impl Assembler {
                         };
                         self.device_map
                             .entry(device)
-                            .and_modify(|existing| {
-                                existing.extend_fields(devmap.fields.clone())
-                            })
+                            .and_modify(|existing| existing.extend_fields(devmap.fields.clone()))
                             .or_insert(devmap);
                     }
                 }
@@ -1141,8 +1126,7 @@ impl Assembler {
         let tokens = lexer.tokenize()?;
 
         // Parse the included file
-        let mut parser =
-            Parser::new_with_source(tokens, path.to_string(), content);
+        let mut parser = Parser::new_with_source(tokens, path.to_string(), content);
         let ast = parser.parse()?;
 
         // Set the ROM path to the included file path for error context
@@ -1153,6 +1137,7 @@ impl Assembler {
             self.process_node(&node, rom)?;
         }
 
+
         Ok(())
     }
 }
@@ -1160,5 +1145,6 @@ impl Assembler {
 impl Default for Assembler {
     fn default() -> Self {
         Self::new()
+
     }
 }

@@ -18,20 +18,16 @@ impl Opcodes {
 
     /// Get the base opcode for an instruction
     pub fn get_opcode(&self, instruction: &str) -> Result<u8> {
-        self.opcodes.get(instruction).copied().ok_or_else(|| {
-            AssemblerError::UnknownOpcode {
+        self.opcodes
+            .get(instruction)
+            .copied()
+            .ok_or_else(|| AssemblerError::UnknownOpcode {
                 opcode: instruction.to_string(),
-            }
-        })
+            })
     }
 
     /// Apply mode flags to an opcode
-    pub fn apply_modes(
-        opcode: u8,
-        short_mode: bool,
-        return_mode: bool,
-        keep_mode: bool,
-    ) -> u8 {
+    pub fn apply_modes(opcode: u8, short_mode: bool, return_mode: bool, keep_mode: bool) -> u8 {
         encode_opcode(opcode, short_mode, return_mode, keep_mode)
     }
 }

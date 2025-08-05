@@ -25,31 +25,24 @@ fn main() -> Result<(), AssemblerError> {
     }
 
     let input_file = &args[1];
-    let source = fs::read_to_string(input_file).map_err(|e| {
-        AssemblerError::SyntaxError {
-            line: 0,
-            message: format!("Failed to read file {}: {}", input_file, e),
-            path: input_file.to_owned(),
-            position: 0,
-            source_line: String::new(),
-        }
+    let source = fs::read_to_string(input_file).map_err(|e| AssemblerError::SyntaxError {
+        line: 0,
+        message: format!("Failed to read file {}: {}", input_file, e),
+        path: input_file.to_owned(),
+        position: 0,
+        source_line: String::new(),
     })?;
 
     let mut assembler = Assembler::new();
     match assembler.assemble(&source, Some(input_file.to_owned())) {
         Ok(rom) => {
             let output_file = input_file.replace(".tal", ".rom");
-            fs::write(&output_file, &rom).map_err(|e| {
-                AssemblerError::SyntaxError {
-                    line: 0,
-                    message: format!(
-                        "Failed to write ROM file {}: {}",
-                        output_file, e
-                    ),
-                    path: output_file.clone(),
-                    position: 0,
-                    source_line: String::new(),
-                }
+            fs::write(&output_file, &rom).map_err(|e| AssemblerError::SyntaxError {
+                line: 0,
+                message: format!("Failed to write ROM file {}: {}", output_file, e),
+                path: output_file.clone(),
+                position: 0,
+                source_line: String::new(),
             })?;
 
             println!("Created {} ({} bytes)", output_file, rom.len());
@@ -80,10 +73,7 @@ fn main() -> Result<(), AssemblerError> {
                     println!("  --> (line {} not found)", line_num);
                 }
             } else {
-                println!(
-                    "  (could not extract line number from: '{}')",
-                    error_string
-                );
+                println!("  (could not extract line number from: '{}')", error_string);
             }
 
             std::process::exit(1);

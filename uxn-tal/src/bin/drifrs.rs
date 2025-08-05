@@ -12,7 +12,7 @@ use log::info;
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// ROM to load and execute
+    /// TAL/ROM to assemble/execute
     rom: PathBuf,
 
     /// Use the native Uxn implementation
