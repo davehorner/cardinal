@@ -52,9 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn find_tal_files(
-    dir: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+fn find_tal_files(dir: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut tal_files = Vec::new();
     find_tal_files_recursive(Path::new(dir), &mut tal_files)?;
     tal_files.sort();
@@ -72,9 +70,7 @@ fn find_tal_files_recursive(
 
             if path.is_dir() {
                 // Skip target directories and hidden directories
-                if let Some(dir_name) =
-                    path.file_name().and_then(|n| n.to_str())
-                {
+                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
                     if dir_name.starts_with('.') || dir_name == "target" {
                         continue;
                     }
@@ -93,8 +89,8 @@ fn find_tal_files_recursive(
 }
 
 fn assemble_file(file_path: &str) -> Result<usize, String> {
-    let source = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let source =
+        fs::read_to_string(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     let mut assembler = Assembler::new();
     match assembler.assemble(&source, Some(file_path.to_string())) {

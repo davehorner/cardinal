@@ -17,7 +17,8 @@ fn enumerate_tal_files(dir: &str) -> Vec<String> {
     files
 }
 fn main() -> Result<(), AssemblerError> {
-    let tal_files = enumerate_tal_files("tal");
+    std::env::set_current_dir("tal")?;
+    let tal_files = enumerate_tal_files(".");
     for tal_file in tal_files {
         println!("Processing TAL file: {}", tal_file);
         let tal_file_name = Path::new(&tal_file)
@@ -33,11 +34,7 @@ fn main() -> Result<(), AssemblerError> {
             Ok(rom) => {
                 let rom_path = format!("{}.rom", tal_file_name);
                 std::fs::write(&rom_path, &rom)?;
-                println!(
-                    "Successfully assembled {} bytes to {}",
-                    rom.len(),
-                    rom_path
-                );
+                println!("Successfully assembled {} bytes to {}", rom.len(), rom_path);
 
                 // Run WSL uxnasm on the TAL source file
                 let wsl_rom_path = format!("{}_wsl.rom", tal_file);
@@ -53,24 +50,21 @@ fn main() -> Result<(), AssemblerError> {
                 );
                 let status = Command::new("wsl")
                     .arg("uxnasm")
-                    .current_dir("tal")
                     .arg(&tal_file_name)
                     .arg(&wsl_file_name)
                     .status()?;
 
                 if status.success() {
-                    println!(
-                        "WSL uxnasm succeeded, output at {:?}",
-                        wsl_rom_path
-                    );
+                    println!("WSL uxnasm succeeded, output at {:?}", wsl_rom_path);
                 } else {
                     eprintln!("WSL uxnasm failed with status: {}", status);
                 }
 
                 // Compare the two ROM files byte-by-byte
                 // let rom_path = format!("tal\\{}.rom", tal_file_name);
-                let rust_rom = std::fs::read(&rom_path)?;
-                let wsl_rom = std::fs::read(&wsl_rom_path)?;
+
+                let rust_rom = std::fs::read(&rom_path).unwrap_or_default();
+                let wsl_rom = std::fs::read(&wsl_rom_path).unwrap_or_default();
 
                 if rust_rom == wsl_rom {
                     println!("ROM outputs are identical for {}", tal_file);
@@ -79,29 +73,45 @@ fn main() -> Result<(), AssemblerError> {
                 }
 
                 // Run both ROMs using uxncli via WSL and compare their outputs
-                let run_rom =
-                    |rom_path: &str| -> Result<String, std::io::Error> {
-                        let output = Command::new("wsl")
-                            .arg("uxncli")
-                            .current_dir("tal")
-                            .arg(rom_path)
-                            .output()?;
-                        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-                    };
+                let run_rom = |rom_path: &str| -> Result<String, std::io::Error> {
+                    let output = Command::new("wsl").arg("uxncli").arg(rom_path).output()?;
+                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                };
 
                 let rust_output = run_rom(&rom_path)?;
                 let wsl_output = run_rom(&wsl_rom_path)?;
 
-                println!("--- Rust ROM output ---\n{}", rust_output);
-                println!("--- WSL ROM output ---\n{}", wsl_output);
+                println!("--- Rust ROM output {}---\n{}", rust_output, rom_path);
+                println!("--- WSL ROM output {}---\n{}", wsl_output, wsl_rom_path);
 
                 if rust_output == wsl_output {
-                    println!(
-                        "ROM runtime outputs are identical for {}",
-                        tal_file
-                    );
+                    println!("ROM runtime outputs are identical for {}", tal_file);
                 } else {
                     println!("ROM runtime outputs differ for {}", tal_file);
+                }
+
+                // Run both ROMs using uxndis via WSL and compare their outputs
+                let run_dis = |rom_path: &str| -> Result<String, std::io::Error> {
+                    let output = Command::new("wsl")
+                        .arg("uxncli")
+                        .arg("uxndis.rom")
+                        .arg("--")
+                        .arg(rom_path)
+                        .output()?;
+                    println!("Running command: wsl uxncli uxndis.rom -- {}", rom_path);
+                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                };
+
+                let rust_dis_output = run_dis(&rom_path)?;
+                let wsl_dis_output = run_dis(&wsl_rom_path)?;
+
+                println!("--- Rust ROM disassembly ---\n{}", rust_dis_output);
+                println!("--- WSL ROM disassembly ---\n{}", wsl_dis_output);
+
+                if rust_dis_output == wsl_dis_output {
+                    println!("ROM disassembly outputs are identical for {}", tal_file);
+                } else {
+                    println!("ROM disassembly outputs differ for {}", tal_file);
                 }
             }
             Err(e) => {
@@ -109,6 +119,10 @@ fn main() -> Result<(), AssemblerError> {
             }
         }
     }
+    let cwd = std::env::current_dir()?;
+    let parent_cwd = cwd.parent().unwrap_or(&cwd);
+    println!("Changing back to parent directory: {:?}", parent_cwd);
+    std::env::set_current_dir(parent_cwd)?;
     //     ( Simple working hello world )
     //     #48 #18 DEO  ( H )
     //     #65 #18 DEO  ( e )

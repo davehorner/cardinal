@@ -108,10 +108,7 @@ impl Rom {
     }
 
     /// Save the ROM to a file
-    pub fn save_to_file<P: AsRef<std::path::Path>>(
-        &self,
-        path: P,
-    ) -> Result<()> {
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
         let mut file = std::fs::File::create(path)?;
         file.write_all(self.data())?;
         Ok(())

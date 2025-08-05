@@ -41,14 +41,31 @@ pub enum Token {
     HyphenRef(String),
     /// Padding directive (e.g., |0100)
     Padding(u16),
+    PaddingLabel(String),
     /// Skip bytes directive (e.g., $2)
     Skip(u16),
     /// Device access (e.g., .Screen/width)
     DeviceAccess(String, String), // device, field
-    /// Macro definition (e.g., %MACRO)
+
+    /// Macro definition (e.g., MACRO)
     MacroDef(String),
+
     /// Macro call (e.g., MACRO)
     MacroCall(String),
+    /// Dot reference - generates LIT + 8-bit address (like uxnasm's '.' rune)
+    DotRef(String),
+    /// Semicolon reference - generates LIT2 + 16-bit address (like uxnasm's ';' rune)  
+    SemicolonRef(String),
+    /// Equals reference - generates 16-bit address directly (like uxnasm's '=' rune)
+    EqualsRef(String),
+    /// Comma reference - generates LIT + relative 8-bit address (like uxnasm's ',' rune)
+    CommaRef(String),
+    /// Underscore reference - generates relative 8-bit address (like uxnasm's '_' rune)
+    UnderscoreRef(String),
+    /// Question reference - generates conditional jump (like uxnasm's '?' rune)
+    QuestionRef(String),
+    /// Exclamation reference - generates JSR call (like uxnasm's '!' rune)
+    ExclamationRef(String),
     /// Brace open
     BraceOpen,
     /// Brace close
@@ -69,6 +86,15 @@ pub enum Token {
     Eof,
 }
 
+/// Token with position information
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenWithPos {
+    pub token: Token,
+    pub line: usize,
+    pub start_pos: usize,
+    pub end_pos: usize,
+}
+
 /// Lexer for TAL assembly language
 pub struct Lexer {
     input: String,
@@ -76,6 +102,8 @@ pub struct Lexer {
     line: usize,
     path: Option<String>,
     position_on_line: usize,
+    /// Next sublabel for conditional operator, if any
+    next_conditional_sublabel: Option<String>,
 }
 
 impl Lexer {
@@ -87,6 +115,7 @@ impl Lexer {
             line: 1,
             path,
             position_on_line: 1,
+            next_conditional_sublabel: None,
         }
     }
 
@@ -116,296 +145,83 @@ impl Lexer {
     }
 
     /// Tokenize the entire input
-    pub fn tokenize(&mut self) -> Result<Vec<Token>> {
+    pub fn tokenize(&mut self) -> Result<Vec<TokenWithPos>> {
         let mut tokens = Vec::new();
 
-        loop {
+        while self.position < self.input.len() {
+            let start_line = self.line;
+            let start_pos = self.position_on_line;
+            let token_start_position = self.position;
+
+            // Handle newlines and whitespace
+            let ch = self.current_char();
+            if ch == '\n' {
+                tokens.push(TokenWithPos {
+                    token: Token::Newline,
+                    line: start_line,
+                    start_pos,
+                    end_pos: start_pos,
+                });
+                self.advance();
+                continue;
+            }
+            if ch.is_whitespace() && ch != '\n' {
+                self.advance();
+                continue;
+            }
+
+            // Handle comments
+            if ch == '(' {
+                let comment_start_line = self.line;
+                let comment_start_pos = self.position_on_line;
+                self.advance();
+                let comment = self.read_comment()?;
+                let comment_end_pos = self.position_on_line;
+                tokens.push(TokenWithPos {
+                    token: Token::Comment(comment),
+                    line: comment_start_line,
+                    start_pos: comment_start_pos,
+                    end_pos: comment_end_pos,
+                });
+                continue;
+            }
+
+            // Get next token
             match self.next_token()? {
                 Token::Eof => break,
-                token => tokens.push(token),
+                token => {
+                    let token_end_position = self.position;
+                    let token_end_pos =
+                        start_pos + (token_end_position - token_start_position).max(1) - 1;
+                    // Debug print for position tracking
+                    println!(
+                        "DEBUG: token={:?} line={} start_pos={} end_pos={} position={} position_on_line={}",
+                        token, start_line, start_pos, token_end_pos, self.position, self.position_on_line
+                    );
+                    tokens.push(TokenWithPos {
+                        token,
+                        line: start_line,
+                        start_pos,
+                        end_pos: token_end_pos,
+                    });
+                }
             }
         }
 
         Ok(tokens)
     }
 
-    /// Get the next token from the input
-    pub fn next_token(&mut self) -> Result<Token> {
-        // Robustly skip all whitespace except newlines before tokenizing
-        while self.position < self.input.len() {
-            let ch = self.current_char();
-            if ch.is_whitespace() && ch != '\n' {
-                self.advance();
-            } else {
-                break;
-            }
-        }
-
-        if self.position >= self.input.len() {
-            return Ok(Token::Eof);
-        }
-
-        let ch = self.current_char();
-
-        match ch {
-            '\n' => {
-                self.advance();
-                self.line += 1;
-                Ok(Token::Newline)
-            }
-            '(' => {
-                self.advance();
-                let comment = self.read_comment()?;
-                Ok(Token::Comment(comment))
-            }
-            '"' => {
-                self.advance();
-                // Check if this is a character literal ("a) or a string ("hello)
-                let ch = self.current_char();
-                if ch != '\0' && !ch.is_whitespace() {
-                    // Look ahead to see if there's more content
-                    let next_pos = self.position + 1;
-                    let next_ch = if next_pos < self.input.len() {
-                        self.input.chars().nth(next_pos).unwrap_or('\0')
-                    } else {
-                        '\0'
-                    };
-
-                    // If next character is whitespace or end of input, it's a character literal
-                    if next_ch.is_whitespace()
-                        || next_ch == '\0'
-                        || next_ch == ']'
-                        || next_ch == ')'
-                    {
-                        self.advance(); // consume the character
-                        Ok(Token::CharLiteral(ch))
-                    } else {
-                        // It's a string
-                        let string = self.read_string()?;
-                        Ok(Token::RawString(string))
-                    }
-                } else {
-                    // Empty string or invalid
-                    let string = self.read_string()?;
-                    Ok(Token::RawString(string))
-                }
-            }
-            '\'' => {
-                self.advance();
-                let ch = self.current_char();
-                if ch == '\0' {
-                    return Err(AssemblerError::SyntaxError {
-                        path: self.path.clone().unwrap_or_default(),
-                        line: self.line,
-                        position: self.position_on_line,
-                        message: "Unexpected end of file in character literal"
-                            .to_string(),
-                        source_line: self.get_current_line(),
-                    });
-                }
-                self.advance();
-                Ok(Token::CharLiteral(ch))
-            }
-            '#' => {
-                self.advance();
-                if self.current_char() == 'b' {
-                    self.advance();
-                    let binary = self.read_binary()?;
-                    Ok(Token::BinLiteral(binary))
-                } else {
-                    let hex = self.read_hex()?;
-                    Ok(Token::HexLiteral(hex))
-                }
-            }
-            '@' => {
-                self.advance();
-                let label = self.read_identifier()?;
-                Ok(Token::LabelDef(label))
-            }
-            ';' | ':' => {
-                self.advance();
-                if self.current_char() == '&' {
-                    self.advance();
-                    let sublabel = self.read_identifier()?;
-                    Ok(Token::SublabelRef(sublabel))
-                } else {
-                    let label = self.read_identifier()?;
-                    Ok(Token::LabelRef(label))
-                }
-            }
-            '&' => {
-                self.advance();
-                let sublabel = self.read_identifier()?;
-                Ok(Token::SublabelDef(sublabel))
-            }
-            ',' => {
-                self.advance();
-                // Check if next char is & (relative sublabel reference)
-                if self.current_char() == '&' {
-                    self.advance(); // consume &
-                    let sublabel = self.read_identifier()?;
-                    Ok(Token::RelativeRef(format!("&{}", sublabel)))
-                } else {
-                    let sublabel = self.read_identifier()?;
-                    Ok(Token::SublabelRef(sublabel))
-                }
-            }
-            '/' => {
-                self.advance();
-                let label = self.read_identifier()?;
-                Ok(Token::RelativeRef(label))
-            }
-            '?' => {
-                self.advance();
-                // Check for conditional block start ?{
-                if self.current_char() == '{' {
-                    self.advance(); // consume the '{'
-                    Ok(Token::ConditionalBlockStart)
-                }
-                // Check if next char is & (sublabel reference)
-                else if self.current_char() == '&' {
-                    self.advance();
-                    let sublabel = self.read_identifier()?;
-                    Ok(Token::ConditionalRef(format!("&{}", sublabel)))
-                }
-                // Check if next char starts an identifier
-                else if self.current_char().is_ascii_alphabetic()
-                    || self.current_char() == '_'
-                {
-                    let label = self.read_identifier()?;
-                    Ok(Token::ConditionalRef(label))
-                }
-                // Otherwise it's a standalone conditional operator
-                else {
-                    Ok(Token::ConditionalOperator)
-                }
-            }
-            '!' => {
-                self.advance();
-                // Check if next char is & (sublabel reference)
-                if self.current_char() == '&' {
-                    self.advance();
-                    let sublabel = self.read_identifier()?;
-                    Ok(Token::JSRRef(format!("&{}", sublabel)))
-                } else {
-                    let label = self.read_identifier()?;
-                    Ok(Token::JSRRef(label))
-                }
-            }
-            '-' => {
-                self.advance();
-                let identifier = self.read_identifier()?;
-                Ok(Token::HyphenRef(identifier))
-            }
-            '|' => {
-                self.advance();
-                let addr_str = self.read_hex()?;
-                let addr =
-                    u16::from_str_radix(&addr_str, 16).map_err(|_| {
-                        AssemblerError::InvalidNumber {
-                            value: addr_str.clone(),
-                        }
-                    })?;
-                Ok(Token::Padding(addr))
-            }
-            '$' => {
-                self.advance();
-                let count_str = self.read_hex()?;
-                let count =
-                    u16::from_str_radix(&count_str, 16).map_err(|_| {
-                        AssemblerError::InvalidNumber {
-                            value: count_str.clone(),
-                        }
-                    })?;
-                Ok(Token::Skip(count))
-            }
-            '.' => {
-                self.advance();
-                let device_and_field = self.read_device_access()?;
-                if let Some(slash_pos) = device_and_field.find('/') {
-                    let device = device_and_field[..slash_pos].to_string();
-                    let field = device_and_field[slash_pos + 1..].to_string();
-                    Ok(Token::DeviceAccess(device, field))
-                } else {
-                    // Variable access without slash - treat as LabelRef
-                    Ok(Token::LabelRef(device_and_field))
-                }
-            }
-            '%' => {
-                self.advance();
-                let macro_name = self.read_identifier()?;
-                Ok(Token::MacroDef(macro_name))
-            }
-            '{' => {
-                self.advance();
-                Ok(Token::BraceOpen)
-            }
-            '}' => {
-                self.advance();
-                Ok(Token::BraceClose)
-            }
-            '[' => {
-                self.advance();
-                Ok(Token::BracketOpen)
-            }
-            ']' => {
-                self.advance();
-                Ok(Token::BracketClose)
-            }
-            '~' => {
-                self.advance();
-                let filename = self.read_include_path()?;
-                Ok(Token::Include(filename))
-            }
-            '<' => {
-                self.advance();
-                let macro_name = self.read_macro_call()?;
-                Ok(Token::MacroCall(macro_name))
-            }
-            '=' => {
-                self.advance();
-                let label = self.read_identifier()?;
-                Ok(Token::RawAddressRef(label))
-            }
-            _ if ch.is_ascii_digit() => {
-                let number = self.read_hex_number()?;
-                // In TAL, bare hex numbers are treated as raw hex bytes
-                Ok(Token::RawHex(number))
-            }
-            _ if ch.is_ascii_alphabetic() || ch == '_' => {
-                // First, peek ahead to see if this looks like hex data
-                let start_pos = self.position;
-                let identifier = self.read_identifier()?;
-
-                // If it's all hex digits and an even number of chars (2, 4, 6, 8...)
-                // and no special characters, treat as hex data
-                if identifier.chars().all(|c| c.is_ascii_hexdigit())
-                    && identifier.len() % 2 == 0
-                    && identifier.len() >= 2
-                {
-                    // Reset position and read as hex bytes in pairs
-                    self.position = start_pos;
-                    let hex_byte = self.read_hex_number()?;
-                    Ok(Token::RawHex(hex_byte))
-                } else {
-                    Ok(Token::Instruction(identifier))
-                }
-            }
-            _ => {
-                Err(self
-                    .syntax_error(format!("Unexpected character: '{}'", ch)))
-            }
-        }
-    }
-
-    /// Get the current character at the position
-    fn current_char(&self) -> char {
-        self.input.chars().nth(self.position).unwrap_or('\0')
-    }
-
     /// Move to the next character
     fn advance(&mut self) {
-        self.position += 1;
+        if self.position < self.input.len() {
+            if self.input.chars().nth(self.position) == Some('\n') {
+                self.line += 1;
+                self.position_on_line = 1;
+            } else {
+                self.position_on_line += 1;
+            }
+            self.position += 1;
+        }
     }
 
     /// Skip whitespace characters except newlines
@@ -424,9 +240,7 @@ impl Lexer {
     #[allow(dead_code)]
     fn read_until(&mut self, delimiter: char) -> Result<String> {
         let mut result = String::new();
-        while self.position < self.input.len()
-            && self.current_char() != delimiter
-        {
+        while self.position < self.input.len() && self.current_char() != delimiter {
             result.push(self.current_char());
             self.advance();
         }
@@ -529,24 +343,22 @@ impl Lexer {
     }
 
     /// Read a hexadecimal number (hex digits only)
-    /// For asset data, splits long hex strings into byte pairs
+    /// For asset data, reads up to 4 hex digits for RawHex tokens
     fn read_hex_number(&mut self) -> Result<String> {
         let mut result = String::new();
-        while self.position < self.input.len() {
+        let mut count = 0;
+        while self.position < self.input.len() && count < 4 {
             let ch = self.current_char();
             if ch.is_ascii_hexdigit() {
                 result.push(ch);
                 self.advance();
-
-                // If we have 2 hex digits, that's one byte - stop here
-                // This allows c3c7 to be tokenized as c3, then c7
-                if result.len() == 2 {
-                    break;
-                }
+                count += 1;
             } else {
                 break;
             }
         }
+        // Fix position_on_line drift: always update position_on_line based on chars consumed
+        // This is already handled by advance(), so do NOT manually update position_on_line here.
         Ok(result)
     }
 
@@ -554,23 +366,45 @@ impl Lexer {
     /// Allows alphanumeric characters, underscores, hyphens, and forward slashes
     fn read_identifier(&mut self) -> Result<String> {
         let mut result = String::new();
+        let mut first = true;
         while self.position < self.input.len() {
             let ch = self.current_char();
-            // Accept alphanumeric, underscore, hyphen, slash, and angle brackets in identifiers
+            // Accept alphanumeric, underscore, hyphen, slash, angle brackets, allow '@', '{' , '&', and '"' as first char
             if ch.is_ascii_alphanumeric()
                 || ch == '_'
                 || ch == '-'
                 || ch == '/'
                 || ch == '<'
                 || ch == '>'
+                || ch == '"'
+                || ch == '#'
+                || (first && (ch == '@' || ch == '{' || ch == '&'))
             {
+                // Special case: treat "" as a CharLiteral('"')
+                if first && ch == '"' && self.input.chars().nth(self.position + 1) == Some('"') {
+                    self.advance(); // skip first "
+                    self.advance(); // skip second "
+                                    // Return as CharLiteral token, not identifier
+                    return Ok(String::from("\"")); // This will be handled as a CharLiteral by the parser
+                }
                 result.push(ch);
                 self.advance();
+                first = false;
             } else {
                 break;
             }
         }
+        // Debug: print what we read to see if it's being truncated
+        eprintln!("DEBUG: read_identifier result: '{}'", result);
+        // If we returned "" above, result will be empty, so skip error
         if result.is_empty() {
+            // If we just parsed "", treat as CharLiteral('"')
+            if self.position > 1
+                && self.input.chars().nth(self.position - 2) == Some('"')
+                && self.input.chars().nth(self.position - 1) == Some('"')
+            {
+                return Ok(String::from("\""));
+            }
             return Err(AssemblerError::SyntaxError {
                 path: self.path.clone().unwrap_or_default(),
                 line: self.line,
@@ -609,8 +443,7 @@ impl Lexer {
         let mut result = String::new();
         while self.position < self.input.len() {
             let ch = self.current_char();
-            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '/'
-            {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '/' {
                 result.push(ch);
                 self.advance();
             } else {
@@ -673,8 +506,8 @@ impl Lexer {
                 break;
             }
 
-            // Allow alphanumeric, hyphens and underscores in macro names
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+            // Allow alphanumeric, hyphens, underscores, and slashes in macro names
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '/' {
                 name.push(ch);
                 self.advance();
             } else {
@@ -700,4 +533,368 @@ impl Lexer {
 
         Ok(name)
     }
+
+    /// Get the current character at the position
+    fn current_char(&self) -> char {
+        self.input.chars().nth(self.position).unwrap_or('\0')
+    }
+
+    /// Get the next token from the input
+    pub fn next_token(&mut self) -> Result<Token> {
+        // Check for pending sublabel/label from conditional operator
+        if let Some(label) = self.next_conditional_sublabel.take() {
+            if label.starts_with('&') {
+                return Ok(Token::SublabelRef(
+                    label.trim_start_matches('&').to_string(),
+                ));
+            }
+            if label.starts_with('<') {
+                return Ok(Token::LabelRef(label.trim_start_matches('<').to_string()));
+            }
+            return Ok(Token::LabelRef(label));
+        }
+
+        // Robustly skip all whitespace except newlines before tokenizing
+        while self.position < self.input.len() {
+            let ch = self.current_char();
+            if ch.is_whitespace() && ch != '\n' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        // Skip comments before tokenizing
+        while self.position < self.input.len() {
+            let ch = self.current_char();
+            if ch.is_whitespace() && ch != '\n' {
+                self.advance();
+            } else if ch == '(' {
+                self.advance();
+                let mut depth = 1;
+                while self.position < self.input.len() && depth > 0 {
+                    let ch = self.current_char();
+                    if ch == '(' {
+                        depth += 1;
+                    } else if ch == ')' {
+                        depth -= 1;
+                    }
+                    self.advance();
+                }
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        if self.position >= self.input.len() {
+            return Ok(Token::Eof);
+        }
+
+        let ch = self.current_char();
+
+        match ch {
+            '\n' => {
+                self.advance();
+                Ok(Token::Newline)
+            }
+            '(' => {
+                self.advance();
+                let comment = self.read_comment()?;
+                Ok(Token::Comment(comment))
+            }
+            '"' => {
+                self.advance();
+                if self.current_char() == '"' {
+                    self.advance();
+                    return Ok(Token::RawString(String::new()));
+                }
+                let ch = self.current_char();
+                if ch != '\0' && !ch.is_whitespace() {
+                    let next_pos = self.position + 1;
+                    let next_ch = if next_pos < self.input.len() {
+                        self.input.chars().nth(next_pos).unwrap_or('\0')
+                    } else {
+                        '\0'
+                    };
+                    if next_ch.is_whitespace()
+                        || next_ch == '\0'
+                        || next_ch == ']'
+                        || next_ch == ')'
+                    {
+                        self.advance();
+                        Ok(Token::CharLiteral(ch))
+                    } else {
+                        let string = self.read_string()?;
+                        Ok(Token::RawString(string))
+                    }
+                } else {
+                    let string = self.read_string()?;
+                    Ok(Token::RawString(string))
+                }
+            }
+            '\'' => {
+                self.advance();
+                let ch = self.current_char();
+                if ch == '\0' {
+                    return Err(AssemblerError::SyntaxError {
+                        path: self.path.clone().unwrap_or_default(),
+                        line: self.line,
+                        position: self.position_on_line,
+                        message: "Unexpected end of file in character literal".to_string(),
+                        source_line: self.get_current_line(),
+                    });
+                }
+                self.advance();
+                Ok(Token::CharLiteral(ch))
+            }
+            '#' => {
+                self.advance();
+                loop {
+                    let ch = self.current_char();
+                    if ch.is_whitespace() && ch != '\n' {
+                        self.advance();
+                    } else if ch == '(' {
+                        self.advance();
+                        let comment = self.read_comment()?;
+                        let comment_newlines = comment.chars().filter(|c| *c == '\n').count();
+                        self.line += comment_newlines;
+                    } else {
+                        break;
+                    }
+                }
+                if self.current_char() == '"' {
+                    self.advance();
+                    let ch = self.current_char();
+                    if ch != '\0' {
+                        self.advance();
+                        return Ok(Token::CharLiteral(ch));
+                    }
+                }
+                if self.current_char() == '\'' {
+                    self.advance();
+                    let ch = self.current_char();
+                    if ch != '\0' {
+                        self.advance();
+                        return Ok(Token::CharLiteral(ch));
+                    }
+                }
+                if self.current_char() == '[' {
+                    self.advance();
+                    let ch = self.current_char();
+                    if ch != '\0' && self.input.chars().nth(self.position + 1) == Some(']') {
+                        self.advance();
+                        self.advance();
+                        return Ok(Token::CharLiteral(ch));
+                    }
+                }
+                if self.current_char().is_ascii_alphabetic()
+                    && self
+                        .input
+                        .chars()
+                        .nth(self.position + 1)
+                        .map(|c| c.is_whitespace() || c == ']')
+                        == Some(true)
+                {
+                    let ch = self.current_char();
+                    self.advance();
+                    return Ok(Token::CharLiteral(ch));
+                }
+                if !self.current_char().is_ascii_hexdigit() {
+                    return Err(AssemblerError::SyntaxError {
+                        path: self.path.clone().unwrap_or_default(),
+                        line: self.line,
+                        position: self.position_on_line,
+                        message: "Expected hexadecimal digits after '#'".to_string(),
+                        source_line: self.get_current_line(),
+                    });
+                }
+                let hex = self.read_hex()?;
+                Ok(Token::HexLiteral(hex))
+            }
+            '@' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::LabelDef(label))
+            }
+            ';' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::SemicolonRef(label))
+            }
+            '.' => {
+                self.advance();
+                let ident = self.read_identifier()?;
+                Ok(Token::DotRef(ident))
+            }
+            '=' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::EqualsRef(label))
+            }
+            ',' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::CommaRef(label))
+            }
+            '_' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::UnderscoreRef(label))
+            }
+            '-' => {
+                self.advance();
+                let identifier = self.read_identifier()?;
+                Ok(Token::HyphenRef(identifier))
+            }
+            '/' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                // Don't include the leading slash in the label name - it's just syntax
+                Ok(Token::RelativeRef(label))
+            }
+            '?' => {
+                self.advance();
+                if self.current_char() == '{' {
+                    return Ok(Token::ConditionalOperator);
+                }
+                let label = self.read_identifier()?;
+                Ok(Token::QuestionRef(label))
+            }
+            '!' => {
+                self.advance();
+                let label = self.read_identifier()?;
+                Ok(Token::ExclamationRef(label))
+            }
+            '{' => {
+                self.advance();
+                Ok(Token::BraceOpen)
+            }
+            '}' => {
+                self.advance();
+                Ok(Token::BraceClose)
+            }
+            '[' => {
+                self.advance();
+                if self.current_char() == '"'
+                    && self.input.chars().nth(self.position + 1) == Some('"')
+                {
+                    self.advance();
+                    self.advance();
+                    return Ok(Token::CharLiteral('"'));
+                }
+                Ok(Token::BracketOpen)
+            }
+            ']' => {
+                self.advance();
+                Ok(Token::BracketClose)
+            }
+            '~' => {
+                self.advance();
+                let filename = self.read_include_path()?;
+                Ok(Token::Include(filename))
+            }
+            '<' => {
+                self.advance();
+                let macro_name = self.read_macro_call()?;
+                Ok(Token::MacroCall(macro_name))
+            }
+            _ if ch.is_ascii_digit() => {
+                let number = self.read_hex_number()?;
+                Ok(Token::RawHex(number))
+            }
+            _ if ch.is_ascii_alphabetic() || ch == '_' => {
+                let identifier = self.read_identifier()?;
+                // Only treat as hex if it's a simple pattern like "ff", "1234", etc.
+                // Don't treat words with hyphens or complex patterns as hex
+                // Also don't treat known instruction names as hex
+                if identifier.len() >= 2
+                    && identifier.len() <= 4
+                    && identifier.len() % 2 == 0
+                    && identifier.chars().all(|c| c.is_ascii_hexdigit())
+                    && !identifier.contains('-')  // No hyphens in hex values
+                    && !identifier.contains('/')  // No slashes in hex values
+                    && !identifier.contains('_')  // No underscores in hex values
+                    && !is_instruction_name(&identifier)
+                // Don't treat instruction names as hex
+                {
+                    Ok(Token::RawHex(identifier))
+                } else {
+                    Ok(Token::Instruction(identifier))
+                }
+            }
+            '|' => {
+                self.advance();
+                let padding_value = self.read_identifier()?;
+
+                // Check if it's a hex value or a label
+                if padding_value.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // Parse as hex address
+                    let addr = u16::from_str_radix(&padding_value, 16)
+                        .map_err(|_| self.syntax_error("Invalid padding address".to_string()))?;
+                    Ok(Token::Padding(addr))
+                } else {
+                    // It's a label reference for padding
+                    Ok(Token::PaddingLabel(padding_value))
+                }
+            }
+            '$' => {
+                self.advance();
+                let skip_value = self.read_identifier()?;
+                // Parse as hex value for skip count
+                if skip_value.chars().all(|c| c.is_ascii_hexdigit()) {
+                    let count = u16::from_str_radix(&skip_value, 16)
+                        .map_err(|_| self.syntax_error("Invalid skip count".to_string()))?;
+                    Ok(Token::Skip(count))
+                } else {
+                    // Could be a label-based skip, but for now treat as error
+                    Err(self.syntax_error("Skip directive requires hex value".to_string()))
+                }
+            }
+            '%' => {
+                self.advance();
+                let macro_name = self.read_identifier()?;
+                Ok(Token::MacroDef(macro_name))
+            }
+            '&' => {
+                self.advance();
+                let sublabel = self.read_identifier()?;
+                // In uxnasm.c, '&' always creates a sublabel definition (makelabel)
+                // Comma references use ',' prefix, not '&'
+                Ok(Token::SublabelDef(sublabel))
+            }
+            _ => Err(self.syntax_error(format!("Unexpected character: '{}'", ch))),
+        }
+    }
+}
+
+/// Check if an identifier is a known instruction name
+fn is_instruction_name(identifier: &str) -> bool {
+    // List of UXN instruction names that could be confused with hex
+    const INSTRUCTIONS: &[&str] = &[
+        "ADD", "ADD2", "SUB", "SUB2", "MUL", "MUL2", "DIV", "DIV2", "AND", "AND2", "ORA", "ORA2",
+        "EOR", "EOR2", "SFT", "SFT2", "LDZ", "LDZ2", "STZ", "STZ2", "LDR", "LDR2", "STR", "STR2",
+        "LDA", "LDA2", "STA", "STA2", "DEI", "DEI2", "DEO", "DEO2", "INC", "INC2", "POP", "POP2",
+        "NIP", "NIP2", "SWP", "SWP2", "ROT", "ROT2", "DUP", "DUP2", "OVR", "OVR2", "EQU", "EQU2",
+        "NEQ", "NEQ2", "GTH", "GTH2", "LTH", "LTH2", "JMP", "JMP2", "JCN", "JCN2", "JSR", "JSR2",
+        "STH", "STH2", "BRK", "LIT", "LIT2",
+    ];
+
+    // Check the base instruction name (without mode flags)
+    let base_name = if identifier.len() > 3 {
+        let mut base = identifier.to_string();
+        // Remove mode flags (k, r, 2)
+        while base.ends_with('k') || base.ends_with('r') || base.ends_with('2') {
+            base.pop();
+        }
+        base
+    } else {
+        identifier.to_string()
+    };
+
+    INSTRUCTIONS.iter().any(|&inst| {
+        inst == identifier
+            || inst == base_name
+            || (inst.ends_with('2') && inst[..inst.len() - 1] == base_name)
+    })
 }

@@ -45,9 +45,7 @@ fn assemble_file_with_symbols(
 }
 
 // Assemble a TAL file and write ROM, returning ROM path and size
-fn assemble_file_auto(
-    path: &Path,
-) -> Result<(std::path::PathBuf, usize), AssemblerError> {
+fn assemble_file_auto(path: &Path) -> Result<(std::path::PathBuf, usize), AssemblerError> {
     let source = std::fs::read_to_string(path)?;
     let mut assembler = Assembler::new();
     let canonical = std::fs::canonicalize(path)
@@ -60,7 +58,7 @@ fn assemble_file_auto(
 }
 
 // Directory containing demo TAL files (update as needed)
-const DEMOS_DIR: &str = "tal";
+const DEMOS_DIR: &str = "../tal";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔨 UXN TAL Batch Assembler Test");
@@ -89,68 +87,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Check if --symbols flag is provided
-    let generate_symbols =
-        std::env::args().any(|arg| arg == "--symbols" || arg == "-s");
+    let generate_symbols = std::env::args().any(|arg| arg == "--symbols" || arg == "-s");
 
     if generate_symbols {
         println!("🔍 Symbol file generation enabled\n");
     }
 
     // Read directory and process all .tal files
-    for entry in std::fs::read_dir(DEMOS_DIR)? {
-        let entry = entry?;
-        let path = entry.path();
+    if let Ok(entries) = std::fs::read_dir(DEMOS_DIR) {
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
 
-        // Skip if not a .tal file
-        if path.extension().and_then(|s| s.to_str()) != Some("tal") {
-            continue;
-        }
+            // Skip if not a .tal file
+            if path.extension().and_then(|s| s.to_str()) != Some("tal") {
+                continue;
+            }
 
-        let filename = path.file_name().unwrap().to_string_lossy();
-        print!("📝 Assembling {}... ", filename);
+            let filename = path.file_name().unwrap().to_string_lossy();
+            print!("📝 Assembling {}... ", filename);
 
-        if generate_symbols {
-            match assemble_file_with_symbols(&path) {
-                Ok((rom_path, sym_path, size)) => {
-                    println!(
-                        "✅ {} bytes -> {} + {}",
-                        size,
-                        rom_path.file_name().unwrap().to_string_lossy(),
-                        sym_path.file_name().unwrap().to_string_lossy()
-                    );
-                    successful += 1;
-                    total_size += size;
+            if generate_symbols {
+                match assemble_file_with_symbols(&path) {
+                    Ok((rom_path, sym_path, size)) => {
+                        println!(
+                            "✅ {} bytes -> {} + {}",
+                            size,
+                            rom_path.file_name().unwrap().to_string_lossy(),
+                            sym_path.file_name().unwrap().to_string_lossy()
+                        );
+                        successful += 1;
+                        total_size += size;
+                    }
+                    Err(AssemblerError::Io(e)) => {
+                        println!("❌ IO error: {}", e);
+                        failed += 1;
+                    }
+                    Err(e) => {
+                        println!("❌ Assembly error: {}", e);
+                        failed += 1;
+                    }
                 }
-                Err(AssemblerError::Io(e)) => {
-                    println!("❌ IO error: {}", e);
-                    failed += 1;
-                }
-                Err(e) => {
-                    println!("❌ Assembly error: {}", e);
-                    failed += 1;
+            } else {
+                match assemble_file_auto(&path) {
+                    Ok((rom_path, size)) => {
+                        println!(
+                            "✅ {} bytes -> {}",
+                            size,
+                            rom_path.file_name().unwrap().to_string_lossy()
+                        );
+                        successful += 1;
+                        total_size += size;
+                    }
+                    Err(AssemblerError::Io(e)) => {
+                        println!("❌ IO error: {}", e);
+                        failed += 1;
+                    }
+                    Err(e) => {
+                        println!("❌ Assembly error: {}", e);
+                        failed += 1;
+                    }
                 }
             }
-        } else {
-            match assemble_file_auto(&path) {
-                Ok((rom_path, size)) => {
-                    println!(
-                        "✅ {} bytes -> {}",
-                        size,
-                        rom_path.file_name().unwrap().to_string_lossy()
-                    );
-                    successful += 1;
-                    total_size += size;
-                }
-                Err(AssemblerError::Io(e)) => {
-                    println!("❌ IO error: {}", e);
-                    failed += 1;
-                }
-                Err(e) => {
-                    println!("❌ Assembly error: {}", e);
-                    failed += 1;
-                }
-            }
         }
+    } else {
+        println!(
+            "ℹ️ DEMOS_DIR '{}' does not exist, skipping demo assembly.",
+            DEMOS_DIR
+        );
     }
 
     println!("\n📊 Results:");

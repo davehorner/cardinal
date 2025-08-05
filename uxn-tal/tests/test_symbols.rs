@@ -30,8 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::write("../tal/test_symbols.tal", source)?;
 
-    let (rom_path, sym_path, size) =
-        assemble_file_with_symbols("../tal/test_symbols.tal")?;
+    let (rom_path, sym_path, size) = assemble_file_with_symbols("../tal/test_symbols.tal")?;
     println!("Generated ROM: {} ({} bytes)", rom_path.display(), size);
     println!("Generated symbols: {}", sym_path.display());
 

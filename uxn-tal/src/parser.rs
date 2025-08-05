@@ -1,7 +1,8 @@
 //! Parser for TAL assembly language
 
 use crate::error::{AssemblerError, Result};
-use crate::lexer::Token;
+use crate::lexer::{Token, TokenWithPos};
+use std::collections::HashMap;
 
 /// Represents a parsed instruction with modes
 #[derive(Debug, Clone)]
@@ -15,6 +16,7 @@ pub struct Instruction {
 /// AST node types
 #[derive(Debug, Clone)]
 pub enum AstNode {
+    Ignore, // Used for empty nodes or ignored sections
     /// Raw byte value
     Byte(u8),
     /// 16-bit short value
@@ -47,45 +49,62 @@ pub enum AstNode {
     HyphenRef(String),
     /// Padding to specific address
     Padding(u16),
+    PaddingLabel(String),
     /// Skip N bytes
     Skip(u16),
     /// Device access (e.g., .Screen/width)
     DeviceAccess(String, String), // device, field
     /// Macro definition
     MacroDef(String, Vec<AstNode>), // name, body
-    /// Macro call
-    MacroCall(String),
+    /// Macro call (name, line, position)
+    MacroCall(String, usize, usize),
     /// Raw string data
     RawString(Vec<u8>),
-    /// Inline assembly block
-    InlineAssembly(Vec<AstNode>),
     /// Include directive
     Include(String),
+    /// Dot reference - generates LIT + 8-bit address (like uxnasm's '.' rune)
+    DotRef(String),
+    /// Semicolon reference - generates LIT2 + 16-bit address (like uxnasm's ';' rune)  
+    SemicolonRef(String),
+    /// Equals reference - generates 16-bit address directly (like uxnasm's '=' rune)
+    EqualsRef(String),
+    /// Comma reference - generates LIT + relative 8-bit address (like uxnasm's ',' rune)
+    CommaRef(String),
+    /// Underscore reference - generates relative 8-bit address (like uxnasm's '_' rune)
+    UnderscoreRef(String),
+    /// Question reference - generates conditional jump (like uxnasm's '?' rune)
+    QuestionRef(String),
+    /// Exclamation reference - generates JSR call (like uxnasm's '!' rune)
+    ExclamationRef(String),
 }
 
 /// Parser for TAL assembly
 pub struct Parser {
-    tokens: Vec<Token>,
+    tokens: Vec<TokenWithPos>,
     position: usize,
     line: usize,
+    position_in_line: usize,
     path: String,
     source: String,
-    position_in_line: usize,
+    current_scope: Option<String>,
+    labels: HashMap<String, u16>,
+    current_address: u16,
 }
 
 impl Parser {
-    pub fn new_with_source(
-        tokens: Vec<Token>,
-        path: String,
-        source: String,
-    ) -> Self {
+    pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
+        let line = tokens.get(0).map(|t| t.line).unwrap_or(1);
+        let position_in_line = tokens.get(0).map(|t| t.start_pos).unwrap_or(1);
         Self {
             tokens,
             position: 0,
-            line: 1,
+            line,
+            position_in_line,
             path,
             source,
-            position_in_line: 0,
+            current_scope: None,
+            labels: HashMap::new(),
+            current_address: 0x100,
         }
     }
 
@@ -94,17 +113,36 @@ impl Parser {
         let mut nodes = Vec::new();
 
         while !self.is_at_end() {
-            match self.current_token() {
+            let tok_with_pos = self.current_token();
+            // Print path:line:start_pos-end_pos for every token
+            println!(
+                "{}:{}:{}-{} {:?}",
+                self.path,
+                tok_with_pos.line,
+                tok_with_pos.start_pos,
+                tok_with_pos.end_pos,
+                tok_with_pos.token
+            );
+            let token = &tok_with_pos.token;
+            match token {
                 Token::Newline => {
                     self.advance();
                     continue;
                 }
-                Token::Comment(_) => {
+                Token::Comment(comment) => {
+                    println!("Comment({:?})", comment);
+                    self.advance();
+                    continue;
+                }
+                Token::BracketOpen | Token::BracketClose => {
+                    // Completely ignore brackets - they're just ignored in uxnasm.c
                     self.advance();
                     continue;
                 }
                 _ => {
-                    nodes.push(self.parse_node()?);
+                    let node = self.parse_node()?;
+                    println!("{:?}", node);
+                    nodes.push(node);
                 }
             }
         }
@@ -116,14 +154,20 @@ impl Parser {
         // Robustly skip newlines before parsing a node
         // Robustly skip newlines and comments before parsing a node
         loop {
-            match self.current_token() {
+            let token = &self.current_token().token;
+            match token {
                 Token::Newline | Token::Comment(_) => self.advance(),
+                Token::BraceClose => {
+                    self.advance();
+                    continue;
+                }
                 _ => break,
             }
         }
-        match self.current_token().clone() {
+        let token = &self.current_token().token;
+        match token {
             Token::HexLiteral(hex) => {
-                let value = self.parse_hex_literal(&hex)?;
+                let value = self.parse_hex_literal(hex)?;
                 let hex_len = hex.len();
                 self.advance();
                 if hex_len <= 2 {
@@ -133,7 +177,7 @@ impl Parser {
                 }
             }
             Token::RawHex(hex) => {
-                let value = self.parse_hex_literal(&hex)?;
+                let value = self.parse_hex_literal(hex)?;
                 self.advance();
                 if value <= 255 {
                     Ok(AstNode::Byte(value as u8))
@@ -142,20 +186,17 @@ impl Parser {
                 }
             }
             Token::DecLiteral(dec) => {
-                let value = dec.parse::<u16>().map_err(|_| {
-                    AssemblerError::SyntaxError {
+                let line = self.current_token().line;
+                let position = self.current_token().start_pos;
+                let value = dec
+                    .parse::<u16>()
+                    .map_err(|_| AssemblerError::SyntaxError {
                         path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
+                        line,
+                        position,
                         message: format!("Invalid decimal literal: {}", dec),
-                        source_line: self
-                            .source
-                            .lines()
-                            .nth(self.line)
-                            .unwrap_or("")
-                            .to_string(),
-                    }
-                })?;
+                        source_line: self.get_source_line(line),
+                    })?;
                 self.advance();
                 if value <= 255 {
                     Ok(AstNode::LiteralByte(value as u8))
@@ -164,20 +205,16 @@ impl Parser {
                 }
             }
             Token::BinLiteral(bin) => {
-                let value = u16::from_str_radix(&bin, 2).map_err(|_| {
-                    AssemblerError::SyntaxError {
+                let line = self.current_token().line;
+                let position = self.current_token().start_pos;
+                let value =
+                    u16::from_str_radix(bin, 2).map_err(|_| AssemblerError::SyntaxError {
                         path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
+                        line,
+                        position,
                         message: format!("Invalid binary literal: {}", bin),
-                        source_line: self
-                            .source
-                            .lines()
-                            .nth(self.line)
-                            .unwrap_or("")
-                            .to_string(),
-                    }
-                })?;
+                        source_line: self.get_source_line(line),
+                    })?;
                 self.advance();
                 if value <= 255 {
                     Ok(AstNode::LiteralByte(value as u8))
@@ -186,218 +223,219 @@ impl Parser {
                 }
             }
             Token::CharLiteral(ch) => {
-                let value = ch as u8;
+                let value = *ch as u8;
                 self.advance();
                 Ok(AstNode::Byte(value))
             }
             Token::Instruction(inst) => {
-                let instruction = self.parse_instruction(&inst)?;
+                let inst = inst.clone();
                 self.advance();
-                Ok(AstNode::Instruction(instruction))
-            }
-            Token::LabelDef(label) => {
-                self.advance();
-                Ok(AstNode::LabelDef(label))
-            }
-            Token::LabelRef(label) => {
-                self.advance();
-                Ok(AstNode::LabelRef(label))
-            }
-            Token::SublabelDef(sublabel) => {
-                self.advance();
-                Ok(AstNode::SublabelDef(sublabel))
-            }
-            Token::SublabelRef(sublabel) => {
-                self.advance();
-                Ok(AstNode::SublabelRef(sublabel))
-            }
-            Token::RelativeRef(label) => {
-                self.advance();
-                Ok(AstNode::RelativeRef(label))
-            }
-            Token::ConditionalRef(label) => {
-                self.advance();
-                Ok(AstNode::ConditionalRef(label))
-            }
-            Token::ConditionalOperator => {
-                self.advance();
-                // Check if next token is BraceOpen to form a conditional block
-                if matches!(self.current_token(), Token::BraceOpen) {
-                    self.advance(); // consume the '{'
-                    let mut block_nodes = Vec::new();
-
-                    // Parse nodes until we find a closing brace
-                    while !matches!(
-                        self.current_token(),
-                        Token::BraceClose | Token::Eof
-                    ) {
-                        block_nodes.push(self.parse_node()?);
-                    }
-
-                    // Expect closing brace
-                    if matches!(self.current_token(), Token::BraceClose) {
-                        self.advance();
-                    } else {
-                        return Err(AssemblerError::SyntaxError {
-                            path: self.path.clone(),
-                            line: self.line,
-                            position: self.position_in_line,
-                            message: "Expected '}' after conditional block"
-                                .to_string(),
-                            source_line: self
-                                .source
-                                .lines()
-                                .nth(self.line)
-                                .unwrap_or("")
-                                .to_string(),
-                        });
-                    }
-
-                    Ok(AstNode::ConditionalBlock(block_nodes))
+                let ast_node = self.parse_instruction(inst)?;
+                if let AstNode::Instruction(instr) = ast_node {
+                    Ok(AstNode::Instruction(instr))
                 } else {
-                    // Standalone conditional operator - this is an error for now
                     Err(AssemblerError::SyntaxError {
                         path: self.path.clone(),
                         line: self.line,
                         position: self.position_in_line,
-                        message: "Conditional operator '?' must be followed by a block or label".to_string(),
-                        source_line: self.source.lines().nth(self.line).unwrap_or("").to_string(),
-                    })
-                }
-            }
-            Token::ConditionalBlockStart => {
-                self.advance();
-                let mut block_nodes = Vec::new();
-
-                // Parse nodes until we find a closing brace
-                while !matches!(
-                    self.current_token(),
-                    Token::BraceClose | Token::Eof
-                ) {
-                    block_nodes.push(self.parse_node()?);
-                }
-
-                // Expect closing brace
-                if matches!(self.current_token(), Token::BraceClose) {
-                    self.advance();
-                } else {
-                    return Err(AssemblerError::SyntaxError {
-                        path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
-                        message: "Expected '}' after conditional block"
-                            .to_string(),
+                        message: "Expected instruction node".to_string(),
                         source_line: self
                             .source
                             .lines()
-                            .nth(self.line)
+                            .nth(self.line.saturating_sub(1))
                             .unwrap_or("")
                             .to_string(),
-                    });
+                    })
                 }
-
-                Ok(AstNode::ConditionalBlock(block_nodes))
+            }
+            Token::LabelDef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::LabelDef(label))
+            }
+            Token::LabelRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::LabelRef(label))
+            }
+            Token::SublabelDef(sublabel) => {
+                let sublabel = sublabel.clone();
+                self.advance();
+                Ok(AstNode::SublabelDef(sublabel))
+            }
+            Token::SublabelRef(sublabel) => {
+                let sublabel = sublabel.clone();
+                self.advance();
+                Ok(AstNode::SublabelRef(sublabel))
+            }
+            Token::RelativeRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::RelativeRef(label))
+            }
+            Token::ConditionalRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::ConditionalRef(label))
+            }
+            Token::DotRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::DotRef(label))
+            }
+            Token::SemicolonRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::SemicolonRef(label))
+            }
+            Token::EqualsRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::EqualsRef(label))
+            }
+            Token::CommaRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::CommaRef(label))
+            }
+            Token::UnderscoreRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::UnderscoreRef(label))
+            }
+            Token::QuestionRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::QuestionRef(label))
+            }
+            Token::ExclamationRef(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::ExclamationRef(label))
+            }
+            Token::ConditionalOperator => {
+                self.advance();
+                // Skip any newlines or comments after '?'
+                while matches!(
+                    &self.current_token().token,
+                    Token::Newline | Token::Comment(_)
+                ) {
+                    self.advance();
+                }
+                let next_token = &self.current_token().token;
+                match next_token {
+                    Token::BraceOpen => {
+                        self.advance();
+                        let mut block_nodes = Vec::new();
+                        while !matches!(&self.current_token().token, Token::BraceClose | Token::Eof)
+                        {
+                            let token = &self.current_token().token;
+                            match token {
+                                Token::BracketOpen | Token::BracketClose => {
+                                    // Ignore brackets in conditional blocks too
+                                    self.advance();
+                                    continue;
+                                }
+                                Token::Comment(_) | Token::Newline => {
+                                    self.advance();
+                                    continue;
+                                }
+                                _ => {
+                                    block_nodes.push(self.parse_node()?);
+                                }
+                            }
+                        }
+                        if matches!(&self.current_token().token, Token::BraceClose) {
+                            self.advance();
+                        } else {
+                            let line = self.current_token().line;
+                            let position = self.current_token().start_pos;
+                            return Err(AssemblerError::SyntaxError {
+                                path: self.path.clone(),
+                                line,
+                                position,
+                                message: "Expected '}' after conditional block".to_string(),
+                                source_line: self.get_source_line(line),
+                            });
+                        }
+                        Ok(AstNode::ConditionalBlock(block_nodes))
+                    }
+                    _ => {
+                        let line = self.current_token().line;
+                        let position = self.current_token().start_pos;
+                        Err(AssemblerError::SyntaxError {
+                            path: self.path.clone(),
+                            line,
+                            position,
+                            message: "Conditional operator '?' must be followed by a block"
+                                .to_string(),
+                            source_line: self.get_source_line(line),
+                        })
+                    }
+                }
             }
             Token::RawAddressRef(label) => {
+                let label = label.clone();
                 self.advance();
                 Ok(AstNode::RawAddressRef(label))
             }
             Token::JSRRef(label) => {
+                let label = label.clone();
                 self.advance();
                 Ok(AstNode::JSRRef(label))
             }
             Token::HyphenRef(identifier) => {
+                let identifier = identifier.clone();
                 self.advance();
                 Ok(AstNode::HyphenRef(identifier))
             }
             Token::Padding(addr) => {
+                let addr = *addr;
                 self.advance();
                 Ok(AstNode::Padding(addr))
             }
-            Token::Skip(count) => {
+            Token::PaddingLabel(label) => {
+                let label = label.clone();
                 self.advance();
-                Ok(AstNode::Skip(count))
+                Ok(AstNode::PaddingLabel(label))
+            }
+            Token::Skip(count) => {
+                let count = *count;
+                self.advance();
+                if let Token::LabelDef(label) = &self.current_token().token {
+                    let label_owned = label.clone();
+                    self.advance();
+                    Ok(AstNode::LabelDef(label_owned))
+                } else {
+                    Ok(AstNode::Skip(count))
+                }
             }
             Token::DeviceAccess(device, field) => {
+                let device = device.clone();
+                let field = field.clone();
                 self.advance();
                 Ok(AstNode::DeviceAccess(device, field))
             }
-            Token::BraceOpen => {
-                // Raw data block { ... }
-                self.advance();
-                let mut data = Vec::new();
-
-                while !matches!(
-                    self.current_token(),
-                    Token::BraceClose | Token::Eof
-                ) {
-                    match self.current_token() {
-                        Token::Comment(_) | Token::Newline => {
-                            self.advance();
-                            continue;
-                        }
-                        _ => {
-                            let node = self.parse_node()?;
-                            match node {
-                                AstNode::Byte(b) => data.push(b),
-                                AstNode::LiteralByte(b) => data.push(b),
-                                AstNode::RawString(bytes) => data.extend(bytes),
-                                _ => {
-                                    return Err(AssemblerError::SyntaxError {
-                                        path: self.path.clone(),
-                                        line: self.line,
-                                        position: self.position_in_line,
-                                        message: "Only raw bytes and strings allowed in data blocks".to_string(),
-                                        source_line: self.source.lines().nth(self.line).unwrap_or("").to_string(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if matches!(self.current_token(), Token::BraceClose) {
-                    self.advance();
-                } else {
-                    return Err(AssemblerError::SyntaxError {
-                        path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
-                        message: "Expected '}' after data block".to_string(),
-                        source_line: self
-                            .source
-                            .lines()
-                            .nth(self.line)
-                            .unwrap_or("")
-                            .to_string(),
-                    });
-                }
-
-                Ok(AstNode::RawString(data))
-            }
             Token::MacroDef(name) => {
+                let name = name.clone();
                 self.advance();
 
-                // Skip comments and newlines before opening brace
                 while matches!(
-                    self.current_token(),
+                    &self.current_token().token,
                     Token::Comment(_) | Token::Newline
                 ) {
                     self.advance();
                 }
 
-                // Expect opening brace
-                match self.current_token() {
+                match &self.current_token().token {
                     Token::BraceOpen => {
                         self.advance();
                         let mut body = Vec::new();
 
-                        // Parse macro body until closing brace
-                        while !matches!(
-                            self.current_token(),
-                            Token::BraceClose | Token::Eof
-                        ) {
-                            match self.current_token() {
+                        while !matches!(&self.current_token().token, Token::BraceClose | Token::Eof)
+                        {
+                            let token = &self.current_token().token;
+                            match token {
                                 Token::Comment(_) | Token::Newline => {
                                     self.advance();
                                     continue;
@@ -408,39 +446,33 @@ impl Parser {
                             }
                         }
 
-                        // Expect closing brace
-                        if matches!(self.current_token(), Token::BraceClose) {
+                        if matches!(&self.current_token().token, Token::BraceClose) {
                             self.advance();
                         } else {
+                            let line = self.current_token().line;
+                            let position = self.current_token().start_pos;
                             return Err(AssemblerError::SyntaxError {
                                 path: self.path.clone(),
-                                line: self.line,
-                                position: self.position_in_line,
-                                message: "Expected '}' after macro body"
-                                    .to_string(),
-                                source_line: self
-                                    .source
-                                    .lines()
-                                    .nth(self.line)
-                                    .unwrap_or("")
-                                    .to_string(),
+                                line,
+                                position,
+                                message: "Expected '}' after macro body".to_string(),
+                                source_line: self.get_source_line(line),
                             });
                         }
 
                         Ok(AstNode::MacroDef(name, body))
                     }
-                    _ => Err(AssemblerError::SyntaxError {
-                        path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
-                        message: "Expected '{' after macro name".to_string(),
-                        source_line: self
-                            .source
-                            .lines()
-                            .nth(self.line)
-                            .unwrap_or("")
-                            .to_string(),
-                    }),
+                    _ => {
+                        let line = self.current_token().line;
+                        let position = self.current_token().start_pos;
+                        Err(AssemblerError::SyntaxError {
+                            path: self.path.clone(),
+                            line,
+                            position,
+                            message: "Expected '{' after macro name".to_string(),
+                            source_line: self.get_source_line(line),
+                        })
+                    }
                 }
             }
             Token::RawString(string) => {
@@ -448,124 +480,85 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::RawString(bytes))
             }
-            Token::BracketOpen => {
-                self.advance();
-                let mut assembly_nodes = Vec::new();
-
-                // Parse inline assembly until closing bracket
-                while !matches!(
-                    self.current_token(),
-                    Token::BracketClose | Token::Eof
-                ) {
-                    assembly_nodes.push(self.parse_node()?);
-                }
-
-                // Expect closing bracket
-                if matches!(self.current_token(), Token::BracketClose) {
-                    self.advance();
-                } else {
-                    return Err(AssemblerError::SyntaxError {
-                        path: self.path.clone(),
-                        line: self.line,
-                        position: self.position_in_line,
-                        message: "Expected ']' after inline assembly block"
-                            .to_string(),
-                        source_line: self
-                            .source
-                            .lines()
-                            .nth(self.line)
-                            .unwrap_or("")
-                            .to_string(),
-                    });
-                }
-
-                Ok(AstNode::InlineAssembly(assembly_nodes))
-            }
             Token::Include(path) => {
+                let path = path.clone();
                 self.advance();
                 Ok(AstNode::Include(path))
             }
             Token::MacroCall(name) => {
-                // Only treat as macro call if a macro is defined; otherwise treat as label reference (routine call)
-                // (In TAL, <word> is a routine call unless %macro is defined)
-                if self
-                    .tokens
-                    .iter()
-                    .any(|t| matches!(t, Token::MacroDef(def) if def == &name))
-                {
-                    self.advance();
-                    Ok(AstNode::MacroCall(name))
-                } else {
-                    self.advance();
-                    Ok(AstNode::LabelRef(name))
-                }
+                let name = name.clone();
+                let macro_line = self.current_token().line;
+                let macro_pos = self.current_token().start_pos;
+                self.advance();
+                
+                // In uxnasm.c, <name> syntax is always treated as a label reference, not a macro call
+                // Macros are defined with % and called by their bare name
+                // Preserve the angle brackets in the label name to match uxnasm.c behavior
+                let label_name = format!("<{}>", name);
+                Ok(AstNode::LabelRef(label_name))
             }
-            _ => Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.line,
-                position: self.position_in_line,
-                message: format!(
-                    "Unexpected token: {:?}",
-                    self.current_token()
-                ),
-                source_line: self
-                    .source
-                    .lines()
-                    .nth(self.line)
-                    .unwrap_or("")
-                    .to_string(),
-            }),
+            _ => {
+                let line = self.current_token().line;
+                let position = self.current_token().start_pos;
+                Err(AssemblerError::SyntaxError {
+                    path: self.path.clone(),
+                    line,
+                    position,
+                    message: format!("Unexpected token: {:?}", self.current_token().token),
+                    source_line: self.get_source_line(line),
+                })
+            }
         }
     }
 
-    fn parse_instruction(&self, inst: &str) -> Result<Instruction> {
-        let mut chars = inst.chars().rev().collect::<Vec<_>>();
+    fn parse_instruction(&mut self, name: String) -> Result<AstNode> {
+        let mut opcode = name;
         let mut short_mode = false;
         let mut return_mode = false;
         let mut keep_mode = false;
 
-        // Parse mode suffixes
-        while let Some(&ch) = chars.first() {
-            match ch {
-                '2' => {
-                    short_mode = true;
-                    chars.remove(0);
+        // Don't parse mode flags for special LIT instructions - they should be handled as-is
+        if matches!(opcode.as_str(), "LIT" | "LIT2" | "LITr" | "LIT2r") {
+            return Ok(AstNode::Instruction(Instruction {
+                opcode,
+                short_mode: false,
+                return_mode: false,
+                keep_mode: false,
+            }));
+        }
+
+        // Parse mode flags - only if they are suffixes, not if they're part of the base name
+        // Check for mode flags at the end, but be careful not to break valid instruction names
+        let original_len = opcode.len();
+
+        // Only parse mode flags if the instruction is likely to have them
+        // Don't parse flags if the name is a compound identifier with hyphens or slashes
+        if !opcode.contains('-') && !opcode.contains('/') && original_len > 1 {
+            while let Some(last_char) = opcode.chars().last() {
+                match last_char {
+                    'k' if opcode.len() > 1 => {
+                        keep_mode = true;
+                        opcode.pop();
+                    }
+                    'r' if opcode.len() > 1 => {
+                        return_mode = true;
+                        opcode.pop();
+                    }
+                    '2' if opcode.len() > 1 => {
+                        short_mode = true;
+                        opcode.pop();
+                    }
+                    _ => break,
                 }
-                'r' => {
-                    return_mode = true;
-                    chars.remove(0);
-                }
-                'k' => {
-                    keep_mode = true;
-                    chars.remove(0);
-                }
-                _ => break,
             }
         }
 
-        let opcode = chars.into_iter().rev().collect::<String>();
-
-        if opcode.is_empty() {
-            return Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.line,
-                position: self.position_in_line,
-                message: "Invalid instruction".to_string(),
-                source_line: self
-                    .source
-                    .lines()
-                    .nth(self.line)
-                    .unwrap_or("")
-                    .to_string(),
-            });
-        }
-
-        Ok(Instruction {
+        Ok(AstNode::Instruction(Instruction {
             opcode,
             short_mode,
             return_mode,
             keep_mode,
-        })
+        }))
     }
 
     fn parse_hex_literal(&self, hex: &str) -> Result<u16> {
@@ -577,29 +570,177 @@ impl Parser {
             source_line: self
                 .source
                 .lines()
-                .nth(self.line)
+                .nth(self.line - 1)
                 .unwrap_or("")
                 .to_string(),
         })
     }
 
-    fn current_token(&self) -> &Token {
-        self.tokens.get(self.position).unwrap_or(&Token::Eof)
+    fn current_token(&self) -> &TokenWithPos {
+        self.tokens.get(self.position).unwrap_or(&TokenWithPos {
+            token: Token::Eof,
+            line: 0,
+            start_pos: 0,
+            end_pos: 0,
+        })
     }
 
     fn advance(&mut self) {
-        if self.position < self.tokens.len() {
-            if let Token::Newline = self.tokens[self.position] {
-                self.line += 1;
-                self.position_in_line = 0;
-            } else {
-                self.position_in_line += 1;
-            }
-            self.position += 1;
+        self.position += 1;
+        if let Some(tok) = self.tokens.get(self.position) {
+            self.line = tok.line;
+            self.position_in_line = tok.start_pos;
         }
     }
 
     fn is_at_end(&self) -> bool {
         self.position >= self.tokens.len()
+    }
+
+    fn get_source_line(&self, line: usize) -> String {
+        self.source
+            .lines()
+            .nth(line.saturating_sub(1))
+            .unwrap_or("")
+            .to_string()
+    }
+
+    fn parse_label_definition(&mut self) -> Result<AstNode> {
+        if let Token::LabelDef(label) = &self.current_token().token {
+            let label = label.clone();
+            self.advance();
+            Ok(AstNode::LabelDef(label))
+        } else {
+            Err(AssemblerError::SyntaxError {
+                path: self.path.clone(),
+                line: self.current_token().line,
+                position: self.current_token().start_pos,
+                message: "Expected label definition".to_string(),
+                source_line: self.get_source_line(self.current_token().line),
+            })
+        }
+    }
+
+    fn parse_sublabel_definition(&mut self) -> Result<AstNode> {
+        if let Token::SublabelDef(sublabel) = &self.current_token().token {
+            let sublabel = sublabel.clone();
+            self.advance();
+            Ok(AstNode::SublabelDef(sublabel))
+        } else {
+            Err(AssemblerError::SyntaxError {
+                path: self.path.clone(),
+                line: self.current_token().line,
+                position: self.current_token().start_pos,
+                message: "Expected sublabel definition".to_string(),
+                source_line: self.get_source_line(self.current_token().line),
+            })
+        }
+    }
+
+    fn parse_padding(&mut self) -> Result<AstNode> {
+        match &self.current_token().token {
+            Token::Padding(addr) => {
+                let addr = *addr;
+                self.advance();
+                Ok(AstNode::Padding(addr))
+            }
+            Token::PaddingLabel(label) => {
+                let label = label.clone();
+                self.advance();
+                Ok(AstNode::PaddingLabel(label))
+            }
+            _ => Err(AssemblerError::SyntaxError {
+                path: self.path.clone(),
+                line: self.current_token().line,
+                position: self.current_token().start_pos,
+                message: "Expected padding directive".to_string(),
+                source_line: self.get_source_line(self.current_token().line),
+            }),
+        }
+    }
+
+    fn parse_expression(&mut self) -> Result<AstNode> {
+        match &self.current_token().token {
+            Token::Padding(_) | Token::PaddingLabel(_) => self.parse_padding(),
+            Token::LabelDef(_) => self.parse_label_definition(),
+            Token::SublabelDef(_) => self.parse_sublabel_definition(),
+            Token::Skip(count) => {
+                let count = *count;
+                self.advance();
+                Ok(AstNode::Skip(count))
+            }
+            // ...existing code for other tokens...
+            _ => Err(AssemblerError::SyntaxError {
+                path: self.path.clone(),
+                line: self.current_token().line,
+                position: self.current_token().start_pos,
+                message: format!("Unexpected token: {:?}", self.current_token().token),
+                source_line: self.get_source_line(self.current_token().line),
+            }),
+        }
+    }
+
+    fn resolve_label_reference(&self, name: &str) -> Result<u16> {
+        // Handle sublabel references that start with &
+        if name.starts_with('&') {
+            let sublabel_name = &name[1..]; // Remove the & prefix
+            if let Some(current_scope) = &self.current_scope {
+                let full_name = format!("{}/{}", current_scope, sublabel_name);
+                if let Some(address) = self.labels.get(&full_name) {
+                    return Ok(*address);
+                }
+            }
+            // If not found in current scope, try global scope
+            if let Some(address) = self.labels.get(sublabel_name) {
+                return Ok(*address);
+            }
+        }
+
+        // Handle regular label references
+        if let Some(address) = self.labels.get(name) {
+            return Ok(*address);
+        }
+
+        // Handle scoped references (label/sublabel format)
+        if name.contains('/') {
+            if let Some(address) = self.labels.get(name) {
+                return Ok(*address);
+            }
+        }
+
+        Err(AssemblerError::SyntaxError {
+            path: self.path.clone(),
+            line: 0,
+            position: 0,
+            message: format!("Label unknown: {}", name),
+            source_line: self.get_source_line(0),
+        })
+    }
+
+    fn define_label(&mut self, name: String) -> Result<()> {
+        let address = self.current_address;
+        self.labels.insert(name.clone(), address);
+
+        // Update current scope for regular labels
+        if !name.starts_with('&') {
+            self.current_scope = Some(name);
+        }
+
+        Ok(())
+    }
+
+    fn define_sublabel(&mut self, name: String) -> Result<()> {
+        let address = self.current_address;
+
+        // Store sublabel with current scope prefix
+        if let Some(scope) = &self.current_scope {
+            let full_name = format!("{}/{}", scope, name);
+            self.labels.insert(full_name, address);
+        }
+
+        // Also store without scope for backward compatibility
+        self.labels.insert(name, address);
+
+        Ok(())
     }
 }

@@ -327,12 +327,7 @@ pub fn decode_opcode(opcode: u8) -> (u8, bool, bool, bool) {
 }
 
 /// Encode an opcode from base instruction and mode flags
-pub fn encode_opcode(
-    base: u8,
-    short_mode: bool,
-    return_mode: bool,
-    keep_mode: bool,
-) -> u8 {
+pub fn encode_opcode(base: u8, short_mode: bool, return_mode: bool, keep_mode: bool) -> u8 {
     let mut opcode = base & 0x1F;
     if short_mode {
         opcode |= 0x20;

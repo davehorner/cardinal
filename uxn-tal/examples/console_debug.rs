@@ -25,8 +25,7 @@ fn main() -> Result<(), AssemblerError> {
     "#;
 
     let mut assembler = Assembler::new();
-    let rom = assembler
-        .assemble(console_test, Some("console_debug.rs".to_owned()))?;
+    let rom = assembler.assemble(console_test, Some("console_debug.rs".to_owned()))?;
     std::fs::write("console_test.rom", &rom)?;
 
     println!("Created console_test.rom");

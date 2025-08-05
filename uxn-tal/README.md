@@ -5,6 +5,12 @@ A fast and comprehensive Rust library for assembling TAL (Tal Assembly Language)
 This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.
 
 ** this release is a developer preview - the roms are not functional yet! **
+**working**
+cargo e debug_assemble -- working_hello.tal
+cargo e debug_assemble -- uxn/projects/examples/exercises/sierpinski.tal
+cargo e debug_assemble -- uxn/projects/examples/exercises/fib.tal
+cargo e debug_assemble -- uxn/projects/examples/exercises/pig.tal
+
 
 ## Features
 

@@ -39,10 +39,7 @@ fn main() -> Result<(), AssemblerError> {
                 // Show where the actual code is
                 for (i, &byte) in rom.iter().enumerate() {
                     if byte != 0 {
-                        println!(
-                            "  First non-zero byte at 0x{:04x}: 0x{:02x}",
-                            i, byte
-                        );
+                        println!("  First non-zero byte at 0x{:04x}: 0x{:02x}", i, byte);
                         break;
                     }
                 }

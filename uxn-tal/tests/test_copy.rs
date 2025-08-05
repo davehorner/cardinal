@@ -11,14 +11,12 @@ fn main() -> Result<(), AssemblerError> {
 
     let input_file = &args[1];
     let tal_path = format!("../tal/{}", input_file);
-    let source = fs::read_to_string(&tal_path).map_err(|e| {
-        AssemblerError::SyntaxError {
-            line: 0,
-            message: format!("Failed to read file {}: {}", tal_path, e),
-            path: tal_path.clone(),
-            position: 0,
-            source_line: String::new(),
-        }
+    let source = fs::read_to_string(&tal_path).map_err(|e| AssemblerError::SyntaxError {
+        line: 0,
+        message: format!("Failed to read file {}: {}", tal_path, e),
+        path: tal_path.clone(),
+        position: 0,
+        source_line: String::new(),
     })?;
 
     println!("Source file contents:");
@@ -31,17 +29,12 @@ fn main() -> Result<(), AssemblerError> {
     match assembler.assemble(&source, Some(input_file.to_owned())) {
         Ok(rom) => {
             let output_file = input_file.replace(".tal", ".rom");
-            fs::write(&output_file, &rom).map_err(|e| {
-                AssemblerError::SyntaxError {
-                    line: 0,
-                    message: format!(
-                        "Failed to write ROM file {}: {}",
-                        output_file, e
-                    ),
-                    path: output_file.clone(),
-                    position: 0,
-                    source_line: String::new(),
-                }
+            fs::write(&output_file, &rom).map_err(|e| AssemblerError::SyntaxError {
+                line: 0,
+                message: format!("Failed to write ROM file {}: {}", output_file, e),
+                path: output_file.clone(),
+                position: 0,
+                source_line: String::new(),
             })?;
 
             println!("Created {} ({} bytes)", output_file, rom.len());

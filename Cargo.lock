@@ -2400,6 +2400,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "is-docker"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "is-wsl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "173609498df190136aa7dea1a91db051746d339e18476eed5ca40521f02d7aa5"
+dependencies = [
+ "is-docker",
+ "once_cell",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4770,13 +4789,14 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cardinal-varvara 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "env_logger",
+ "is-wsl",
  "log",
  "once_cell",
  "regex",
@@ -5109,7 +5129,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
