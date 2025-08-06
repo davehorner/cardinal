@@ -235,84 +235,54 @@ impl Assembler {
                         self.process_node(macro_node, rom)?;
                     }
                 } else {
-                    // Handle special LIT instructions that have mode flags built in
-                    let opcode = match inst.opcode.as_str() {
-                        "LIT" => {
-                            // Handle LIT with mode flags - this is for cases where parser 
-                            // breaks down LIT2r into LIT + flags
-                            let mut base_opcode = 0x80; // Base LIT opcode (0x80 = BRK + keep)
-                            if inst.short_mode { base_opcode |= 0x20; } // Add short flag
-                            if inst.return_mode { base_opcode |= 0x40; } // Add return flag
-                            // keep_mode is already included in base LIT opcode
-                            base_opcode
-                        }
-                        "LIT2" => 0xA0,  // LIT2 (BRK + short + keep flags)
-                        "LITr" => 0xC0,  // LITr (BRK + return + keep flags)
-                        "LIT2r" => 0xE0, // LIT2r (BRK + short + return + keep flags)
-                        _ => {
-                            // Try to get the opcode - if it fails, treat as implicit JSR call
-                            match self.opcodes.get_opcode(&inst.opcode) {
-                                Ok(base_opcode) => {
-                                    // It's a regular instruction - apply mode flags
-                                    let final_opcode = Opcodes::apply_modes(
-                                        base_opcode,
-                                        inst.short_mode,
-                                        inst.return_mode,
-                                        inst.keep_mode,
-                                    );
-
-                                    // Check if this is a STR instruction that should create storage for pending comma references
-                                    if inst.opcode.starts_with("STR") {
-                                        // Create storage for any pending comma reference that would target this position
-                                        // This mimics uxnasm.c behavior where STR creates the storage location
-                                        eprintln!("DEBUG: STR instruction at {:04X} - this creates storage", rom.position());
-                                    }
-
-                                    final_opcode
-                                }
-                                Err(_) => {
-                                    // Unknown opcode - treat as implicit JSR call
-                                    eprintln!(
-                                        "DEBUG: Creating JSR reference for unknown opcode: '{}'",
-                                        inst.opcode
-                                    );
-                                    // From uxnasm.c: return makeref(w, ' ', ptr + 1, ctx) && writebyte(0x60, ctx) && writeshort(0xffff);
-                                    self.references.push(Reference {
-                                        name: inst.opcode.clone(),
-                                        rune: ' ',
-                                        address: rom.position() + 1,
-                                        line: self.line_number,
-                                        path: path.clone(),
-                                        scope: self.current_label.clone(), // Save current scope
-                                    });
-                                    rom.write_byte(0x60)?; // JSR opcode
-                                    eprintln!(
-                                        "DEBUG: Wrote JSR opcode 0x60 at {:04X}",
-                                        rom.position() - 1
-                                    );
-                                    self.update_effective_length(rom);
-                                    rom.write_short(0xffff)?; // Placeholder
-                                    eprintln!(
-                                        "DEBUG: Wrote JSR placeholder 0xFFFF at {:04X}-{:04X}",
-                                        rom.position() - 2,
-                                        rom.position() - 1
-                                    );
-                                    self.update_effective_length(rom);
-                                    return Ok(());
-                                }
+                    // --- FIX: Always try opcode table for all instruction names, including those with mode flags ---
+                    match self.opcodes.get_opcode(&inst.opcode) {
+                        Ok(base_opcode) => {
+                            let final_opcode = Opcodes::apply_modes(
+                                base_opcode,
+                                inst.short_mode,
+                                inst.return_mode,
+                                inst.keep_mode,
+                            );
+                            rom.write_byte(final_opcode)?;
+                            eprintln!(
+                                "DEBUG: Wrote opcode 0x{:02X} ({}) at {:04X}",
+                                final_opcode,
+                                inst.opcode,
+                                rom.position() - 1
+                            );
+                            if final_opcode != 0 {
+                                self.update_effective_length(rom);
                             }
                         }
-                    };
-                    rom.write_byte(opcode)?;
-                    eprintln!(
-                        "DEBUG: Wrote opcode 0x{:02X} ({}) at {:04X}",
-                        opcode,
-                        inst.opcode,
-                        rom.position() - 1
-                    );
-                    // Only update effective length if opcode is non-zero (following uxnasm.c exactly)
-                    if opcode != 0 {
-                        self.update_effective_length(rom);
+                        Err(_) => {
+                            // Unknown opcode - treat as implicit JSR call
+                            eprintln!(
+                                "DEBUG: Creating JSR reference for unknown opcode: '{}'",
+                                inst.opcode
+                            );
+                            self.references.push(Reference {
+                                name: inst.opcode.clone(),
+                                rune: ' ',
+                                address: rom.position() + 1,
+                                line: self.line_number,
+                                path: path.clone(),
+                                scope: self.current_label.clone(),
+                            });
+                            rom.write_byte(0x60)?; // JSR opcode
+                            eprintln!(
+                                "DEBUG: Wrote JSR opcode 0x60 at {:04X}",
+                                rom.position() - 1
+                            );
+                            self.update_effective_length(rom);
+                            rom.write_short(0xffff)?; // Placeholder
+                            eprintln!(
+                                "DEBUG: Wrote JSR placeholder 0xFFFF at {:04X}-{:04X}",
+                                rom.position() - 2,
+                                rom.position() - 1
+                            );
+                            self.update_effective_length(rom);
+                        }
                     }
                 }
             }
@@ -784,7 +754,31 @@ impl Assembler {
             );
             println!("DEBUG: Found symbol: {:?}", symbol);
 
+            // --- PATCH: skip error for instruction-like unresolved references ---
+            let is_possible_instruction = {
+                let mut base = resolved_name.as_str();
+                while let Some(last) = base.chars().last() {
+                    if last == 'k' || last == 'r' || last == '2' {
+                        base = &base[..base.len() - 1];
+                    } else {
+                        break;
+                    }
+                }
+                matches!(
+                    base,
+                    "ADD" | "SUB" | "MUL" | "DIV" | "AND" | "ORA" | "EOR" | "SFT"
+                        | "LDZ" | "STZ" | "LDR" | "STR" | "LDA" | "STA" | "DEI" | "DEO"
+                        | "INC" | "POP" | "NIP" | "SWP" | "ROT" | "DUP" | "OVR"
+                        | "EQU" | "NEQ" | "GTH" | "LTH" | "JMP" | "JCN" | "JSR" | "STH"
+                        | "BRK" | "LIT" | "LIT2" | "LITr" | "LIT2r"
+                )
+            };
+
             if symbol.is_none() {
+                // If this is a reference for an instruction (not a label), skip error
+                if reference.rune == ' ' && is_possible_instruction {
+                    continue;
+                }
                 // Debug: print all available symbols when we can't find one
                 eprintln!("Available symbols:");
                 for (name, sym) in &self.symbols {
@@ -795,12 +789,32 @@ impl Assembler {
                     resolved_name, reference.scope
                 );
 
+                let source_line = rom
+                    .source()
+                    .and_then(|src| {
+                        if reference.line > 0 {
+                            src.lines().nth(reference.line - 1).map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default();
+
+                let message = if is_possible_instruction {
+                    format!(
+                        "'{}' is not a label, but looks like an instruction. Did you mean to use it as an instruction?",
+                        resolved_name
+                    )
+                } else {
+                    format!("Label unknown: {}", resolved_name)
+                };
+
                 return Err(AssemblerError::SyntaxError {
                     path: reference.path.clone(),
                     line: reference.line,
                     position: 0,
-                    message: format!("Label unknown: {}", resolved_name),
-                    source_line: String::new(),
+                    message,
+                    source_line,
                 });
             }
 

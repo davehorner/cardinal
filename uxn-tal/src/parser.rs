@@ -2,6 +2,8 @@
 
 use crate::error::{AssemblerError, Result};
 use crate::lexer::{Token, TokenWithPos};
+use crate::opcode_table::UXN_OPCODE_TABLE;
+use crate::opcodes::Opcodes;
 use std::collections::HashMap;
 
 /// Represents a parsed instruction with modes
@@ -512,46 +514,72 @@ impl Parser {
     }
 
     fn parse_instruction(&mut self, name: String) -> Result<AstNode> {
-        let mut opcode = name;
+        let opcodes = Opcodes::new();
+        let mut opcode = name.clone();
         let mut short_mode = false;
         let mut return_mode = false;
         let mut keep_mode = false;
 
-        // Don't parse mode flags for special LIT instructions - they should be handled as-is
-        if matches!(opcode.as_str(), "LIT" | "LIT2" | "LITr" | "LIT2r") {
-            return Ok(AstNode::Instruction(Instruction {
-                opcode,
-                short_mode: false,
-                return_mode: false,
-                keep_mode: false,
-            }));
-        }
+        // Debug output for tracing
+        eprintln!("DEBUG: parse_instruction input name: '{}'", name);
 
-        // Parse mode flags - only if they are suffixes, not if they're part of the base name
-        // Check for mode flags at the end, but be careful not to break valid instruction names
-        let original_len = opcode.len();
-
-        // Only parse mode flags if the instruction is likely to have them
-        // Don't parse flags if the name is a compound identifier with hyphens or slashes
-        if !opcode.contains('-') && !opcode.contains('/') && original_len > 1 {
-            while let Some(last_char) = opcode.chars().last() {
-                match last_char {
-                    'k' if opcode.len() > 1 => {
-                        keep_mode = true;
-                        opcode.pop();
-                    }
-                    'r' if opcode.len() > 1 => {
-                        return_mode = true;
-                        opcode.pop();
-                    }
-                    '2' if opcode.len() > 1 => {
-                        short_mode = true;
-                        opcode.pop();
-                    }
-                    _ => break,
-                }
+        // Always parse mode flags for all instructions, including LIT/LIT2/LIT2r/LITr
+        let mut base = name.as_str();
+        let mut mode_chars = String::new();
+        while let Some(last) = base.chars().last() {
+            if last == 'k' || last == 'r' || last == '2' {
+                mode_chars.insert(0, last);
+                base = &base[..base.len() - 1];
+            } else {
+                break;
             }
         }
+        eprintln!("DEBUG: base after stripping flags: '{}', mode_chars: '{}'", base, mode_chars);
+
+        if opcodes.get_opcode(base).is_ok() {
+            opcode = base.to_string();
+            for c in mode_chars.chars() {
+                match c {
+                    'k' => {
+                        keep_mode = true;
+                        eprintln!("DEBUG: found 'k' flag, keep_mode = true");
+                    }
+                    'r' => {
+                        return_mode = true;
+                        eprintln!("DEBUG: found 'r' flag, return_mode = true");
+                    }
+                    '2' => {
+                        short_mode = true;
+                        eprintln!("DEBUG: found '2' flag, short_mode = true");
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            opcode = name.clone();
+            eprintln!("DEBUG: base '{}' not found in opcode table, using original name '{}'", base, name);
+        }
+
+        // For LIT/LIT2/LITr/LIT2r, always use base "LIT" and set flags accordingly
+        if opcode == "LIT" || name.starts_with("LIT") {
+            eprintln!("DEBUG: opcode is 'LIT' or starts with 'LIT', checking for '2' and 'r' in name '{}'", name);
+            if name.contains('2') {
+                short_mode = true;
+                eprintln!("DEBUG: name contains '2', short_mode = true");
+            }
+            if name.contains('r') {
+                return_mode = true;
+                eprintln!("DEBUG: name contains 'r', return_mode = true");
+            }
+            keep_mode = true;
+            eprintln!("DEBUG: LIT always sets keep_mode = true");
+            opcode = "LIT".to_string();
+        }
+
+        eprintln!(
+            "DEBUG: parse_instruction result: opcode='{}', short_mode={}, return_mode={}, keep_mode={}",
+            opcode, short_mode, return_mode, keep_mode
+        );
 
         Ok(AstNode::Instruction(Instruction {
             opcode,
@@ -743,4 +771,10 @@ impl Parser {
 
         Ok(())
     }
+}
+
+// Add this helper function at the bottom of the file (or near is_instruction_name in lexer.rs)
+fn is_known_instruction(opcode: &str) -> bool {
+    // Use the UXN_OPCODE_TABLE for dynamic lookup
+    UXN_OPCODE_TABLE.iter().any(|&(_, name)| name == opcode)
 }
