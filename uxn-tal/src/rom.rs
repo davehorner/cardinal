@@ -6,17 +6,19 @@ use std::io::Write;
 /// Represents a UXN ROM file
 pub struct Rom {
     data: Vec<u8>,
+    position: u16,
     size: usize,
     source: Option<String>,
     path: Option<String>,
 }
 
 impl Rom {
-    /// Create a new empty ROM
+    /// Create a new ROM instance
     pub fn new() -> Self {
         Self {
-            data: vec![0; 65536], // Maximum ROM size
-            size: 0,
+            data: vec![0; 0x10000],
+            position: 0x0100, // Start at 0x0100 like uxnasm does
+            size: 0x0100,     // Initialize size to match position
             source: None,
             path: None,
         }
@@ -38,13 +40,14 @@ impl Rom {
     }
     /// Write a byte to the ROM at the current position
     pub fn write_byte(&mut self, byte: u8) -> Result<()> {
-        if self.size >= 65536 {
+        if self.position as usize >= 65536 {
             return Err(AssemblerError::RomTooLarge {
-                size: self.size + 1,
+                size: self.position as usize + 1,
             });
         }
-        self.data[self.size] = byte;
-        self.size += 1;
+        self.data[self.position as usize] = byte;
+        self.position += 1;
+        self.size = self.size.max(self.position as usize);
         Ok(())
     }
 
@@ -65,22 +68,17 @@ impl Rom {
 
     /// Pad the ROM to a specific address
     pub fn pad_to(&mut self, address: u16) -> Result<()> {
-        let target_size = address as usize;
-        if target_size > 65536 {
+        if address as usize > 65536 {
             return Err(AssemblerError::InvalidPadding { address });
         }
-        // Allow padding to any address, even backwards - this is valid in TAL
-        // Just extend the data vector if needed to accommodate the target address
-        if target_size >= self.data.len() {
-            self.data.resize(target_size, 0);
-        }
-        self.size = target_size;
+        self.position = address;
+        self.size = self.size.max(address as usize);
         Ok(())
     }
 
     /// Get the current position in the ROM
     pub fn position(&self) -> u16 {
-        self.size as u16
+        self.position
     }
 
     /// Set the current position in the ROM
@@ -88,7 +86,8 @@ impl Rom {
         if position as usize > 65536 {
             return Err(AssemblerError::InvalidPadding { address: position });
         }
-        self.size = position as usize;
+        self.position = position;
+        self.size = self.size.max(position as usize);
         Ok(())
     }
 
@@ -116,13 +115,9 @@ impl Rom {
 
     /// Write a byte at a specific position without changing current position
     pub fn write_byte_at(&mut self, position: u16, byte: u8) -> Result<()> {
-        let pos = position as usize;
-        if pos >= 65536 {
-            return Err(AssemblerError::InvalidPadding { address: position });
-        }
-        self.data[pos] = byte;
-        if pos >= self.size {
-            self.size = pos + 1;
+        self.data[position as usize] = byte;
+        if position as usize >= self.size {
+            self.size = position as usize + 1;
         }
         Ok(())
     }
@@ -132,6 +127,11 @@ impl Rom {
         self.write_byte_at(position, (value >> 8) as u8)?;
         self.write_byte_at(position + 1, value as u8)?;
         Ok(())
+    }
+
+    /// Advance the ROM position by a specified number of bytes without writing data
+    pub fn advance_position(&mut self, bytes: usize) {
+        self.position = self.position.saturating_add(bytes as u16);
     }
 }
 

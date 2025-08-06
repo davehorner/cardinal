@@ -180,53 +180,9 @@ impl Assembler {
     fn first_pass(&mut self, ast: &[AstNode], rom: &mut Rom) -> Result<()> {
         let mut i = 0;
         while i < ast.len() {
-            match &ast[i] {
-                AstNode::SublabelDef(sublabel) => {
-                    // Register sublabel at current ROM position (before string/skip)
-                    let full_name = if let Some(ref parent) = self.current_label {
-                        format!("{}/{}", parent, sublabel)
-                    } else {
-                        return Err(AssemblerError::SyntaxError {
-                            path: rom.source_path().cloned().unwrap_or_default(),
-                            line: self.line_number,
-                            position: self.position_in_line,
-                            message: "Sublabel defined outside of label scope".to_string(),
-                            source_line: rom
-                                .source()
-                                .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
-                                .unwrap_or_default(),
-                        });
-                    };
-                    let address = rom.position();
-                    if !self.symbols.contains_key(&full_name) {
-                        self.symbols.insert(
-                            full_name.clone(),
-                            Symbol {
-                                address,
-                                is_sublabel: true,
-                                parent_label: self.current_label.clone(),
-                            },
-                        );
-                    }
-                    // Now process any following string/skip nodes
-                    let mut j = i + 1;
-                    while j < ast.len() {
-                        match &ast[j] {
-                            AstNode::RawString(_) | AstNode::Skip(_) => {
-                                self.process_node(&ast[j], rom)?;
-                                j += 1;
-                            }
-                            _ => break,
-                        }
-                    }
-                    i = j;
-                    continue;
-                }
-                _ => {
-                    self.process_node(&ast[i], rom)?;
-                    i += 1;
-                }
-            }
+            // Remove special handling for SublabelDef here
+            self.process_node(&ast[i], rom)?;
+            i += 1;
         }
         Ok(())
     }
@@ -372,8 +328,6 @@ impl Assembler {
                         },
                     );
                 }
-                // DON'T create both bracketed/unbracketed versions - only create the exact label specified
-                // This was causing us to have extra symbols compared to uxnasm.c
                 
                 self.current_label = Some(label.clone());
                 eprintln!(
@@ -397,6 +351,7 @@ impl Assembler {
                 rom.write_short(0xffff)?; // Placeholder
             }
             AstNode::SublabelDef(sublabel) => {
+                // Register sublabel at the current ROM position (after any data written before this node)
                 let full_name = if let Some(ref parent) = self.current_label {
                     format!("{}/{}", parent, sublabel)
                 } else {
@@ -411,7 +366,6 @@ impl Assembler {
                             .unwrap_or_default(),
                     });
                 };
-                // Register sublabel at the current ROM position (not at parent label address)
                 let address = rom.position();
                 if !self.symbols.contains_key(&full_name) {
                     self.symbols.insert(
@@ -423,8 +377,12 @@ impl Assembler {
                         },
                     );
                 }
-                // CRUCIAL: Do NOT advance ROM position here!
-                // The sublabel is just a marker at the current position.
+                eprintln!(
+                    "DEBUG: Defined sublabel '{}' at address {:04X}",
+                    full_name,
+                    address
+                );
+                // Do NOT advance ROM position here!
             }
             AstNode::SublabelRef(sublabel) => {
                 let full_name = if let Some(ref parent) = self.current_label {
@@ -454,17 +412,16 @@ impl Assembler {
             AstNode::RelativeRef(label) => {
                 // Store the reference with the '/' rune and let find_symbol handle resolution
                 // This matches uxnasm.c behavior where '/' rune triggers special scope handling
-                // Note: uxnasm.c uses writebyte(0xff) but resolve writes 2 bytes, creating a buffer overrun
-                // We need to match this exact behavior for compatibility
                 self.references.push(Reference {
                     name: label.clone(), // Store original label (without leading slash if present)
                     rune: '/', // Use '/' rune to trigger special handling in find_symbol
-                    address: rom.position(),
+                    address: rom.position() + 1,
                     line: self.line_number,
                     path: path.clone(),
                     scope: self.current_label.clone(),
                 });
-                rom.write_byte(0xff)?; // Use 1-byte placeholder to match uxnasm.c makeref behavior
+                rom.write_byte(0x60)?; // JSR opcode
+                rom.write_short(0xffff)?; // 16-bit placeholder
             }
             AstNode::ConditionalRef(label) => {
                 // Conditional reference generates JCN followed by relative address
@@ -651,10 +608,12 @@ impl Assembler {
                 }
             }
             AstNode::RawString(bytes) => {
-                rom.write_bytes(bytes)?;
-                // Update effective length if any non-zero bytes were written
-                if bytes.iter().any(|&b| b != 0) {
-                    self.update_effective_length(rom);
+                // Write string data byte by byte, updating effective length for each non-zero byte
+                for &byte in bytes {
+                    rom.write_byte(byte)?;
+                    if byte != 0 {
+                        self.update_effective_length(rom);
+                    }
                 }
             }
             AstNode::Include(path) => {
@@ -905,7 +864,7 @@ impl Assembler {
                     rom.write_byte_at(reference.address, (symbol.address >> 8) as u8)?;
                     rom.write_byte_at(reference.address + 1, (symbol.address & 0xff) as u8)?;
                     eprintln!(
-                        "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:04X} (raw)",
+                        "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:04X} (no offset)",
                         reference.name, reference.address, symbol.address
                     );
                     // Update effective length - address references are typically non-zero
@@ -914,15 +873,26 @@ impl Assembler {
                             self.effective_length.max(reference.address as usize + 2);
                     }
                 }
-                '?' | '!' | ' ' | '/' => {
-                    // case '?': case '!': default: rel = l->addr - r->addr - 2; *rom++ = rel >> 8, *rom = rel;
-                    // The '/' rune falls through to default case in uxnasm.c
+                '!' => {
+                    // Fix: match uxnasm.c, use rel = target_addr - ref_addr - 2
                     let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
                     rom.write_byte_at(reference.address, (rel >> 8) as u8)?;
                     rom.write_byte_at(reference.address + 1, (rel & 0xff) as u8)?;
                     eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
                              reference.name, reference.address, rel as u16, rel);
-                    // Update effective length if resolved value is non-zero
+                    if rel != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 2);
+                    }
+                }
+                '?' | ' ' | '/' => {
+                    // For conditional ('?'), space (' '), and slash ('/') runes:
+                    // rel = target_addr - ref_addr - 2 (matches uxnasm for relative word references)
+                    let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
+                    rom.write_byte_at(reference.address, (rel >> 8) as u8)?;
+                    rom.write_byte_at(reference.address + 1, (rel & 0xff) as u8)?;
+                    eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
+                             reference.name, reference.address, rel as u16, rel);
                     if rel != 0 {
                         self.effective_length =
                             self.effective_length.max(reference.address as usize + 2);
@@ -1136,7 +1106,6 @@ impl Assembler {
         for node in ast {
             self.process_node(&node, rom)?;
         }
-
 
         Ok(())
     }
