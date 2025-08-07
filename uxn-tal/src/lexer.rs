@@ -50,8 +50,6 @@ pub enum Token {
     /// Macro definition (e.g., MACRO)
     MacroDef(String),
 
-    /// Macro call (e.g., MACRO)
-    MacroCall(String),
     /// Dot reference - generates LIT + 8-bit address (like uxnasm's '.' rune)
     DotRef(String),
     /// Semicolon reference - generates LIT2 + 16-bit address (like uxnasm's ';' rune)  
@@ -86,13 +84,14 @@ pub enum Token {
     Eof,
 }
 
-/// Token with position information
+/// Token with position information and optional scope
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenWithPos {
     pub token: Token,
     pub line: usize,
     pub start_pos: usize,
     pub end_pos: usize,
+    pub scope: Option<String>, // <-- Add scope field
 }
 
 /// Lexer for TAL assembly language
@@ -102,8 +101,8 @@ pub struct Lexer {
     line: usize,
     path: Option<String>,
     position_on_line: usize,
-    /// Next sublabel for conditional operator, if any
     next_conditional_sublabel: Option<String>,
+    current_scope: Option<String>, // <-- Track current scope
 }
 
 impl Lexer {
@@ -116,6 +115,7 @@ impl Lexer {
             path,
             position_on_line: 1,
             next_conditional_sublabel: None,
+            current_scope: None, // <-- Initialize
         }
     }
 
@@ -161,6 +161,7 @@ impl Lexer {
                     line: start_line,
                     start_pos,
                     end_pos: start_pos,
+                    scope: self.current_scope.clone(), // <-- Add this line
                 });
                 self.advance();
                 continue;
@@ -182,6 +183,7 @@ impl Lexer {
                     line: comment_start_line,
                     start_pos: comment_start_pos,
                     end_pos: comment_end_pos,
+                    scope: self.current_scope.clone(), // <-- Add this line
                 });
                 continue;
             }
@@ -193,6 +195,40 @@ impl Lexer {
                     let token_end_position = self.position;
                     let token_end_pos =
                         start_pos + (token_end_position - token_start_position).max(1) - 1;
+
+                    // --- SCOPE TRACKING ---
+                    // Update current_scope for label/sublabel definitions
+                    match &token {
+                        Token::LabelDef(label) => {
+                            self.current_scope = Some(label.clone());
+                        }
+                        Token::SublabelDef(sublabel) => {
+                            if let Some(ref parent) = self.current_scope {
+                                self.current_scope = Some(format!("{}/{}", parent, sublabel));
+                            } else {
+                                self.current_scope = Some(sublabel.clone());
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    // For sublabel definition, set scope to parent label (not full sublabel path)
+                    let token_scope = match &token {
+                        Token::SublabelDef(_) | Token::SublabelRef(_) | Token::CommaRef(_) | Token::UnderscoreRef(_) => {
+                            // Use parent label as scope
+                            if let Some(ref scope) = self.current_scope {
+                                if let Some(pos) = scope.rfind('/') {
+                                    Some(scope[..pos].to_string())
+                                } else {
+                                    Some(scope.clone())
+                                }
+                            } else {
+                                None
+                            }
+                        }
+                        _ => self.current_scope.clone(),
+                    };
+
                     // Debug print for position tracking
                     println!(
                         "DEBUG: token={:?} line={} start_pos={} end_pos={} position={} position_on_line={}",
@@ -203,6 +239,7 @@ impl Lexer {
                         line: start_line,
                         start_pos,
                         end_pos: token_end_pos,
+                        scope: token_scope, // <-- Use parent label for sublabel tokens
                     });
                 }
             }
@@ -393,6 +430,12 @@ impl Lexer {
             } else {
                 break;
             }
+        }
+        // If the identifier is just "_", skip it and try to read the next identifier
+        if result == "_" {
+            self.advance();
+                        self.advance();
+            return self.read_identifier();
         }
         // Debug: print what we read to see if it's being truncated
         eprintln!("DEBUG: read_identifier result: '{}'", result);
@@ -734,12 +777,25 @@ impl Lexer {
             }
             ',' => {
                 self.advance();
+                                if self.current_char() == '&' {
+                    self.advance();
+                }
                 let label = self.read_identifier()?;
                 Ok(Token::CommaRef(label))
             }
             '_' => {
                 self.advance();
+                if self.current_char() == '&' {
+                    self.advance();
+                }
                 let label = self.read_identifier()?;
+                println!("DEBUG: Read underscore label: '{}'", label);
+                if label == "_" {
+                    // If the label is just "_", skip and try to read the next identifier
+                    let label = self.read_identifier()?;
+                    println!("DEBUG: Read underscore label (after skip): '{}'", label);
+                    return Ok(Token::UnderscoreRef(label));
+                }
                 Ok(Token::UnderscoreRef(label))
             }
             '-' => {
@@ -797,7 +853,8 @@ impl Lexer {
             '<' => {
                 self.advance();
                 let macro_name = self.read_macro_call()?;
-                Ok(Token::MacroCall(macro_name))
+                // Ok(Token::MacroCall(macro_name)) // <-- REMOVE THIS LINE
+                Ok(Token::LabelRef(format!("<{}>", macro_name))) // Always treat <name> as LabelRef
             }
             _ if ch.is_ascii_digit() => {
                 let number = self.read_hex_number()?;

@@ -18,7 +18,7 @@ impl Rom {
         Self {
             data: vec![0; 0x10000],
             position: 0x0100, // Start at 0x0100 like uxnasm does
-            size: 0x0100,     // Initialize size to match position
+            size: 0,     
             source: None,
             path: None,
         }
@@ -48,6 +48,13 @@ impl Rom {
         self.data[self.position as usize] = byte;
         self.position += 1;
         self.size = self.size.max(self.position as usize);
+        Ok(())
+    }
+
+    /// Write a 16-bit value at a specific position without changing current position (big-endian)
+    pub fn write_word_at(&mut self, position: u16, value: u16) -> Result<()> {
+        self.write_byte_at(position, (value >> 8) as u8)?;
+        self.write_byte_at(position + 1, value as u8)?;
         Ok(())
     }
 
@@ -93,12 +100,37 @@ impl Rom {
 
     /// Get the ROM data as a slice, trimmed to actual size
     pub fn data(&self) -> &[u8] {
-        &self.data[..self.size]
+        let start = 0x0100;
+        let end = self.size.clamp(start, self.data.len());
+        if end > self.data.len() || end <= start {
+            &[]
+        } else {
+            // Find the first nonzero byte after 0x0100
+            let data = &self.data[start..end];
+            let first_nonzero = data.iter().position(|&b| b != 0).unwrap_or(0);
+            &data[first_nonzero..]
+        }
     }
 
+        /// Returns true if any byte in the zero page (0x0000..0x0100) is nonzero
+    pub fn has_zero_page_data(&self) -> bool {
+        if self.data.len() < 0x0100 {
+            return false;
+        }
+        self.data[..0x0100].iter().any(|&b| b != 0)
+    }
     /// Get the size of the ROM
     pub fn len(&self) -> usize {
-        self.size
+        // Compute the length of the ROM data as returned by data()
+        let start = 0x0100;
+        let end = self.size.clamp(start, self.data.len());
+        if end > self.data.len() || end <= start {
+            0
+        } else {
+            let data = &self.data[start..end];
+            let first_nonzero = data.iter().position(|&b| b != 0).unwrap_or(0);
+            data.len().saturating_sub(first_nonzero)
+        }
     }
 
     /// Check if the ROM is empty
@@ -132,6 +164,7 @@ impl Rom {
     /// Advance the ROM position by a specified number of bytes without writing data
     pub fn advance_position(&mut self, bytes: usize) {
         self.position = self.position.saturating_add(bytes as u16);
+        self.size = self.size.max(self.position as usize);
     }
 }
 
