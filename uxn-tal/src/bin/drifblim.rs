@@ -33,9 +33,20 @@ fn main() -> Result<()> {
     let args = Args::parse();
     // If the ROM file extension is .tal, pass its path as an argument to drifblim.rom
     let mut extra_args = args.args.clone();
-    if args.rom.extension().map(|ext| ext == "tal").unwrap_or(false) {
+    if args
+        .rom
+        .extension()
+        .map(|ext| ext == "tal")
+        .unwrap_or(false)
+    {
         extra_args.insert(0, args.rom.to_string_lossy().to_string());
-        extra_args.insert(1, args.rom.with_extension("drifblim.rom").to_string_lossy().to_string());
+        extra_args.insert(
+            1,
+            args.rom
+                .with_extension("drifblim.rom")
+                .to_string_lossy()
+                .to_string(),
+        );
         extra_args = extra_args
             .into_iter()
             .map(|s| s.replace('\\', "/"))

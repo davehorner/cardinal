@@ -32,30 +32,28 @@ pub enum AstNode {
     /// Label definition
     LabelDef(String),
     /// Label reference
-    LabelRef(String),
+    LabelRef(TokenWithPos),
     /// Sublabel definition
     SublabelDef(String),
     /// Sublabel reference
-    SublabelRef(String),
+    SublabelRef(TokenWithPos),
     /// Relative address reference
-    RelativeRef(String),
+    RelativeRef(TokenWithPos),
     /// Conditional jump reference  
-    ConditionalRef(String),
+    ConditionalRef(TokenWithPos),
     /// Conditional block (e.g., ?{ ... })
     ConditionalBlock(Vec<AstNode>),
     /// Raw address reference
-    RawAddressRef(String),
+    RawAddressRef(TokenWithPos),
     /// JSR call reference
-    JSRRef(String),
+    JSRRef(TokenWithPos),
     /// Hyphen address reference
-    HyphenRef(String),
+    HyphenRef(TokenWithPos),
     /// Padding to specific address
     Padding(u16),
-    PaddingLabel(String),
+    PaddingLabel(TokenWithPos),
     /// Skip N bytes
     Skip(u16),
-    /// Device access (e.g., .Screen/width)
-    DeviceAccess(String, String), // device, field
     /// Macro definition
     MacroDef(String, Vec<AstNode>), // name, body
     /// Macro call (name, line, position)
@@ -65,19 +63,19 @@ pub enum AstNode {
     /// Include directive
     Include(String),
     /// Dot reference - generates LIT + 8-bit address (like uxnasm's '.' rune)
-    DotRef(String),
+    DotRef(TokenWithPos),
     /// Semicolon reference - generates LIT2 + 16-bit address (like uxnasm's ';' rune)  
-    SemicolonRef(String),
+    SemicolonRef(TokenWithPos),
     /// Equals reference - generates 16-bit address directly (like uxnasm's '=' rune)
-    EqualsRef(String),
+    EqualsRef(TokenWithPos),
     /// Comma reference - generates LIT + relative 8-bit address (like uxnasm's ',' rune)
-    CommaRef(String),
+    CommaRef(TokenWithPos),
     /// Underscore reference - generates relative 8-bit address (like uxnasm's '_' rune)
-    UnderscoreRef(String),
+    UnderscoreRef(TokenWithPos),
     /// Question reference - generates conditional jump (like uxnasm's '?' rune)
-    QuestionRef(String),
+    QuestionRef(TokenWithPos),
     /// Exclamation reference - generates JSR call (like uxnasm's '!' rune)
-    ExclamationRef(String),
+    ExclamationRef(TokenWithPos),
 }
 
 /// Parser for TAL assembly
@@ -255,65 +253,66 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::LabelDef(label))
             }
-            Token::LabelRef(label) => {
-                let label = label.clone();
+            Token::LabelRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::LabelRef(label))
+                Ok(AstNode::LabelRef(tok))
             }
             Token::SublabelDef(sublabel) => {
                 let sublabel = sublabel.clone();
                 self.advance();
                 Ok(AstNode::SublabelDef(sublabel))
             }
-            Token::SublabelRef(sublabel) => {
-                let sublabel = sublabel.clone();
+            Token::SublabelRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::SublabelRef(sublabel))
+                Ok(AstNode::SublabelRef(tok))
             }
-            Token::RelativeRef(label) => {
-                let label = label.clone();
+            Token::RelativeRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::RelativeRef(label))
+                Ok(AstNode::RelativeRef(tok))
             }
-            Token::ConditionalRef(label) => {
-                let label = label.clone();
+            Token::ConditionalRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::ConditionalRef(label))
+                Ok(AstNode::ConditionalRef(tok))
             }
-            Token::DotRef(label) => {
-                let label = label.clone();
+            Token::DotRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::DotRef(label))
+                Ok(AstNode::DotRef(tok))
             }
-            Token::SemicolonRef(label) => {
-                let label = label.clone();
+            Token::SemicolonRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::SemicolonRef(label))
+                Ok(AstNode::SemicolonRef(tok))
             }
-            Token::EqualsRef(label) => {
-                let label = label.clone();
+            Token::EqualsRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::EqualsRef(label))
+                Ok(AstNode::EqualsRef(tok))
             }
-            Token::CommaRef(label) => {
-                let label = label.clone();
+            Token::CommaRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::CommaRef(label))
+                Ok(AstNode::CommaRef(tok))
             }
-            Token::UnderscoreRef(label) => {
-                let label = label.clone();
+            Token::UnderscoreRef(_) => {
+                let tok = self.current_token().clone();
+                println!("DEBUG PARSER: Processing underscore reference: {:?}", tok);
                 self.advance();
-                Ok(AstNode::UnderscoreRef(label))
+                Ok(AstNode::UnderscoreRef(tok))
             }
-            Token::QuestionRef(label) => {
-                let label = label.clone();
+            Token::QuestionRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::QuestionRef(label))
+                Ok(AstNode::QuestionRef(tok))
             }
-            Token::ExclamationRef(label) => {
-                let label = label.clone();
+            Token::ExclamationRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::ExclamationRef(label))
+                Ok(AstNode::ExclamationRef(tok))
             }
             Token::ConditionalOperator => {
                 self.advance();
@@ -376,30 +375,30 @@ impl Parser {
                     }
                 }
             }
-            Token::RawAddressRef(label) => {
-                let label = label.clone();
+            Token::RawAddressRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::RawAddressRef(label))
+                Ok(AstNode::RawAddressRef(tok))
             }
-            Token::JSRRef(label) => {
-                let label = label.clone();
+            Token::JSRRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::JSRRef(label))
+                Ok(AstNode::JSRRef(tok))
             }
-            Token::HyphenRef(identifier) => {
-                let identifier = identifier.clone();
+            Token::HyphenRef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::HyphenRef(identifier))
+                Ok(AstNode::HyphenRef(tok))
             }
             Token::Padding(addr) => {
                 let addr = *addr;
                 self.advance();
                 Ok(AstNode::Padding(addr))
             }
-            Token::PaddingLabel(label) => {
-                let label = label.clone();
+            Token::PaddingLabel(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::PaddingLabel(label))
+                Ok(AstNode::PaddingLabel(tok))
             }
             Token::Skip(count) => {
                 let count = *count;
@@ -411,12 +410,6 @@ impl Parser {
                 } else {
                     Ok(AstNode::Skip(count))
                 }
-            }
-            Token::DeviceAccess(device, field) => {
-                let device = device.clone();
-                let field = field.clone();
-                self.advance();
-                Ok(AstNode::DeviceAccess(device, field))
             }
             Token::MacroDef(name) => {
                 let name = name.clone();
@@ -486,18 +479,6 @@ impl Parser {
                 let path = path.clone();
                 self.advance();
                 Ok(AstNode::Include(path))
-            }
-            Token::MacroCall(name) => {
-                let name = name.clone();
-                let macro_line = self.current_token().line;
-                let macro_pos = self.current_token().start_pos;
-                self.advance();
-                
-                // In uxnasm.c, <name> syntax is always treated as a label reference, not a macro call
-                // Macros are defined with % and called by their bare name
-                // Preserve the angle brackets in the label name to match uxnasm.c behavior
-                let label_name = format!("<{}>", name);
-                Ok(AstNode::LabelRef(label_name))
             }
             _ => {
                 let line = self.current_token().line;
@@ -610,6 +591,7 @@ impl Parser {
             line: 0,
             start_pos: 0,
             end_pos: 0,
+            scope: None, // <-- Add default scope
         })
     }
 
@@ -632,149 +614,4 @@ impl Parser {
             .unwrap_or("")
             .to_string()
     }
-
-    fn parse_label_definition(&mut self) -> Result<AstNode> {
-        if let Token::LabelDef(label) = &self.current_token().token {
-            let label = label.clone();
-            self.advance();
-            Ok(AstNode::LabelDef(label))
-        } else {
-            Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.current_token().line,
-                position: self.current_token().start_pos,
-                message: "Expected label definition".to_string(),
-                source_line: self.get_source_line(self.current_token().line),
-            })
-        }
-    }
-
-    fn parse_sublabel_definition(&mut self) -> Result<AstNode> {
-        if let Token::SublabelDef(sublabel) = &self.current_token().token {
-            let sublabel = sublabel.clone();
-            self.advance();
-            Ok(AstNode::SublabelDef(sublabel))
-        } else {
-            Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.current_token().line,
-                position: self.current_token().start_pos,
-                message: "Expected sublabel definition".to_string(),
-                source_line: self.get_source_line(self.current_token().line),
-            })
-        }
-    }
-
-    fn parse_padding(&mut self) -> Result<AstNode> {
-        match &self.current_token().token {
-            Token::Padding(addr) => {
-                let addr = *addr;
-                self.advance();
-                Ok(AstNode::Padding(addr))
-            }
-            Token::PaddingLabel(label) => {
-                let label = label.clone();
-                self.advance();
-                Ok(AstNode::PaddingLabel(label))
-            }
-            _ => Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.current_token().line,
-                position: self.current_token().start_pos,
-                message: "Expected padding directive".to_string(),
-                source_line: self.get_source_line(self.current_token().line),
-            }),
-        }
-    }
-
-    fn parse_expression(&mut self) -> Result<AstNode> {
-        match &self.current_token().token {
-            Token::Padding(_) | Token::PaddingLabel(_) => self.parse_padding(),
-            Token::LabelDef(_) => self.parse_label_definition(),
-            Token::SublabelDef(_) => self.parse_sublabel_definition(),
-            Token::Skip(count) => {
-                let count = *count;
-                self.advance();
-                Ok(AstNode::Skip(count))
-            }
-            // ...existing code for other tokens...
-            _ => Err(AssemblerError::SyntaxError {
-                path: self.path.clone(),
-                line: self.current_token().line,
-                position: self.current_token().start_pos,
-                message: format!("Unexpected token: {:?}", self.current_token().token),
-                source_line: self.get_source_line(self.current_token().line),
-            }),
-        }
-    }
-
-    fn resolve_label_reference(&self, name: &str) -> Result<u16> {
-        // Handle sublabel references that start with &
-        if name.starts_with('&') {
-            let sublabel_name = &name[1..]; // Remove the & prefix
-            if let Some(current_scope) = &self.current_scope {
-                let full_name = format!("{}/{}", current_scope, sublabel_name);
-                if let Some(address) = self.labels.get(&full_name) {
-                    return Ok(*address);
-                }
-            }
-            // If not found in current scope, try global scope
-            if let Some(address) = self.labels.get(sublabel_name) {
-                return Ok(*address);
-            }
-        }
-
-        // Handle regular label references
-        if let Some(address) = self.labels.get(name) {
-            return Ok(*address);
-        }
-
-        // Handle scoped references (label/sublabel format)
-        if name.contains('/') {
-            if let Some(address) = self.labels.get(name) {
-                return Ok(*address);
-            }
-        }
-
-        Err(AssemblerError::SyntaxError {
-            path: self.path.clone(),
-            line: 0,
-            position: 0,
-            message: format!("Label unknown: {}", name),
-            source_line: self.get_source_line(0),
-        })
-    }
-
-    fn define_label(&mut self, name: String) -> Result<()> {
-        let address = self.current_address;
-        self.labels.insert(name.clone(), address);
-
-        // Update current scope for regular labels
-        if !name.starts_with('&') {
-            self.current_scope = Some(name);
-        }
-
-        Ok(())
-    }
-
-    fn define_sublabel(&mut self, name: String) -> Result<()> {
-        let address = self.current_address;
-
-        // Store sublabel with current scope prefix
-        if let Some(scope) = &self.current_scope {
-            let full_name = format!("{}/{}", scope, name);
-            self.labels.insert(full_name, address);
-        }
-
-        // Also store without scope for backward compatibility
-        self.labels.insert(name, address);
-
-        Ok(())
-    }
-}
-
-// Add this helper function at the bottom of the file (or near is_instruction_name in lexer.rs)
-fn is_known_instruction(opcode: &str) -> bool {
-    // Use the UXN_OPCODE_TABLE for dynamic lookup
-    UXN_OPCODE_TABLE.iter().any(|&(_, name)| name == opcode)
 }

@@ -24,11 +24,11 @@ impl Default for DebugAssembler {
 }
 
 impl DebugAssembler {
-    pub fn assemble_and_compare(
+    pub fn assemble(
         &self,
         tal_file: &str,
         tal_source: &str,
-    ) -> Result<DebugAssembleResult, AssemblerError> {
+    ) -> Result<(String, String, Vec<u8>, Vec<u8>, String, String, String, String), AssemblerError> {
         let _tal_file_name = Path::new(tal_file)
             .file_name()
             .unwrap()
@@ -37,7 +37,13 @@ impl DebugAssembler {
             .to_owned();
 
         let mut assembler = Assembler::new();
-        let rom = assembler.assemble(tal_source, Some(tal_file.to_owned()))?;
+        let rom = match assembler.assemble(tal_source, Some(tal_file.to_owned())) {
+            Ok(rom) => rom,
+            Err(e) => {
+                eprintln!("Rust assembler error: {:?}", e);
+                Vec::new()
+            }
+        };
         let wsl_tal_file = tal_file.replace("\\", "/");
         let rust_rom_path = format!("{}_compare.rom", tal_file);
         fs::write(&rust_rom_path, &rom)?;
@@ -126,6 +132,23 @@ impl DebugAssembler {
         let rust_dis_output = run_dis(&rust_rom_path.replace("\\", "/")).unwrap_or_default();
         let wsl_dis_output = run_dis(&wsl_rom_path).unwrap_or_default();
 
+        Ok((
+            rust_rom_path,
+            wsl_rom_path,
+            rust_rom_bytes,
+            wsl_rom_bytes,
+            rust_output,
+            wsl_output,
+            rust_dis_output,
+            wsl_dis_output,
+        ))
+    }
+
+    pub fn compare(
+        &self,
+        rust_dis_output: &str,
+        wsl_dis_output: &str,
+    ) -> Option<(usize, String, String)> {
         // Find first line of difference in disassembly output
         let mut first_line_difference_dis = None;
         for (i, (r, w)) in rust_dis_output
@@ -154,6 +177,26 @@ impl DebugAssembler {
                 }
             }
         }
+        first_line_difference_dis
+    }
+
+    pub fn assemble_and_compare(
+        &self,
+        tal_file: &str,
+        tal_source: &str,
+    ) -> Result<DebugAssembleResult, AssemblerError> {
+        let (
+            rust_rom_path,
+            wsl_rom_path,
+            rust_rom_bytes,
+            wsl_rom_bytes,
+            rust_output,
+            wsl_output,
+            rust_dis_output,
+            wsl_dis_output,
+        ) = self.assemble(tal_file, tal_source)?;
+
+        let first_line_difference_dis = self.compare(&rust_dis_output, &wsl_dis_output);
 
         Ok(DebugAssembleResult {
             rust_rom_path,
@@ -167,4 +210,5 @@ impl DebugAssembler {
             first_line_difference_dis,
         })
     }
+    
 }

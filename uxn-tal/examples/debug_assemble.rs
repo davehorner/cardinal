@@ -24,7 +24,6 @@ fn main() -> Result<(), AssemblerError> {
         println!("{:2}: {}", i + 1, line);
     }
     println!("--- End of file ---");
-
     let mut assembler = Assembler::new();
     match assembler.assemble(&source, Some(input_file.clone())) {
         Ok(rom) => {
@@ -60,7 +59,7 @@ fn main() -> Result<(), AssemblerError> {
                 print!(" ...");
             }
             println!();
-
+     
             // Write symbols to a .sym file
             let sym_output_file = input_file.as_str().replace(".tal", ".sym");
 
@@ -122,6 +121,7 @@ fn main() -> Result<(), AssemblerError> {
         }
         Err(e) => {
             println!("Assembly failed: {}", e);
+            uxn_tal::DebugAssembler::default().assemble(input_file, &source)?;
             std::process::exit(1);
         }
     }
