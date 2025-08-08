@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.9...cardinal-gui-v0.3.10) - 2025-08-08
+
+### Added
+
+- *(unx-tal)* initial developer release of unx-tal
+
 ## [0.3.9](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.8...cardinal-gui-v0.3.9) - 2025-07-31
 
 ### Added
