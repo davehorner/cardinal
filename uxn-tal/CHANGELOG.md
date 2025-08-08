@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.3...uxn-tal-v0.1.4) - 2025-08-08
+
+### Added
+
+- update assembler structure to include lambda stack and counter, modify lexer for conditional references, and enhance parser for new AST node types. Added validation files for TAL and opcode tests.
+
+### Other
+
+- improve assembler error handling, add scope tracking and correct ROM size management
+
 ## [0.1.3](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.2...uxn-tal-v0.1.3) - 2025-08-06
 
 ### Added

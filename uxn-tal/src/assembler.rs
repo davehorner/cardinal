@@ -35,7 +35,9 @@ pub struct Assembler {
     line_number: usize,
     position_in_line: usize,
     effective_length: usize, // Track effective length like uxnasm.c
-    lambda_counter: u16, // Add lambda counter as a field
+    //lambda_counter: u16, // Add lambda counter as a field
+    lambda_counter: usize,
+    lambda_stack: Vec<usize>,
 }
 
 /// Represents a forward reference that needs to be resolved
@@ -109,7 +111,8 @@ impl Assembler {
             line_number: 0,
             position_in_line: 0,
             effective_length: 0,
-            lambda_counter: 0, // Initialize lambda counter
+lambda_counter: 0,
+lambda_stack: Vec::new(),
         }
     }
 
@@ -193,63 +196,70 @@ impl Assembler {
         let path = rom.source_path().cloned().unwrap_or_default();
         let _start_address = rom.position();
 
+        // --- Rune table for reference ---
+        // rune '?' : conditional branch (0x20 + rel word)
+        // rune '!' : exclamation branch (0x40 + rel word)
+        // rune ' ' : JSR (unknown token, 0x60 + rel word)
+        // rune '='/':'/';' : absolute word
+        // rune '-' / '.' : absolute byte
+        // rune '_' / ',' : relative byte (+ int8 range check)
+        // (see uxnasm.c resolve() switch)
         match node {
-            AstNode::Ignore => {
-                // Do nothing - brackets are completely ignored like in uxnasm.c
-            }
-            AstNode::ConditionalBlock(nodes) => {
-                // --- PATCH: Emit a lambda label and a reference for the conditional block, like uxnasm ---
-                // Generate a unique lambda label for this block
-                let lambda_label = format!("λ{:02X}", self.lambda_counter);
+            AstNode::ConditionalBlockStart(tok) => {
+                // 1) new lambda id
+                let id = self.lambda_counter;
                 self.lambda_counter += 1;
+                self.lambda_stack.push(id);
 
-                                // Emit a reference to the lambda label with '?' rune (JCN)
-                // Write JCN opcode (0x20), then placeholder for relative address
-                rom.write_byte(0x20)?;
-                self.update_effective_length(rom);
-                // Write placeholder for relative address (2 bytes)
-                let position = rom.position();
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
+                // 2) its label name
+                let name = format_lambda_label(id);
 
-                // Emit the block contents
-                for n in nodes {
-                    self.process_node(n, rom)?;
-                }
-                let len = rom.position() - position;
-         
-
-                /*
-                No, we do not need to capture the closing '}' or any special token here.
-                The block contents have already been processed above, and the lambda label is placed
-                immediately after the block, matching uxnasm's behavior.
-                */
-                // --- FIX: Place the lambda label *after* the block (after the closing }) ---
-                // This matches uxnasm: the label is at the instruction after the block.
-                // (Nothing needed here; the block contents are already processed above.)
-                self.symbols.insert(
-                    lambda_label.clone(),
-                    Symbol {
-                        address: rom.position(),
-                        is_sublabel: false,
-                        parent_label: None,
-                    },
-                );
-
-                       // Reference address is the position of the placeholder (JCN's address field)
-                let ref_addr = position;
-                // rom.write_short_at(ref_addr, position+len as u16)?;
+                // 3) record a reference at the first byte of the word (after opcode), rune '?'
+                let ref_addr = rom.position() + 1; // <-- FIX: was rom.position()
                 self.references.push(Reference {
-                    name: lambda_label.clone(),
+                    name: name.clone(),
                     rune: '?',
-                    address: ref_addr,
-                    line: self.line_number,
-                    path: rom.source_path().cloned().unwrap_or_default(),
-                    scope: self.current_label.clone(),
-                    token: None,
+                    address: ref_addr as u16,
+                    line: tok.line,
+                    path: String::new(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
                 });
+                // 4) emit JCN and 0xFFFF placeholder
+                rom.write_byte(0x20)?;        // JCN
+                rom.write_short(0xFFFF)?;     // placeholder for relative word
+            }
+            AstNode::ConditionalBlockEnd(tok) => {
+                let id = match self.lambda_stack.pop() {
+                    Some(id) => id,
+                    None => {
+                        return Err(AssemblerError::SyntaxError {
+                            path: String::new(),
+                            line: tok.line,
+                            position: 0,
+                            message: "Unmatched '}'".to_string(),
+                            source_line: String::new(),
+                        });
+                    }
+                };
+                let name = format_lambda_label(id);
 
-                // Do not update current_label here
+                // Define the label at current address WITHOUT changing scope/current label
+                let addr = rom.position() as u16; // <-- Correct: no +1
+                if self.symbols.contains_key(&name) {
+                    return Err(AssemblerError::SyntaxError {
+                        path: String::new(),
+                        line: tok.line,
+                        position: 0,
+                        message: format!("Duplicate lambda label {}", name),
+                        source_line: String::new(),
+                    });
+                }
+                self.symbols.insert(name.clone(), Symbol {
+                    address: addr,
+                    is_sublabel: false,
+                    parent_label: None
+                });
             }
             AstNode::Padding(pad_addr) => {
                 // If this is a |xxxx padding (not $xx skip), reset scope if at or above 0x0100
@@ -299,7 +309,17 @@ impl Assembler {
                     inst.opcode,
                     rom.position()
                 );
-                // Remove special-case for <...> labels: treat any unknown instruction as JSR reference
+                // Special-case BRK: always emit 0x00, matching uxnasm.c
+                if inst.opcode.eq_ignore_ascii_case("BRK") {
+                    rom.write_byte(0x00)?;
+                    eprintln!(
+                        "DEBUG: Wrote opcode 0x00 (BRK) at {:04X}",
+                        rom.position() - 1
+                    );
+                    // Do not update effective_length for BRK (matches C)
+                    return Ok(());
+                }
+                // Always emit a JSR reference for unknown instructions (not in opcode table)
                 match self.opcodes.get_opcode(&inst.opcode) {
                     Ok(base_opcode) => {
                         let final_opcode = Opcodes::apply_modes(
@@ -317,6 +337,12 @@ impl Assembler {
                         );
                         if final_opcode != 0 {
                             self.update_effective_length(rom);
+                        }
+                        // Only expand macro if found and handled as instruction
+                        if let Some(macro_def) = self.macros.get(&inst.opcode).cloned() {
+                            for macro_node in &macro_def.body {
+                                self.process_node(macro_node, rom)?;
+                            }
                         }
                     }
                     Err(_) => {
@@ -348,25 +374,60 @@ impl Assembler {
                         self.update_effective_length(rom);
                     }
                 }
-                // --- Only expand macro if found and not handled as instruction ---
-                if let Some(macro_def) = self.macros.get(&inst.opcode).cloned() {
-                    for macro_node in &macro_def.body {
-                        self.process_node(macro_node, rom)?;
+            }
+                        AstNode::LabelRef(tok) => {
+                // DEBUG: Log when a bare label reference is encountered
+                println!(
+                    "DEBUG: AstNode::LabelRef encountered at line {}, emitting JSR to label {:?} at address {:04X}",
+                    tok.line,
+                    tok.token,
+                    rom.position()
+                );
+                // Always treat label references as JSR, never as BRK or nothing
+                let label = if let crate::lexer::Token::LabelRef(s) = &tok.token {
+                    s.clone()
+                } else {
+                    println!("DEBUG: Expected LabelRef, found {:?}", tok);
+                    if let crate::lexer::Token::Newline = &tok.token {
+                        // If it's a newline, just continue (ignore)
+                        return Ok(());
                     }
-                }
+                    return Err(AssemblerError::SyntaxError {
+                        path: path.clone(),
+                        line: self.line_number,
+                        position: self.position_in_line,
+                        message: format!("Expected LabelRef, found {:?}", tok.token),
+                        source_line: String::new(),
+                    });
+                };
+                // FIX: Emit the reference at rom.position() + 1, not rom.position()
+                self.references.push(Reference {
+                    name: label,
+                    rune: ' ',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: path.clone(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                println!(
+                    "DEBUG: Writing JSR opcode 0x60 and placeholder 0xFFFF for label {:?} at address {:04X}",
+                    tok.token,
+                    rom.position()
+                );
+                rom.write_byte(0x60)?; // JSR opcode for unknown token
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?; // Placeholder for relative address
+                self.update_effective_length(rom);
             }
             AstNode::LabelDef(label) => {
                 // NOTE: The label should be defined at the current ROM position,
-                // which should be AFTER all code/data that precedes it.
+                // which should be AFTER all code/data that precede it.
                 // If this is the last label in the file, it should point to the address
                 // after the last byte written (i.e., rom.position()).
                 // If you emit the label before writing the last data, you may need to add 1.
                 if !self.symbols.contains_key(label) {
-                    let address = if label == "program" {
-                        rom.position() + 1
-                    } else {
-                        rom.position()
-                    };
+                    let address = rom.position(); // <-- FIX: remove special case for "program"
                     self.symbols.insert(
                         label.clone(),
                         Symbol {
@@ -423,38 +484,48 @@ impl Assembler {
                     rom.position()
                 );
             }
-            AstNode::LabelRef(tok) => {
-                // Always treat label references as JSR, never as LIT/LIT2
-                let label = if let crate::lexer::Token::LabelRef(s) = &tok.token {
-                    s.clone()
-                } else {
-                    println!("DEBUG: Expected LabelRef, found {:?}", tok);
-                    if let crate::lexer::Token::Newline = &tok.token {
-                        // If it's a newline, just continue (ignore)
-                        return Ok(());
-                    }
-                    return Err(AssemblerError::SyntaxError {
+            AstNode::ExclamationRef(tok) => {
+                // !label: opcode 0x40, rune '!', relative word placeholder (not JSR!)
+                let label = match &tok.token {
+                    crate::lexer::Token::ExclamationRef(s) => s.clone(),
+                    _ => return Err(AssemblerError::SyntaxError {
                         path: path.clone(),
                         line: self.line_number,
                         position: self.position_in_line,
-                        message: format!("Expected LabelRef, found {:?}", tok.token),
+                        message: "Expected ExclamationRef".to_string(),
                         source_line: String::new(),
-                    });
+                    }),
+                };
+                let resolved_name = if label.starts_with('/') {
+                    let clean_label = &label[1..];
+                    if let Some(ref scope) = tok.scope {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope
+                        };
+                        format!("{}/{}", main_scope, clean_label)
+                    } else {
+                        clean_label.to_string()
+                    }
+                } else {
+                    label
                 };
                 self.references.push(Reference {
-                    name: label,
-                    rune: ' ',
-                    address: rom.position(),
+                    name: resolved_name,
+                    rune: '!',
+                    address: rom.position() + 1,
                     line: tok.line,
                     path: path.clone(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x60)?; // JSR opcode
+                rom.write_byte(0x40)?; // !label: opcode 0x40 (not JSR)
                 self.update_effective_length(rom);
-                rom.write_short(0xffff)?; // Placeholder for relative address
+                rom.write_short(0xffff)?; // relative word placeholder
                 self.update_effective_length(rom);
             }
+
             AstNode::SublabelRef(tok) => {
                 let sublabel = match &tok.token {
                     crate::lexer::Token::SublabelRef(s) => s.clone(),
@@ -715,9 +786,9 @@ impl Assembler {
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x40)?;
+                rom.write_byte(0x40)?; // !label: opcode 0x40 (not JSR)
                 self.update_effective_length(rom);
-                rom.write_short(0xffff)?;
+                rom.write_short(0xffff)?; // relative word placeholder
                 self.update_effective_length(rom);
             }
             AstNode::RawAddressRef(tok) => {
@@ -946,8 +1017,8 @@ impl Assembler {
             };
 
             let symbol = if symbol.is_none() {
-                // --- PATCH: uxnasm-style scope walk for _ and , runes, even if tokens don't store scope ---
                 if reference.rune == '_' || reference.rune == ',' {
+                    // --- PATCH: uxnasm-style scope walk for _ and , runes, even if tokens don't store scope ---
                     // Try walking up the scope chain from the enclosing label scope
                     let mut found = None;
                     let mut scope = reference.scope.clone();
@@ -1024,8 +1095,12 @@ impl Assembler {
 
             let symbol = symbol.unwrap();
 
-            // Apply the reference based on the rune type (following uxnasm.c exactly)
-            // From uxnasm.c resolve() function
+            // PATCH: uxnasm's relative word calculation for '?' rune is: rel = l->addr - r->addr - 2
+            // But the bug is here: for the '?' rune, uxnasm.c uses rel = l->addr - r->addr - 2,
+            // but writes it as a signed 16-bit value, not as an unsigned.
+            // The difference in your output is that you write rel as (symbol.address as i32 - reference.address as i32 - 2) as i16,
+            // but uxnasm.c writes it as (symbol.address - reference.address - 2) as Sint16, then stores it as a little-endian word.
+
             match reference.rune {
                 '_' | ',' => {
                     // case '_': case ',': *rom = rel = l->addr - r->addr - 2;
@@ -1093,22 +1168,51 @@ impl Assembler {
                 }
                 '!' => {
                     // Fix: match uxnasm.c, use rel = target_addr - ref_addr - 2
-                    let rel = (symbol.address as i32 - reference.address as i32-2) as i16;
-                    rom.write_byte_at(reference.address, (rel >> 8) as u8)?;
-                    rom.write_byte_at(reference.address + 1, (rel & 0xff) as u8)?;
-                    eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
-                             reference.name, reference.address, rel as u16, rel);
+                    let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
+                    // --- DEBUG PRINTS ---
+                    println!(
+                        "DEBUG: [second_pass] '!' rune: symbol.address=0x{:04X}, reference.address=0x{:04X}, rel={}(0x{:04X})",
+                        symbol.address, reference.address, rel, rel as u16
+                    );
+                    // Write high byte first (matches uxnasm)
+                    rom.write_short_at(reference.address, rel as u16)?;
+                    eprintln!(
+                        "DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})",
+                        reference.name, reference.address, rel as u16, rel
+                    );
                     if rel != 0 {
                         self.effective_length =
                             self.effective_length.max(reference.address as usize + 2);
                     }
                 }
-                '?' | ' ' | '/' => {
+                '?' => {
+                    // PATCH: uxnasm.c writes rel = l->addr - r->addr - 2 as a signed 16-bit value, little-endian
+                    let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
+                    rom.write_short_at(reference.address, rel as u16)?;
+                    // rom.write_byte_at(reference.address, (rel & 0xff) as u8)?;
+                    // rom.write_byte_at(reference.address + 1, ((rel >> 8) & 0xff) as u8)?;
+                    eprintln!(
+                        "DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})",
+                        reference.name, reference.address, rel as u16, rel
+                    );
+                    if rel != 0 {
+                        self.effective_length =
+                            self.effective_length.max(reference.address as usize + 2);
+                    }
+                }
+                ' ' | '/' => {
                     // For conditional ('?'), space (' '), and slash ('/') runes:
                     // rel = target_addr - ref_addr - 2 (matches uxnasm for relative word references)
                     let rel = (symbol.address as i32 - reference.address as i32 - 2) as i16;
-                    rom.write_byte_at(reference.address, (rel >> 8) as u8)?;
-                    rom.write_byte_at(reference.address + 1, (rel & 0xff) as u8)?;
+                    // --- DEBUG PRINTS ---
+                    println!(
+                        "DEBUG: [second_pass] '{}': symbol.address=0x{:04X}, reference.address=0x{:04X}, rel={}(0x{:04X})",
+                        reference.rune, symbol.address, reference.address, rel, rel as u16
+                    );
+                    // Write as little-endian (low byte first)
+                                      rom.write_short_at(reference.address, rel as u16)?;
+                    // rom.write_byte_at(reference.address, (rel & 0xff) as u8)?;
+                    // rom.write_byte_at(reference.address + 1, ((rel >> 8) & 0xff) as u8)?;
                     eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
                              reference.name, reference.address, rel as u16, rel);
                     if rel != 0 {
@@ -1300,6 +1404,11 @@ impl Assembler {
 
         Ok(())
     }
+}
+
+// Helper to format lambda label (e.g., λ00, λ01, ...)
+fn format_lambda_label(lambda_id: usize) -> String {
+    format!("λ{:02x}", lambda_id)
 }
 
 impl Default for Assembler {
