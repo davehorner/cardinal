@@ -809,14 +809,16 @@ impl Lexer {
                 // Don't include the leading slash in the label name - it's just syntax
                 Ok(Token::RelativeRef(label))
             }
-            '?' => {
-                self.advance();
-                if self.current_char() == '{' {
-                    return Ok(Token::ConditionalOperator);
-                }
-                let label = self.read_identifier()?;
-                Ok(Token::QuestionRef(label))
-            }
+    '?' => {
+        self.advance();
+        if self.current_char() == '{' {
+            self.advance(); // consume '{'
+            Ok(Token::ConditionalBlockStart)
+        } else {
+            let name = self.read_identifier()?;
+            Ok(Token::ConditionalRef(name))
+        }
+    }
             '!' => {
                 self.advance();
                 let label = self.read_identifier()?;
@@ -876,8 +878,11 @@ impl Lexer {
                 // Don't treat instruction names as hex
                 {
                     Ok(Token::RawHex(identifier))
-                } else {
+                } else if is_instruction_name(&identifier) {
                     Ok(Token::Instruction(identifier))
+                } else {
+                    // If not a known instruction, treat as a label reference (bare word)
+                    Ok(Token::LabelRef(identifier))
                 }
             }
             '|' => {
