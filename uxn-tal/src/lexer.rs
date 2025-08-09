@@ -286,29 +286,38 @@ impl Lexer {
 
     /// Read comment with proper nested parentheses handling
     fn read_comment(&mut self) -> Result<String> {
+        // Match uxnasm's walkcomment: only consider '(' and ')' that begin a token
+        // (i.e., occur right after whitespace) for nesting and termination.
         let mut result = String::new();
-        let mut depth = 1; // We've already consumed the opening (
+        let mut depth = 1;
+        let mut last: char = '\0'; // last token-head character or 0 if in whitespace
 
         while self.position < self.input.len() && depth > 0 {
             let ch = self.current_char();
 
-            match ch {
-                '(' => {
+            if ch.is_ascii() && ch <= ' ' {
+                // Whitespace: process the last token-head seen, then reset
+                result.push(ch);
+                self.advance();
+                if last == '(' {
                     depth += 1;
-                    result.push(ch);
-                    self.advance();
-                }
-                ')' => {
+                } else if last == ')' {
                     depth -= 1;
-                    if depth > 0 {
-                        result.push(ch);
+                    if depth < 1 {
+                        break; // end of comment
                     }
-                    self.advance();
                 }
-                _ => {
-                    result.push(ch);
-                    self.advance();
-                }
+                last = '\0';
+            } else if last <= ' ' {
+                // Start of a new token: remember its first character
+                last = ch;
+                result.push(ch);
+                self.advance();
+            } else {
+                // Inside a token: ignore nested parens here
+                last = '~';
+                result.push(ch);
+                self.advance();
             }
         }
 

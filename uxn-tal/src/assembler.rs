@@ -375,7 +375,7 @@ lambda_stack: Vec::new(),
                     }
                 }
             }
-                        AstNode::LabelRef(tok) => {
+            AstNode::LabelRef(tok) => {
                 // DEBUG: Log when a bare label reference is encountered
                 println!(
                     "DEBUG: AstNode::LabelRef encountered at line {}, emitting JSR to label {:?} at address {:04X}",
@@ -383,7 +383,7 @@ lambda_stack: Vec::new(),
                     tok.token,
                     rom.position()
                 );
-                // Always treat label references as JSR, never as BRK or nothing
+                // Extract the bare word
                 let label = if let crate::lexer::Token::LabelRef(s) = &tok.token {
                     s.clone()
                 } else {
@@ -400,6 +400,17 @@ lambda_stack: Vec::new(),
                         source_line: String::new(),
                     });
                 };
+
+                // NEW: If it’s a macro name, expand inline like uxnasm’s findmacro+walkmacro
+                if let Some(m) = self.macros.get(&label).cloned() {
+                    println!("DEBUG: Expanding macro '{}' at {:04X}", label, rom.position());
+                    for macro_node in &m.body {
+                        self.process_node(macro_node, rom)?;
+                    }
+                    return Ok(());
+                }
+
+                // Otherwise, treat as unknown token => JSR reference to label (uxnasm fallback)
                 // FIX: Emit the reference at rom.position() + 1, not rom.position()
                 self.references.push(Reference {
                     name: label,
