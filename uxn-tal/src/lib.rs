@@ -28,20 +28,29 @@
 //! }
 //! ```
 
-pub mod assembler;
-pub mod debug;
-pub mod devicemap;
+//! Public API for uxn-tal (minimal so examples compile).
+
 pub mod error;
 pub mod lexer;
+pub mod parser;
 pub mod opcode_table;
 pub mod opcodes;
-pub mod parser;
 pub mod rom;
+pub mod assembler;
+pub mod devicemap;
+
 pub use assembler::Assembler;
-pub use debug::DebugAssembler;
-pub use devicemap::{Device, DeviceField};
 pub use error::AssemblerError;
-pub use rom::Rom;
+
+pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
+    let mut a = Assembler::new();
+    a.assemble(source, None)
+}
+
+pub fn assemble_with_path(source: &str, path: &str) -> Result<Vec<u8>, AssemblerError> {
+    let mut a = Assembler::new();
+    a.assemble(source, Some(path.to_string()))
+}
 
 /// Convenience function to assemble a TAL file directly from a file path
 pub fn assemble_file<P: AsRef<std::path::Path>>(input_path: P) -> Result<Vec<u8>, AssemblerError> {

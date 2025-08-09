@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use uxn_tal::{Assembler, AssemblerError};
 
 // Find all .tal files recursively in the workspace
@@ -69,6 +70,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut successful = 0;
     let mut failed = 0;
     let mut total_size = 0;
+    // NEW: collect failed builds
+    struct Failure {
+        file: String,
+        reason: String,
+        lines: Vec<String>,
+    }
+    let mut failures: Vec<Failure> = Vec::new();
 
     for file_path in &tal_files {
         print!("Assembling {}... ", file_path);
@@ -80,8 +88,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 total_size += size;
             }
             Err(e) => {
-                println!("❌ Failed: {}", e);
+                let msg = format!("{e}");
+                println!("❌ Failed: {}", first_line(&msg));
                 failed += 1;
+                failures.push(Failure {
+                    file: file_path.to_string(),
+                    reason: first_line(&msg).to_string(),
+                    lines: last_n_nonempty_lines(&msg, 3),
+                });
             }
         }
     }
@@ -120,12 +134,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         total_size += size;
                     }
                     Err(AssemblerError::Io(e)) => {
-                        println!("❌ IO error: {}", e);
+                        let msg = format!("{e}");
+                        println!("❌ IO error: {}", first_line(&msg));
                         failed += 1;
+                        failures.push(Failure {
+                            file: path.display().to_string(),
+                            reason: "IO error".into(),
+                            lines: last_n_nonempty_lines(&msg, 3),
+                        });
                     }
                     Err(e) => {
-                        println!("❌ Assembly error: {}", e);
+                        let msg = format!("{e}");
+                        println!("❌ Assembly error: {}", first_line(&msg));
                         failed += 1;
+                        failures.push(Failure {
+                            file: path.display().to_string(),
+                            reason: first_line(&msg).to_string(),
+                            lines: last_n_nonempty_lines(&msg, 3),
+                        });
                     }
                 }
             } else {
@@ -140,12 +166,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         total_size += size;
                     }
                     Err(AssemblerError::Io(e)) => {
-                        println!("❌ IO error: {}", e);
+                        let msg = format!("{e}");
+                        println!("❌ IO error: {}", first_line(&msg));
                         failed += 1;
+                        failures.push(Failure {
+                            file: path.display().to_string(),
+                            reason: "IO error".into(),
+                            lines: last_n_nonempty_lines(&msg, 3),
+                        });
                     }
                     Err(e) => {
-                        println!("❌ Assembly error: {}", e);
+                        let msg = format!("{e}");
+                        println!("❌ Assembly error: {}", first_line(&msg));
                         failed += 1;
+                        failures.push(Failure {
+                            file: path.display().to_string(),
+                            reason: first_line(&msg).to_string(),
+                            lines: last_n_nonempty_lines(&msg, 3),
+                        });
                     }
                 }
             }
@@ -162,10 +200,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  ❌ Failed: {} files", failed);
     println!("  📦 Total ROM size: {} bytes", total_size);
 
+    // NEW: failure table
+    if !failures.is_empty() {
+        println!("\n🔎 Failure Summary");
+        println!("{:<4} {:<60} {}", "#", "File", "Reason");
+        println!("{}", "-".repeat(100));
+        for (i, f) in failures.iter().enumerate() {
+            println!(
+                "{:<4} {:<60} {}",
+                i + 1,
+                truncate(&f.file, 60),
+                truncate(&f.reason, 30),
+            );
+            if f.lines.is_empty() {
+                println!("      -");
+            } else {
+                for line in &f.lines {
+                    println!("      {}", line);
+                }
+            }
+        }
+    }
+
     if failed > 0 {
         println!("\n💡 Some files may use features not yet implemented in our assembler.");
-        println!("   This is normal for a TAL assembler implementation.");
     }
 
     Ok(())
+}
+
+fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+    if let Ok(rd) = fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                collect(&p, out);
+            } else if p.extension().map(|x| x == "tal").unwrap_or(false) {
+                out.push(p);
+            }
+        }
+    }
+}
+
+// NEW helpers
+fn first_line(s: &str) -> &str {
+    s.lines().next().unwrap_or(s)
+}
+fn last_n_nonempty_lines(s: &str, n: usize) -> Vec<String> {
+    let mut lines: Vec<String> = s
+        .lines()
+        .map(|l| l.trim_end().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    if lines.len() > n {
+        lines = lines.split_off(lines.len() - n);
+    }
+    lines
+}
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else if max > 3 {
+        format!("{}...", &s[..max - 3])
+    } else {
+        s[..max].to_string()
+    }
 }

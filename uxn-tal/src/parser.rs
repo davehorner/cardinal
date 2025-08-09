@@ -49,8 +49,10 @@ pub enum AstNode {
     /// Padding to specific address
     Padding(u16),
     PaddingLabel(TokenWithPos),
-    /// Skip N bytes
-    Skip(u16),
+    /// Relative padding by hex count ($1234)
+    RelativePadding(u16),
+    /// Relative padding to label ($label)
+    RelativePaddingLabel(TokenWithPos),
     /// Macro definition
     MacroDef(String, Vec<AstNode>), // name, body
     /// Macro call (name, line, position)
@@ -77,6 +79,10 @@ pub enum AstNode {
     ConditionalBlockStart(TokenWithPos),
     /// Conditional block end (e.g., }) - lambda id for auto label
     ConditionalBlockEnd(TokenWithPos),
+    /// Lambda block start '{' (standalone, not '?{')
+    LambdaStart(TokenWithPos),
+    /// Lambda block end '}' corresponding to LambdaStart
+    LambdaEnd(TokenWithPos),
 }
 
 /// Parser for TAL assembly
@@ -87,7 +93,11 @@ pub struct Parser {
     position_in_line: usize,
     path: String,
     source: String,
+    brace_stack: Vec<BraceKind>, // track lambda vs conditional braces
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BraceKind { Conditional, Lambda }
 
 impl Parser {
     pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
@@ -100,6 +110,7 @@ impl Parser {
             position_in_line,
             path,
             source,
+            brace_stack: Vec::new(),
         }
     }
 
@@ -151,14 +162,8 @@ impl Parser {
         loop {
             let token = &self.current_token().token;
             match token {
-                Token::Newline | Token::Comment(_) => self.advance(),
-                Token::BraceClose => {
-                    let tok = self.current_token().clone();
-                    self.advance();
-                    // Emit a ConditionalBlockEnd node for lambda label definition
-                    return Ok(AstNode::ConditionalBlockEnd(tok));
-                }
-                Token::BracketOpen => {
+                Token::Newline | Token::Comment(_)
+                | Token::BracketOpen | Token::BracketClose => {
                     self.advance();
                     continue;
                 }
@@ -369,16 +374,15 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::PaddingLabel(tok))
             }
-            Token::Skip(count) => {
-                let count = *count;
+            Token::RelativePadding(count) => {
+                let c = *count;
                 self.advance();
-                if let Token::LabelDef(label) = &self.current_token().token {
-                    let label_owned = label.clone();
-                    self.advance();
-                    Ok(AstNode::LabelDef(label_owned))
-                } else {
-                    Ok(AstNode::Skip(count))
-                }
+                Ok(AstNode::RelativePadding(c))
+            }
+            Token::RelativePaddingLabel(_) => {
+                let tok = self.current_token().clone();
+                self.advance();
+                Ok(AstNode::RelativePaddingLabel(tok))
             }
             Token::MacroDef(name) => {
                 let name = name.clone();
@@ -400,7 +404,8 @@ impl Parser {
                         {
                             let token = &self.current_token().token;
                             match token {
-                                Token::Comment(_) | Token::Newline => {
+                                Token::Comment(_) | Token::Newline
+                                | Token::BracketOpen | Token::BracketClose => {
                                     self.advance();
                                     continue;
                                 }
@@ -452,12 +457,23 @@ impl Parser {
             Token::ConditionalBlockStart => {
                 let tok = self.current_token().clone();
                 self.advance();
+                self.brace_stack.push(BraceKind::Conditional);
                 Ok(AstNode::ConditionalBlockStart(tok))
+            }
+            Token::BraceOpen => {
+                let tok = self.current_token().clone();
+                self.advance();
+                self.brace_stack.push(BraceKind::Lambda);
+                Ok(AstNode::LambdaStart(tok))
             }
             Token::BraceClose => {
                 let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::ConditionalBlockEnd(tok))
+                let kind = self.brace_stack.pop().unwrap_or(BraceKind::Lambda);
+                Ok(match kind {
+                    BraceKind::Conditional => AstNode::ConditionalBlockEnd(tok),
+                    BraceKind::Lambda => AstNode::LambdaEnd(tok),
+                })
             }
             _ => {
                 let line = self.current_token().line;

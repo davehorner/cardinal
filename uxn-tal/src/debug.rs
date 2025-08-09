@@ -1,18 +1,207 @@
 use crate::{Assembler, AssemblerError};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, ExitStatus};
+
+pub trait AssemblerBackend {
+    fn name(&self) -> &'static str;
+    fn assemble(&self, tal_file: &str, tal_source: &str) -> Result<AssemblyOutput, AssemblerError>;
+}
+
+pub struct AssemblyOutput {
+    pub rom_path: String,
+    pub rom_bytes: Vec<u8>,
+    pub stdout: String,
+    pub disassembly: String,
+}
+
+impl Default for AssemblyOutput {
+    fn default() -> Self {
+        Self {
+            rom_path: String::new(),
+            rom_bytes: vec![],
+            stdout: String::new(),
+            disassembly: String::new(),
+        }
+    }
+}
 
 pub struct DebugAssembleResult {
-    pub rust_rom_path: String,
-    pub wsl_rom_path: String,
-    pub rust_rom_bytes: Vec<u8>,
-    pub wsl_rom_bytes: Vec<u8>,
-    pub rust_output: String,
-    pub wsl_output: String,
-    pub rust_dis_output: String,
-    pub wsl_dis_output: String,
-    pub first_line_difference_dis: Option<(usize, String, String)>,
+    pub uxntal_rom_path: String,
+    pub uxnasm_rom_path: String,
+    pub drifblim_rom_path: String,
+    pub uxntal_rom_bytes: Vec<u8>,
+    pub uxnasm_rom_bytes: Vec<u8>,
+    pub drifblim_rom_bytes: Vec<u8>,
+    pub uxntal_output: String,
+    pub uxnasm_output: String,
+    pub drifblim_output: String,
+    pub uxntal_dis_output: String,
+    pub uxnasm_dis_output: String,
+    pub drifblim_dis_output: String,
+    pub diff_uxntal_uxnasm: Option<(usize, String, String)>,
+    pub diff_uxntal_drifblim: Option<(usize, String, String)>,
+    pub diff_uxnasm_drifblim: Option<(usize, String, String)>,
+    pub backend_errors: Vec<(String, String)>,
+}
+
+pub struct UxntalBackend;
+impl AssemblerBackend for UxntalBackend {
+    fn name(&self) -> &'static str {
+        "uxntal"
+    }
+    fn assemble(&self, tal_file: &str, tal_source: &str) -> Result<AssemblyOutput, AssemblerError> {
+        let mut assembler = Assembler::new();
+        let rom = assembler.assemble(tal_source, Some(tal_file.to_string()))?;
+        let rom_path = format!("{}_{}.rom", tal_file, self.name());
+        fs::write(&rom_path, &rom).map_err(|e| io_err(&rom_path, e))?;
+        Ok(AssemblyOutput {
+            rom_path: rom_path.clone(),
+            rom_bytes: rom.clone(),
+            stdout: run_vm_last(&rom)?,
+            disassembly: run_dis_file(&rom_path)?,
+        })
+    }
+}
+
+pub struct UxnasmBackend;
+impl AssemblerBackend for UxnasmBackend {
+    fn name(&self) -> &'static str {
+        "uxnasm"
+    }
+    fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
+        let input = tal_file.replace('\\', "/");
+        let rom_path = format!("{}_{}.rom", input, self.name());
+        let status = spawn_cmd("uxnasm", &["--verbose", &input, &rom_path])?;
+        if !status.success() {
+            return Err(syntax_err(&input, "uxnasm failed"));
+        }
+        let bytes = fs::read(&rom_path).unwrap_or_default();
+        Ok(AssemblyOutput {
+            rom_path: rom_path.clone(),
+            rom_bytes: bytes.clone(),
+            stdout: run_vm_path(&rom_path)?,
+            disassembly: run_dis_file(&rom_path)?,
+        })
+    }
+}
+
+pub struct DrifblimBackend;
+impl AssemblerBackend for DrifblimBackend {
+    fn name(&self) -> &'static str {
+        "drifblim"
+    }
+    fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
+        let input = tal_file.replace('\\', "/");
+        let rom_path = format!("{}_{}.rom", input, self.name());
+        let stdout = Self::run_drif(tal_file, &rom_path)?;
+        let bytes = fs::read(&rom_path).unwrap_or_default();
+        Ok(AssemblyOutput {
+            rom_path: rom_path.clone(),
+            rom_bytes: bytes,
+            stdout,
+            disassembly: run_dis_file(&rom_path)?,
+        })
+    }
+}
+impl DrifblimBackend {
+    fn run_drif(tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
+        let in_wsl = detect_wsl();
+        let output = if in_wsl {
+            Command::new("uxncli")
+                .arg("drifblim.rom")
+                .arg(tal_file)
+                .arg(rom_path)
+                .output()
+        } else {
+            Command::new("wsl")
+                .arg("uxncli")
+                .arg("drifblim.rom")
+                .arg(tal_file)
+                .arg(rom_path)
+                .output()
+        }
+        .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
+fn detect_wsl() -> bool {
+    std::env::var("WSL_DISTRO_NAME").is_ok()
+        || std::env::var("WSLENV").is_ok()
+        || (Path::new("/proc/version").exists()
+            && fs::read_to_string("/proc/version")
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains("microsoft"))
+}
+
+fn spawn_cmd(cmd: &str, args: &[&str]) -> Result<ExitStatus, AssemblerError> {
+    let in_wsl = detect_wsl();
+    let status = if in_wsl {
+        Command::new(cmd).args(args).status()
+    } else {
+        let mut all = vec![cmd];
+        all.extend(args);
+        Command::new("wsl").args(all).status()
+    }
+    .map_err(|e| syntax_err("", &format!("Failed to spawn {cmd}: {e}")))?;
+    Ok(status)
+}
+
+fn run_vm_path(rom_path: &str) -> Result<String, AssemblerError> {
+    let in_wsl = detect_wsl();
+    let output = if in_wsl {
+        Command::new("uxncli").arg(rom_path).output()
+    } else {
+        Command::new("wsl").arg("uxncli").arg(rom_path).output()
+    }
+    .map_err(|e| syntax_err(rom_path, &format!("uxncli failed: {e}")))?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn run_vm_last(bytes: &[u8]) -> Result<String, AssemblerError> {
+    let tmp = ".__temp_uxntal_exec.rom";
+    fs::write(tmp, bytes).map_err(|e| io_err(tmp, e))?;
+    let out = run_vm_path(tmp)?;
+    let _ = fs::remove_file(tmp);
+    Ok(out)
+}
+
+fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
+    let sym = format!("{rom_path}.sym");
+    if Path::new(&sym).exists() {
+        let _ = fs::remove_file(&sym);
+    }
+    let in_wsl = detect_wsl();
+    let output = if in_wsl {
+        Command::new("uxncli")
+            .arg("uxndis.rom")
+            .arg(rom_path)
+            .output()
+    } else {
+        Command::new("wsl")
+            .arg("uxncli")
+            .arg("uxndis.rom")
+            .arg(rom_path)
+            .output()
+    }
+    .map_err(|e| syntax_err(rom_path, &format!("uxndis failed: {e}")))?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn syntax_err(path: &str, msg: &str) -> AssemblerError {
+    AssemblerError::SyntaxError {
+        path: path.to_string(),
+        line: 0,
+        position: 0,
+        message: msg.to_string(),
+        source_line: String::new(),
+    }
+}
+
+fn io_err(path: &str, e: std::io::Error) -> AssemblerError {
+    syntax_err(path, &format!("IO error: {e}"))
 }
 
 pub struct DebugAssembler;
@@ -24,191 +213,87 @@ impl Default for DebugAssembler {
 }
 
 impl DebugAssembler {
-    pub fn assemble(
-        &self,
-        tal_file: &str,
-        tal_source: &str,
-    ) -> Result<(String, String, Vec<u8>, Vec<u8>, String, String, String, String), AssemblerError> {
-        let _tal_file_name = Path::new(tal_file)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-
-        let mut assembler = Assembler::new();
-        let rom = match assembler.assemble(tal_source, Some(tal_file.to_owned())) {
-            Ok(rom) => rom,
-            Err(e) => {
-                eprintln!("Rust assembler error: {:?}", e);
-                Vec::new()
-            }
-        };
-        let wsl_tal_file = tal_file.replace("\\", "/");
-        let rust_rom_path = format!("{}_compare.rom", tal_file);
-        fs::write(&rust_rom_path, &rom)?;
-
-        // Detect if we're already in WSL environment
-        let in_wsl = std::env::var("WSL_DISTRO_NAME").is_ok()
-            || std::env::var("WSLENV").is_ok()
-            || Path::new("/proc/version").exists()
-                && fs::read_to_string("/proc/version")
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    .contains("microsoft");
-
-        // WSL uxnasm
-        let wsl_rom_path = format!("{}_wsl.rom", wsl_tal_file);
-        let wsl_file_name = Path::new(&wsl_rom_path)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-
-        let status = if in_wsl {
-            Command::new("uxnasm")
-                .arg("--verbose")
-                .arg(&wsl_tal_file)
-                .arg(&wsl_rom_path)
-                .status()?
-        } else {
-            Command::new("wsl")
-                .arg("uxnasm")
-                .arg("--verbose")
-                .arg(&wsl_tal_file)
-                .arg(&wsl_rom_path)
-                .status()?
-        };
-
-        println!(
-            "Ran command: {} uxnasm --verbose {} {}",
-            if in_wsl { "" } else { "wsl " },
-            wsl_tal_file,
-            wsl_file_name
-        );
-        println!("Status: {}", status);
-        let rust_rom_bytes = fs::read(&rust_rom_path).unwrap_or_default();
-        let wsl_rom_bytes = fs::read(&wsl_rom_path).unwrap_or_default();
-
-        // uxncli run
-        let run_rom = |rom_path: &str| -> Result<String, std::io::Error> {
-            let output = if in_wsl {
-                Command::new("uxncli").arg(rom_path).output()?
-            } else {
-                Command::new("wsl").arg("uxncli").arg(rom_path).output()?
-            };
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        };
-        let rust_output = run_rom(&rust_rom_path).unwrap_or_default();
-        let wsl_output = run_rom(&wsl_rom_path).unwrap_or_default();
-
-        // uxncli uxndis.rom -- <rom>
-        let run_dis = |rom_path: &str| -> Result<String, std::io::Error> {
-            let sym_path = format!("{}.sym", rom_path);
-            if Path::new(&sym_path).exists() {
-                let _ = fs::remove_file(&sym_path);
-            }
-            let output = if in_wsl {
-                Command::new("uxncli")
-                    .arg("uxndis.rom")
-                    .arg(rom_path)
-                    .output()?
-            } else {
-                Command::new("wsl")
-                    .arg("uxncli")
-                    .arg("uxndis.rom")
-                    .arg(rom_path)
-                    .output()?
-            };
-            println!(
-                "Ran command: {} uxncli uxndis.rom {}",
-                if in_wsl { "" } else { "wsl " },
-                rom_path
-            );
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        };
-
-        let rust_dis_output = run_dis(&rust_rom_path.replace("\\", "/")).unwrap_or_default();
-        let wsl_dis_output = run_dis(&wsl_rom_path).unwrap_or_default();
-
-        Ok((
-            rust_rom_path,
-            wsl_rom_path,
-            rust_rom_bytes,
-            wsl_rom_bytes,
-            rust_output,
-            wsl_output,
-            rust_dis_output,
-            wsl_dis_output,
-        ))
-    }
-
-    pub fn compare(
-        &self,
-        rust_dis_output: &str,
-        wsl_dis_output: &str,
-    ) -> Option<(usize, String, String)> {
-        // Find first line of difference in disassembly output
-        let mut first_line_difference_dis = None;
-        for (i, (r, w)) in rust_dis_output
-            .lines()
-            .zip(wsl_dis_output.lines())
-            .enumerate()
-        {
-            if r != w {
-                first_line_difference_dis = Some((i + 1, r.to_string(), w.to_string()));
-                break;
-            }
-        }
-        // If one output is longer, report the first extra line
-        if first_line_difference_dis.is_none() {
-            let rust_lines = rust_dis_output.lines().count();
-            let wsl_lines = wsl_dis_output.lines().count();
-            if rust_lines > wsl_lines {
-                if let Some(extra) = rust_dis_output.lines().nth(wsl_lines) {
-                    first_line_difference_dis =
-                        Some((wsl_lines + 1, extra.to_string(), String::new()));
-                }
-            } else if wsl_lines > rust_lines {
-                if let Some(extra) = wsl_dis_output.lines().nth(rust_lines) {
-                    first_line_difference_dis =
-                        Some((rust_lines + 1, String::new(), extra.to_string()));
-                }
-            }
-        }
-        first_line_difference_dis
-    }
-
     pub fn assemble_and_compare(
         &self,
         tal_file: &str,
         tal_source: &str,
     ) -> Result<DebugAssembleResult, AssemblerError> {
-        let (
-            rust_rom_path,
-            wsl_rom_path,
-            rust_rom_bytes,
-            wsl_rom_bytes,
-            rust_output,
-            wsl_output,
-            rust_dis_output,
-            wsl_dis_output,
-        ) = self.assemble(tal_file, tal_source)?;
+        let backends: Vec<Box<dyn AssemblerBackend>> = vec![
+            Box::new(UxntalBackend),
+            Box::new(UxnasmBackend),
+            Box::new(DrifblimBackend),
+        ];
+        let mut uxntal = None;
+        let mut uxnasm = None;
+        let mut drif = None;
+        let mut backend_errors = Vec::new();
 
-        let first_line_difference_dis = self.compare(&rust_dis_output, &wsl_dis_output);
+        for b in backends {
+            match b.assemble(tal_file, tal_source) {
+                Ok(out) => match b.name() {
+                    "uxntal" => uxntal = Some(out),
+                    "uxnasm" => uxnasm = Some(out),
+                    "drifblim" => drif = Some(out),
+                    _ => {}
+                },
+                Err(e) => backend_errors.push((b.name().to_string(), e.to_string())),
+            }
+        }
+
+        let uxntal = uxntal.ok_or_else(|| syntax_err(tal_file, "uxntal backend failed"))?;
+        let uxnasm = uxnasm.unwrap_or_default();
+        let drif = drif.unwrap_or_default();
+
+        let diff_uxntal_uxnasm = if !uxnasm.rom_path.is_empty() {
+            diff_first(&uxntal.disassembly, &uxnasm.disassembly)
+        } else {
+            None
+        };
+        let diff_uxntal_drifblim = if !drif.rom_path.is_empty() {
+            diff_first(&uxntal.disassembly, &drif.disassembly)
+        } else {
+            None
+        };
+        let diff_uxnasm_drifblim = if !uxnasm.rom_path.is_empty() && !drif.rom_path.is_empty() {
+            diff_first(&uxnasm.disassembly, &drif.disassembly)
+        } else {
+            None
+        };
 
         Ok(DebugAssembleResult {
-            rust_rom_path,
-            wsl_rom_path,
-            rust_rom_bytes,
-            wsl_rom_bytes,
-            rust_output,
-            wsl_output,
-            rust_dis_output,
-            wsl_dis_output,
-            first_line_difference_dis,
+            uxntal_rom_path: uxntal.rom_path,
+            uxnasm_rom_path: uxnasm.rom_path,
+            drifblim_rom_path: drif.rom_path,
+            uxntal_rom_bytes: uxntal.rom_bytes,
+            uxnasm_rom_bytes: uxnasm.rom_bytes,
+            drifblim_rom_bytes: drif.rom_bytes,
+            uxntal_output: uxntal.stdout,
+            uxnasm_output: uxnasm.stdout,
+            drifblim_output: drif.stdout,
+            uxntal_dis_output: uxntal.disassembly,
+            uxnasm_dis_output: uxnasm.disassembly,
+            drifblim_dis_output: drif.disassembly,
+            diff_uxntal_uxnasm,
+            diff_uxntal_drifblim,
+            diff_uxnasm_drifblim,
+            backend_errors,
         })
     }
-    
+}
+
+fn diff_first(a: &str, b: &str) -> Option<(usize, String, String)> {
+    for (i, (la, lb)) in a.lines().zip(b.lines()).enumerate() {
+        if la != lb {
+            return Some((i + 1, la.to_string(), lb.to_string()));
+        }
+    }
+    let ac = a.lines().count();
+    let bc = b.lines().count();
+    if ac > bc {
+        a.lines().nth(bc).map(|extra| (bc + 1, extra.to_string(), String::new()))
+    } else if bc > ac {
+        b.lines().nth(ac).map(|extra| (ac + 1, String::new(), extra.to_string()))
+    } else {
+        None
+    }
 }

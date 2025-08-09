@@ -39,11 +39,13 @@ pub enum Token {
     JSRRef(String),
     /// Hyphen address reference (e.g., -Screen/auto)
     HyphenRef(String),
-    /// Padding directive (e.g., |0100)
+    /// Padding directive (absolute) |ADDR
     Padding(u16),
     PaddingLabel(String),
-    /// Skip bytes directive (e.g., $2)
-    Skip(u16),
+    /// Relative padding (was Skip): $HEX means advance current address by HEX bytes
+    RelativePadding(u16),
+    /// Relative padding to label: $label sets ptr = current + label.addr
+    RelativePaddingLabel(String),
     /// Device access (e.g., .Screen/width)
     DeviceAccess(String, String), // device, field
 
@@ -230,10 +232,10 @@ impl Lexer {
                     };
 
                     // Debug print for position tracking
-                    println!(
-                        "DEBUG: token={:?} line={} start_pos={} end_pos={} position={} position_on_line={}",
-                        token, start_line, start_pos, token_end_pos, self.position, self.position_on_line
-                    );
+                    // println!(
+                    //     "DEBUG: token={:?} line={} start_pos={} end_pos={} position={} position_on_line={}",
+                    //     token, start_line, start_pos, token_end_pos, self.position, self.position_on_line
+                    // );
                     tokens.push(TokenWithPos {
                         token,
                         line: start_line,
@@ -447,7 +449,7 @@ impl Lexer {
             return self.read_identifier();
         }
         // Debug: print what we read to see if it's being truncated
-        eprintln!("DEBUG: read_identifier result: '{}'", result);
+        // eprintln!("DEBUG: read_identifier result: '{}'", result);
         // If we returned "" above, result will be empty, so skip error
         if result.is_empty() {
             // If we just parsed "", treat as CharLiteral('"')
@@ -808,6 +810,24 @@ impl Lexer {
                 Ok(Token::UnderscoreRef(label))
             }
             '-' => {
+                // // Lookahead: treat 8+ consecutive '-' followed by whitespace/EOF as a separator comment.
+                // let mut look = self.position;
+                // let mut count = 0;
+                // while look < self.input.len()
+                //     && self.input.chars().nth(look) == Some('-')
+                // {
+                //     count += 1;
+                //     look += 1;
+                // }
+                // let next_ch = self.input.chars().nth(look).unwrap_or('\0');
+                // if count >= 8 && (next_ch == '\0' || next_ch.is_whitespace()) {
+                //     // Consume all the dashes.
+                //     for _ in 0..count {
+                //         self.advance();
+                //     }
+                //     return Ok(Token::Comment("-".repeat(count)));
+                // }
+                // Normal hyphen reference
                 self.advance();
                 let identifier = self.read_identifier()?;
                 Ok(Token::HyphenRef(identifier))
@@ -864,8 +884,27 @@ impl Lexer {
             '<' => {
                 self.advance();
                 let macro_name = self.read_macro_call()?;
-                // Ok(Token::MacroCall(macro_name)) // <-- REMOVE THIS LINE
-                Ok(Token::LabelRef(format!("<{}>", macro_name))) // Always treat <name> as LabelRef
+                // NEW: allow immediate "/sublabel" after closing '>' (e.g., <phex>/b)
+                let mut full = format!("<{}>", macro_name);
+                if self.current_char() == '/' {
+                    self.advance();
+                    // read sublabel segment (stop at whitespace or rune delimiters)
+                    let mut sub = String::new();
+                    while self.position < self.input.len() {
+                        let ch = self.current_char();
+                        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                            sub.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    if !sub.is_empty() {
+                        full.push('/');
+                        full.push_str(&sub);
+                    }
+                }
+                Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
             }
             _ if ch.is_ascii_digit() => {
                 let number = self.read_hex_number()?;
@@ -911,15 +950,15 @@ impl Lexer {
             }
             '$' => {
                 self.advance();
-                let skip_value = self.read_identifier()?;
-                // Parse as hex value for skip count
-                if skip_value.chars().all(|c| c.is_ascii_hexdigit()) {
-                    let count = u16::from_str_radix(&skip_value, 16)
-                        .map_err(|_| self.syntax_error("Invalid skip count".to_string()))?;
-                    Ok(Token::Skip(count))
+                let val = self.read_identifier()?;
+                if val.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // relative hex padding
+                    let count = u16::from_str_radix(&val, 16)
+                        .map_err(|_| self.syntax_error("Invalid relative padding value".to_string()))?;
+                    Ok(Token::RelativePadding(count))
                 } else {
-                    // Could be a label-based skip, but for now treat as error
-                    Err(self.syntax_error("Skip directive requires hex value".to_string()))
+                    // relative padding to label
+                    Ok(Token::RelativePaddingLabel(val))
                 }
             }
             '%' => {
@@ -929,9 +968,14 @@ impl Lexer {
             }
             '&' => {
                 self.advance();
+                // NEW: Support bare '&' (no identifier) to define an empty sublabel (parent/)
+                let next = self.current_char();
+                if next == '\n' || next == '\0' || next.is_whitespace() || next == ')' || next == ']' || next == '}' {
+                    // Treat as empty sublabel definition
+                    return Ok(Token::SublabelDef(String::new()));
+                }
                 let sublabel = self.read_identifier()?;
                 // In uxnasm.c, '&' always creates a sublabel definition (makelabel)
-                // Comma references use ',' prefix, not '&'
                 Ok(Token::SublabelDef(sublabel))
             }
             _ => Err(self.syntax_error(format!("Unexpected character: '{}'", ch))),
