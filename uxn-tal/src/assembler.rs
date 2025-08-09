@@ -28,6 +28,7 @@ pub struct Symbol {
 pub struct Assembler {
     opcodes: Opcodes,
     symbols: HashMap<String, Symbol>,
+    symbol_order: Vec<String>, // preserve insertion order like uxnasm
     macros: HashMap<String, Macro>,
     current_label: Option<String>,
     references: Vec<Reference>,
@@ -38,6 +39,7 @@ pub struct Assembler {
     //lambda_counter: u16, // Add lambda counter as a field
     lambda_counter: usize,
     lambda_stack: Vec<usize>,
+    last_top_label: Option<String>, // remember last top-level label to scope stray sublabels
 }
 
 /// Represents a forward reference that needs to be resolved
@@ -56,18 +58,17 @@ impl Assembler {
     /// Generate symbol file content in binary format
     /// Format: [address:u16][name:null-terminated string] repeating
     pub fn generate_symbol_file(&self) -> Vec<u8> {
-        let mut symbols: Vec<_> = self.symbols.iter().collect();
-        symbols.sort_by_key(|(_, symbol)| symbol.address);
-        let mut output = Vec::new();
-        for (name, symbol) in symbols {
-            // Write address as big-endian u16 (C code: hb first, then lb)
-            output.push((symbol.address >> 8) as u8); // high byte
-            output.push((symbol.address & 0xff) as u8); // low byte
-                                                        // Write name as null-terminated string
-            output.extend_from_slice(name.as_bytes());
-            output.push(0); // null terminator
+        // Match uxnasm: emit in insertion order, not sorted.
+        let mut out = Vec::new();
+        for name in &self.symbol_order {
+            if let Some(sym) = self.symbols.get(name) {
+                out.push((sym.address >> 8) as u8);
+                out.push((sym.address & 0xff) as u8);
+                out.extend_from_slice(name.as_bytes());
+                out.push(0);
+            }
         }
-        output
+        out
     }
 
 
@@ -104,6 +105,7 @@ impl Assembler {
         Self {
             opcodes: Opcodes::new(),
             symbols: HashMap::new(),
+            symbol_order: Vec::new(),
             macros: HashMap::new(),
             current_label: None,
             references: Vec::new(),
@@ -113,6 +115,15 @@ impl Assembler {
             effective_length: 0,
 lambda_counter: 0,
 lambda_stack: Vec::new(),
+last_top_label: None,
+        }
+    }
+
+    /// Insert symbol preserving first-seen address and append to ordered list (no overwrite).
+    fn insert_symbol_if_new(&mut self, name: &str, sym: Symbol) {
+        if !self.symbols.contains_key(name) {
+            self.symbols.insert(name.to_string(), sym);
+            self.symbol_order.push(name.to_string());
         }
     }
 
@@ -125,13 +136,15 @@ lambda_stack: Vec::new(),
     pub fn assemble(&mut self, source: &str, path: Option<String>) -> Result<Vec<u8>> {
         // Clear previous state
         self.symbols.clear();
+        self.symbol_order.clear();
         self.current_label = None;
         self.references.clear();
         self.device_map.clear();
         self.line_number = 0;
         self.position_in_line = 0;
         self.effective_length = 0; // Reset effective length
-        self.lambda_counter = 0; // Reset lambda counter
+        self.lambda_counter = 0; // Reset lambda counter (start at 1 to avoid λ0)
+        self.last_top_label = None;
 
         // Tokenize
         let mut lexer = Lexer::new(source.to_string(), path.clone());
@@ -255,23 +268,16 @@ lambda_stack: Vec::new(),
                         source_line: String::new(),
                     });
                 }
-                self.symbols.insert(name.clone(), Symbol {
+                self.insert_symbol_if_new(&name, Symbol {
                     address: addr,
                     is_sublabel: false,
                     parent_label: None
                 });
             }
             AstNode::Padding(pad_addr) => {
-                // If this is a |xxxx padding (not $xx skip), reset scope if at or above 0x0100
-                if *pad_addr >= 0x0100 {
-                    // Reset label scope after device header or |0100, like uxnasm
-                    // But also allow sublabels to be defined at the start of a file (before any label)
-                    if self.current_label.is_none() {
-                        // Allow sublabels at the very start (e.g., device headers)
-                        self.current_label = Some(String::new());
-                    } else {
-                        self.current_label = None;
-                    }
+                // Only clear scope on the very first |0100 (match drifblim keeping scope afterwards)
+                if *pad_addr == 0x0100 && self.last_top_label.is_none() {
+                    self.current_label = None;
                 }
                 rom.pad_to(*pad_addr)?;
             }
@@ -432,23 +438,18 @@ lambda_stack: Vec::new(),
                 self.update_effective_length(rom);
             }
             AstNode::LabelDef(label) => {
-                // NOTE: The label should be defined at the current ROM position,
-                // which should be AFTER all code/data that precede it.
-                // If this is the last label in the file, it should point to the address
-                // after the last byte written (i.e., rom.position()).
-                // If you emit the label before writing the last data, you may need to add 1.
                 if !self.symbols.contains_key(label) {
-                    let address = rom.position(); // <-- FIX: remove special case for "program"
-                    self.symbols.insert(
-                        label.clone(),
-                        Symbol {
-                            address,
-                            is_sublabel: label.contains('/'),
-                            parent_label: label.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
-                        },
-                    );
+                    let address = rom.position();
+                    self.insert_symbol_if_new(label, Symbol {
+                        address,
+                        is_sublabel: label.contains('/'),
+                        parent_label: label.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
+                    });
                 }
+                // Track full current label; also store its top-level base for later stray sublabels
                 self.current_label = Some(label.clone());
+                let top = label.split('/').next().unwrap_or(label).to_string();
+                self.last_top_label = Some(top);
                 eprintln!(
                     "DEBUG: Defined label '{}' at address {:04X}",
                     label,
@@ -456,39 +457,46 @@ lambda_stack: Vec::new(),
                 );
             }
             AstNode::SublabelDef(sublabel) => {
-                // --- FIX: Always register sublabel as <main_label>/<sublabel> ---
-                let full_name = if let Some(ref parent) = self.current_label {
-                    // If current_label is empty or whitespace, treat as global sublabel (for device headers)
-                    if parent.trim().is_empty() {
-                        sublabel.clone()
+                // If current_label lost due to padding but we have a remembered last_top_label, use it.
+                let parent_scope = if let Some(ref cur) = self.current_label {
+                    if cur.trim().is_empty() {
+                        None
                     } else {
-                        // Use only the main label (before first '/')
-                        let main_label = if let Some(slash) = parent.find('/') {
-                            &parent[..slash]
-                        } else {
-                            parent.as_str()
-                        };
-                        format!("{}/{}", main_label, sublabel)
+                        let main = cur.split('/').next().unwrap_or(cur);
+                        Some(main.to_string())
                     }
                 } else {
-                    // If no current_label, treat as global sublabel (for device headers)
+                    self.last_top_label.clone()
+                };
+                let full_name = if let Some(parent) = parent_scope {
+                    format!("{}/{}", parent, sublabel)
+                } else {
                     sublabel.clone()
                 };
                 if !self.symbols.contains_key(&full_name) {
-                    self.symbols.insert(
-                        full_name.clone(),
-                        Symbol {
-                            address: rom.position(),
-                            is_sublabel: true,
-                            parent_label: if full_name.contains('/') {
-                                Some(full_name[..full_name.rfind('/').unwrap()].to_string())
-                            } else {
-                                None
-                            },
-                        },
-                    );
+                    let parent = if full_name.contains('/') {
+                        Some(full_name[..full_name.rfind('/').unwrap()].to_string())
+                    } else { None };
+                    self.insert_symbol_if_new(&full_name, Symbol {
+                        address: rom.position(),
+                        is_sublabel: true,
+                        parent_label: parent.clone(),
+                    });
+                    // Reorder: if parent label exists at same address, move parent after sublabel
+                    if let Some(parent_name) = parent {
+                        if let (Some(parent_sym), Some(subl_sym)) =
+                            (self.symbols.get(&parent_name), self.symbols.get(&full_name))
+                        {
+                            if parent_sym.address == subl_sym.address {
+                                // remove parent then push to end (sublabel now precedes)
+                                if let Some(idx) = self.symbol_order.iter().position(|n| n == &parent_name) {
+                                    let parent_entry = self.symbol_order.remove(idx);
+                                    self.symbol_order.push(parent_entry);
+                                }
+                            }
+                        }
+                    }
                 }
-                // Do NOT update current_label for sublabels (matches uxnasm setscope=0)
                 eprintln!(
                     "DEBUG: Defined sublabel '{}' at address {:04X}",
                     full_name,
@@ -496,7 +504,33 @@ lambda_stack: Vec::new(),
                 );
             }
             AstNode::ExclamationRef(tok) => {
-                // !label: opcode 0x40, rune '!', relative word placeholder (not JSR!)
+                // Special-case !{  (lambda call + definition)
+                if let crate::lexer::Token::ExclamationRef(s) = &tok.token {
+                    if s == "{" {
+                        // allocate lambda id
+                        let id = self.lambda_counter;
+                        self.lambda_counter += 1;
+                        self.lambda_stack.push(id);
+                        let name = format_lambda_label(id);
+                        // reference (rune '!')
+                        self.references.push(Reference {
+                            name: name,
+                            rune: '!',
+                            address: rom.position() + 1,
+                            line: tok.line,
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            scope: tok.scope.clone(),
+                            token: Some(tok.clone()),
+                        });
+                        // emit opcode + placeholder (same as normal !label)
+                        rom.write_byte(0x40)?;
+                        self.update_effective_length(rom);
+                        rom.write_short(0xffff)?;
+                        self.update_effective_length(rom);
+                        return Ok(());
+                    }
+                }
+                // Normal handling for !label
                 let label = match &tok.token {
                     crate::lexer::Token::ExclamationRef(s) => s.clone(),
                     _ => return Err(AssemblerError::SyntaxError {
@@ -510,18 +544,12 @@ lambda_stack: Vec::new(),
                 let resolved_name = if label.starts_with('/') {
                     let clean_label = &label[1..];
                     if let Some(ref scope) = tok.scope {
-                        let main_scope = if let Some(slash_pos) = scope.find('/') {
-                            &scope[..slash_pos]
-                        } else {
-                            scope
-                        };
+                        let main_scope = if let Some(slash_pos) = scope.find('/') { &scope[..slash_pos] } else { scope };
                         format!("{}/{}", main_scope, clean_label)
                     } else {
                         clean_label.to_string()
                     }
-                } else {
-                    label
-                };
+                } else { label };
                 self.references.push(Reference {
                     name: resolved_name,
                     rune: '!',
@@ -531,346 +559,14 @@ lambda_stack: Vec::new(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x40)?; // !label: opcode 0x40 (not JSR)
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?; // relative word placeholder
-                self.update_effective_length(rom);
-            }
-
-            AstNode::SublabelRef(tok) => {
-                let sublabel = match &tok.token {
-                    crate::lexer::Token::SublabelRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected SublabelRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                let full_name = if let Some(ref parent) = self.current_label {
-                    format!("{}/{}", parent, sublabel)
-                } else {
-                    return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Sublabel reference outside of label scope".to_string(),
-                        source_line: String::new(),
-                    });
-                };
-                self.references.push(Reference {
-                    name: full_name,
-                    rune: '_',
-                    address: rom.position(),
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0xff)?;
-            }
-            AstNode::RelativeRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::RelativeRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected RelativeRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '/',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x60)?;
-                rom.write_short(0xffff)?;
-            }
-            AstNode::ConditionalRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::ConditionalRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected ConditionalRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '?',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x20)?;
-                rom.write_short(0xffff)?;
-            }
-            AstNode::DotRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::DotRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected DotRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '.',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x80)?;
-                self.update_effective_length(rom);
-                rom.write_byte(0xff)?;
-                self.update_effective_length(rom);
-            }
-            AstNode::SemicolonRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::SemicolonRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected SemicolonRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: ';',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0xa0)?;
+                rom.write_byte(0x40)?;
                 self.update_effective_length(rom);
                 rom.write_short(0xffff)?;
                 self.update_effective_length(rom);
-            }
-            AstNode::EqualsRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::EqualsRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected EqualsRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '=',
-                    address: rom.position(),
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
-            }
-            AstNode::CommaRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::CommaRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected CommaRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: ',',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x80)?;
-                self.update_effective_length(rom);
-                rom.write_byte(0xff)?;
-                self.update_effective_length(rom);
-            }
-            AstNode::UnderscoreRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::UnderscoreRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected UnderscoreRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '_',
-                    address: rom.position(),
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0xff)?;
-                self.update_effective_length(rom);
-            }
-            AstNode::QuestionRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::QuestionRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected QuestionRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '?',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x20)?;
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
-            }
-            AstNode::ExclamationRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::ExclamationRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected ExclamationRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                let resolved_name = if label.starts_with('/') {
-                    let clean_label = &label[1..];
-                    if let Some(ref scope) = tok.scope {
-                        let main_scope = if let Some(slash_pos) = scope.find('/') {
-                            &scope[..slash_pos]
-                        } else {
-                            scope
-                        };
-                        format!("{}/{}", main_scope, clean_label)
-                    } else {
-                        clean_label.to_string()
-                    }
-                } else {
-                    label
-                };
-                self.references.push(Reference {
-                    name: resolved_name,
-                    rune: '!',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x40)?; // !label: opcode 0x40 (not JSR)
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?; // relative word placeholder
-                self.update_effective_length(rom);
-            }
-            AstNode::RawAddressRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::RawAddressRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected RawAddressRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '=',
-                    address: rom.position(),
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_short(0xffff)?;
-            }
-            AstNode::JSRRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::JSRRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected JSRRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '!',
-                    address: rom.position() + 1,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0x60)?;
-                rom.write_short(0xffff)?;
-            }
-            AstNode::HyphenRef(tok) => {
-                let label = match &tok.token {
-                    crate::lexer::Token::HyphenRef(s) => s.clone(),
-                    _ => return Err(AssemblerError::SyntaxError {
-                        path: path.clone(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: "Expected HyphenRef".to_string(),
-                        source_line: String::new(),
-                    }),
-                };
-                self.references.push(Reference {
-                    name: label,
-                    rune: '-',
-                    address: rom.position(),
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
-                });
-                rom.write_byte(0xff)?;
             }
             AstNode::PaddingLabel(tok) => {
-                let label = match &tok.token {
+                // existing absolute padding by label (add support for leading '/' relative)
+                let raw = match &tok.token {
                     crate::lexer::Token::PaddingLabel(s) => s.clone(),
                     _ => return Err(AssemblerError::SyntaxError {
                         path: path.clone(),
@@ -880,6 +576,26 @@ lambda_stack: Vec::new(),
                         source_line: String::new(),
                     }),
                 };
+                // --- PATCH: resolve &name as sublabel of current label, like uxnasm ---
+                let label = if raw.starts_with('/') {
+                    // Resolve /name relative to main scope
+                    self.resolve_relative_label(&raw, tok.scope.as_ref().or(self.current_label.as_ref()))
+                } else if raw.starts_with('&') {
+                    // Resolve as sublabel of current label's main scope
+                    if let Some(ref parent) = self.current_label {
+                        let sublabel = &raw[1..];
+                        let main_label = if let Some(slash) = parent.find('/') {
+                            &parent[..slash]
+                        } else {
+                            parent.as_str()
+                        };
+                        format!("{}/{}", main_label, sublabel)
+                    } else {
+                        raw.clone()
+                    }
+                } else {
+                    raw
+                };
                 if let Some(symbol) = self.symbols.get(&label) {
                     rom.pad_to(symbol.address)?;
                 } else {
@@ -888,17 +604,38 @@ lambda_stack: Vec::new(),
                         line: self.line_number,
                         position: self.position_in_line,
                         message: format!("Padding label '{}' not found", label),
-                        source_line: rom
-                            .source()
-                            .map(|s| s.lines().nth(self.line_number).unwrap_or("").to_string())
-                            .unwrap_or_default(),
+                        source_line: String::new(),
                     });
                 }
             }
-            AstNode::Skip(count) => {
-                for _ in 0..*count {
-                    rom.write_byte(0)?;
-                    // Don't update effective length for zero bytes
+            AstNode::RelativePadding(count) => {
+                // $HHHH : advance pointer by hex bytes (relative)
+                let new_addr = rom.position() as u16 + count;
+                rom.pad_to(new_addr)?;
+            }
+            AstNode::RelativePaddingLabel(tok) => {
+                // $label : ptr = current + label.addr (label must exist already)
+                let raw = match &tok.token {
+                    crate::lexer::Token::RelativePaddingLabel(s) => s.clone(),
+                    _ => unreachable!("Token/Ast mismatch for RelativePaddingLabel"),
+                };
+                let label_name = if raw.starts_with('/') {
+                    self.resolve_relative_label(&raw, tok.scope.as_ref().or(self.current_label.as_ref()))
+                } else {
+                    raw
+                };
+                let cur = rom.position() as u16;
+                if let Some(sym) = self.symbols.get(&label_name) {
+                    let new_addr = cur.wrapping_add(sym.address);
+                    rom.pad_to(new_addr)?;
+                } else {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: tok.start_pos,
+                        message: format!("Relative padding label '{}' not found", label_name),
+                        source_line: String::new(),
+                    });
                 }
             }
             AstNode::MacroDef(name, body) => {
@@ -964,6 +701,455 @@ lambda_stack: Vec::new(),
                 let saved_label = self.current_label.clone();
                 self.process_include(path, rom)?;
                 self.current_label = saved_label;
+            }
+            AstNode::LambdaStart(tok) => {
+                // Standalone '{' lambda:
+                // 1) allocate id
+                let id = self.lambda_counter;
+                self.lambda_counter += 1;
+                self.lambda_stack.push(id);
+                let name = format_lambda_label(id);
+                // 2) create JSR reference (space rune) at ptr+1
+                self.references.push(Reference {
+                    name: name.clone(),
+                    rune: ' ',               // same rune as unknown token (JSR)
+                    address: (rom.position() + 1) as u16,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x60)?;       // JSR opcode
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?;    // placeholder relative word
+                self.update_effective_length(rom);
+                // Code of lambda body now follows; label defined at LambdaEnd
+            }
+            AstNode::LambdaEnd(tok) => {
+                // Define lambda label at current position.
+                let id = match self.lambda_stack.pop() {
+                    Some(id) => id,
+                    None => {
+                        return Err(AssemblerError::SyntaxError {
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            line: tok.line,
+                            position: 0,
+                            message: "Unmatched '}' (lambda)".to_string(),
+                            source_line: String::new(),
+                        });
+                    }
+                };
+                let name = format_lambda_label(id);
+                if self.symbols.contains_key(&name) {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: 0,
+                        message: format!("Duplicate lambda label {}", name),
+                        source_line: String::new(),
+                    });
+                }
+                self.insert_symbol_if_new(&name, Symbol {
+                    address: rom.position() as u16,
+                    is_sublabel: false,
+                    parent_label: None
+                });
+            }
+            AstNode::SublabelRef(tok) => {
+                let sublabel = match &tok.token {
+                    crate::lexer::Token::SublabelRef(s) => s.clone(),
+                    _ => return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: tok.start_pos,
+                        message: "Expected SublabelRef".to_string(),
+                        source_line: String::new(),
+                    }),
+                };
+                let full_name = if let Some(ref parent) = self.current_label {
+                    format!("{}/{}", parent, sublabel)
+                } else {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: tok.start_pos,
+                        message: "Sublabel reference outside of label scope".to_string(),
+                        source_line: String::new(),
+                    });
+                };
+                self.references.push(Reference {
+                    name: full_name,
+                    rune: '_',
+                    address: rom.position(),
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0xff)?;
+            }
+            AstNode::RelativeRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::RelativeRef(s) => s.clone(),
+                    _ => unreachable!("RelativeRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '/',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x60)?;
+                rom.write_short(0xffff)?;
+            }
+            AstNode::ConditionalRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::ConditionalRef(s) => s.clone(),
+                    _ => unreachable!("ConditionalRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '?',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x20)?;
+                rom.write_short(0xffff)?;
+            }
+            AstNode::RawAddressRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::RawAddressRef(s) => s.clone(),
+                    _ => unreachable!("RawAddressRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '=',
+                    address: rom.position(),
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_short(0xffff)?;
+            }
+            AstNode::JSRRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::JSRRef(s) => s.clone(),
+                    _ => unreachable!("JSRRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '!',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x60)?;
+                rom.write_short(0xffff)?;
+            }
+            AstNode::HyphenRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::HyphenRef(s) => s.clone(),
+                    _ => unreachable!("HyphenRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '-',
+                    address: rom.position(),
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0xff)?;
+            }
+            AstNode::DotRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::DotRef(s) => s.clone(),
+                    _ => unreachable!("DotRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '.',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x80)?;
+                self.update_effective_length(rom);
+                rom.write_byte(0xff)?;
+                self.update_effective_length(rom);
+            }
+            AstNode::SemicolonRef(tok) => {
+                // Special-case ;{ (lambda via LIT2 form)
+                if let crate::lexer::Token::SemicolonRef(s) = &tok.token {
+                    if s == "{" {
+                        let id = self.lambda_counter;
+                        self.lambda_counter += 1;
+                        self.lambda_stack.push(id);
+                        let name = format_lambda_label(id);
+                        self.references.push(Reference {
+                            name,
+                            rune: ';',
+                            address: rom.position() + 1,
+                            line: tok.line,
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            scope: tok.scope.clone(),
+                            token: Some(tok.clone()),
+                        });
+                        rom.write_byte(0xa0)?; // LIT2
+                        self.update_effective_length(rom);
+                        rom.write_short(0xffff)?; // placeholder
+                        self.update_effective_length(rom);
+                        return Ok(());
+                    }
+                }
+                // Normal handling for ;label
+                let label = match &tok.token {
+                    crate::lexer::Token::SemicolonRef(s) => s.clone(),
+                    _ => unreachable!("SemicolonRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: ';',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: path.clone(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0xa0)?; // LIT2 opcode
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?; // Placeholder
+                self.update_effective_length(rom);
+            }
+            AstNode::EqualsRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::EqualsRef(s) => s.clone(),
+                    _ => unreachable!("EqualsRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '=',
+                    address: rom.position(),
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_short(0xffff)?;
+                self.update_effective_length(rom);
+            }
+            AstNode::CommaRef(tok) => {
+                // Special-case ,{ (lambda via LIT + relative byte)
+                if let crate::lexer::Token::CommaRef(s) = &tok.token {
+                    if s == "{" {
+                        let id = self.lambda_counter;
+                        self.lambda_counter += 1;
+                        self.lambda_stack.push(id);
+                        let name = format_lambda_label(id);
+                        self.references.push(Reference {
+                            name,
+                            rune: ',',
+                            address: rom.position() + 1,
+                            line: tok.line,
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            scope: tok.scope.clone(),
+                            token: Some(tok.clone()),
+                        });
+                        rom.write_byte(0x80)?; // LIT
+                        self.update_effective_length(rom);
+                        rom.write_byte(0xff)?; // placeholder byte
+                        self.update_effective_length(rom);
+                        return Ok(());
+                    }
+                }
+                // Normal handling for ,label
+                let label = match &tok.token {
+                    crate::lexer::Token::CommaRef(s) => s.clone(),
+                    _ => unreachable!("CommaRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: ',',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: path.clone(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x80)?; // LIT opcode
+                self.update_effective_length(rom);
+                rom.write_byte(0xff)?; // Placeholder byte
+                self.update_effective_length(rom);
+            }
+            AstNode::UnderscoreRef(tok) => {
+                // Special-case _{ (lambda via relative byte)
+                if let crate::lexer::Token::UnderscoreRef(s) = &tok.token {
+                    if s == "{" {
+                        let id = self.lambda_counter;
+                        self.lambda_counter += 1;
+                        self.lambda_stack.push(id);
+                        let name = format_lambda_label(id);
+                        self.references.push(Reference {
+                            name,
+                            rune: '_',
+                            address: rom.position(),
+                            line: tok.line,
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            scope: tok.scope.clone(),
+                            token: Some(tok.clone()),
+                        });
+                        rom.write_byte(0xff)?; // placeholder byte
+                        self.update_effective_length(rom);
+                        return Ok(());
+                    }
+                }
+                // Normal handling for _label
+                let label = match &tok.token {
+                    crate::lexer::Token::UnderscoreRef(s) => s.clone(),
+                    _ => unreachable!("UnderscoreRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '_',
+                    address: rom.position(),
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0xff)?; // placeholder byte
+                self.update_effective_length(rom);
+            }
+            AstNode::QuestionRef(tok) => {
+                let label = match &tok.token {
+                    crate::lexer::Token::QuestionRef(s) => s.clone(),
+                    _ => unreachable!("QuestionRef token mismatch"),
+                };
+                self.references.push(Reference {
+                    name: label,
+                    rune: '?',
+                    address: rom.position() + 1,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x20)?;
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?;
+                self.update_effective_length(rom);
+            }
+            AstNode::RawString(bytes) => {
+                // Write string data byte by byte, updating effective length for each non-zero byte
+                for &byte in bytes {
+                    rom.write_byte(byte)?;
+                    if byte != 0 {
+                        self.update_effective_length(rom);
+                    }
+                }
+            }
+            AstNode::Include(path) => {
+                // Save/restore current_label around includes
+                let saved_label = self.current_label.clone();
+                self.process_include(path, rom)?;
+                self.current_label = saved_label;
+            }
+            AstNode::LambdaStart(tok) => {
+                // Standalone '{' lambda:
+                // 1) allocate id
+                let id = self.lambda_counter;
+                self.lambda_counter += 1;
+                self.lambda_stack.push(id);
+                let name = format_lambda_label(id);
+                // 2) create JSR reference (space rune) at ptr+1
+                self.references.push(Reference {
+                    name: name.clone(),
+                    rune: ' ',               // same rune as unknown token (JSR)
+                    address: (rom.position() + 1) as u16,
+                    line: tok.line,
+                    path: rom.source_path().cloned().unwrap_or_default(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
+                });
+                rom.write_byte(0x60)?;       // JSR opcode
+                self.update_effective_length(rom);
+                rom.write_short(0xffff)?;    // placeholder relative word
+                self.update_effective_length(rom);
+                // Code of lambda body now follows; label defined at LambdaEnd
+            }
+            AstNode::LambdaEnd(tok) => {
+                // Define lambda label at current position.
+                let id = match self.lambda_stack.pop() {
+                    Some(id) => id,
+                    None => {
+                        return Err(AssemblerError::SyntaxError {
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            line: tok.line,
+                            position: 0,
+                            message: "Unmatched '}' (lambda)".to_string(),
+                            source_line: String::new(),
+                        });
+                    }
+                };
+                let name = format_lambda_label(id);
+                if self.symbols.contains_key(&name) {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: 0,
+                        message: format!("Duplicate lambda label {}", name),
+                        source_line: String::new(),
+                    });
+                }
+                self.insert_symbol_if_new(&name, Symbol {
+                    address: rom.position() as u16,
+                    is_sublabel: false,
+                    parent_label: None
+                });
+            }
+            // duplicate LambdaEnd & ConditionalBlockEnd patterns later in file:
+            // (second occurrence near end)
+            AstNode::LambdaEnd(tok) => {
+                // Define lambda label at current position.
+                let id = match self.lambda_stack.pop() {
+                    Some(id) => id,
+                    None => {
+                        return Err(AssemblerError::SyntaxError {
+                            path: rom.source_path().cloned().unwrap_or_default(),
+                            line: tok.line,
+                            position: 0,
+                            message: "Unmatched '}' (lambda)".to_string(),
+                            source_line: String::new(),
+                        });
+                    }
+                };
+                let name = format_lambda_label(id);
+                if self.symbols.contains_key(&name) {
+                    return Err(AssemblerError::SyntaxError {
+                        path: rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: 0,
+                        message: format!("Duplicate lambda label {}", name),
+                        source_line: String::new(),
+                    });
+                }
+                self.insert_symbol_if_new(&name, Symbol {
+                    address: rom.position() as u16,
+                    is_sublabel: false,
+                    parent_label: None
+                });
             }
         }
         Ok(())
@@ -1300,8 +1486,6 @@ lambda_stack: Vec::new(),
         // --- FIX: Only walk up the scope chain for _ and , runes ---
         // This matches uxnasm's scope resolution for sublabels.
         // We need to know the rune type, so this logic should only be used for those runes.
-        // Instead, move the scope-walk logic out of find_symbol and only use it in second_pass for _ and , runes.
-        // Here, just do direct lookup.
         if let Some(symbol) = self.symbols.get(name) {
             return Some(symbol);
         }
@@ -1381,14 +1565,11 @@ lambda_stack: Vec::new(),
                             };
                             let sublabel = format!("{}/{}", device, field_name);
                             if !self.symbols.contains_key(&sublabel) {
-                                self.symbols.insert(
-                                    sublabel.clone(),
-                                    Symbol {
-                                        address: base_addr + offset,
-                                        is_sublabel: true,
-                                        parent_label: Some(device.clone()),
-                                    },
-                                );
+                                self.insert_symbol_if_new(&sublabel, Symbol {
+                                    address: base_addr + offset,
+                                    is_sublabel: true,
+                                    parent_label: Some(device.clone()),
+                                });
                             }
                             offset += size;
                         }
@@ -1415,9 +1596,26 @@ lambda_stack: Vec::new(),
 
         Ok(())
     }
+
+    // Helper: resolve leading-slash label relative to main scope.
+    // raw: original token (may start with '/')
+    // scope_opt: optional current scope (e.g., from token.scope or current_label)
+    fn resolve_relative_label(&self, raw: &str, scope_opt: Option<&String>) -> String {
+        if !raw.starts_with('/') {
+            return raw.to_string();
+        }
+        let name = &raw[1..];
+        if let Some(scope) = scope_opt {
+            // Main scope is the part before the first '/'
+            let main_scope = if let Some(pos) = scope.find('/') { &scope[..pos] } else { scope };
+            format!("{}/{}", main_scope, name)
+        } else {
+            name.to_string()
+        }
+    }
 }
 
-// Helper to format lambda label (e.g., λ00, λ01, ...)
+// Helper to format lambda label (e.g., λ1, λ2, ... single hex, no leading zero)
 fn format_lambda_label(lambda_id: usize) -> String {
     format!("λ{:02x}", lambda_id)
 }
@@ -1425,6 +1623,5 @@ fn format_lambda_label(lambda_id: usize) -> String {
 impl Default for Assembler {
     fn default() -> Self {
         Self::new()
-
     }
 }

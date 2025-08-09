@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.4...uxn-tal-v0.1.5) - 2025-08-09
+
+### Added
+
+- relativepadding,relativepaddinglabel,bracekind brace_stack. improvements to debug_assemble and batch_assembler.  now most roms assemble!
+
+### Fixed
+
+- adjust label reference handling (MACROS) and enhance comment reading logic in assembler and lexer modules
+
 ## [0.1.4](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.3...uxn-tal-v0.1.4) - 2025-08-08
 
 ### Added

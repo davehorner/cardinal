@@ -3,5 +3,5 @@
 %HELPER { #10 #20 ADD }
 
 @main
-    <HELPER>
+    HELPER
     BRK

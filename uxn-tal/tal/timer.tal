@@ -52,7 +52,6 @@
 		!&<draw>
 	&<draw> ( -- )
 		,&time LDR !<draw-dec>
-dasd#D@
 (
 @|drawing )
 
