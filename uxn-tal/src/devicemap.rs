@@ -129,6 +129,10 @@ pub static DEVICES_DEFAULT: Lazy<Vec<Device>> = Lazy::new(|| {
                     name: "halt".into(),
                     size: 1,
                 },
+                DeviceField {
+                    name: "state".into(),
+                    size: 1,
+                },
             ],
         },
         Device {
@@ -429,7 +433,7 @@ pub static DEVICES_DEFAULT: Lazy<Vec<Device>> = Lazy::new(|| {
         },
         Device {
             address: 0xa0,
-            name: "File0".into(),
+            name: "File".into(),
             fields: vec![
                 DeviceField {
                     name: "vector".into(),

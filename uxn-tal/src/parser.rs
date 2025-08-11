@@ -4,6 +4,7 @@ use crate::error::{AssemblerError, Result};
 use crate::lexer::{Token, TokenWithPos};
 use crate::opcode_table::UXN_OPCODE_TABLE;
 use crate::opcodes::Opcodes;
+use crate::runes::Rune;
 use std::collections::HashMap;
 
 /// Represents a parsed instruction with modes
@@ -31,7 +32,7 @@ pub enum AstNode {
     /// Label definition
     LabelDef(String),
     /// Label reference
-    LabelRef(TokenWithPos),
+    LabelRef{label: String, rune: Rune, token: TokenWithPos},
     /// Sublabel definition
     SublabelDef(String),
     /// Sublabel reference
@@ -60,7 +61,7 @@ pub enum AstNode {
     /// Raw string data
     RawString(Vec<u8>),
     /// Include directive
-    Include(String),
+    Include(TokenWithPos),
     /// Dot reference - generates LIT + 8-bit address (like uxnasm's '.' rune)
     DotRef(TokenWithPos),
     /// Semicolon reference - generates LIT2 + 16-bit address (like uxnasm's ';' rune)  
@@ -94,6 +95,7 @@ pub struct Parser {
     path: String,
     source: String,
     brace_stack: Vec<BraceKind>, // track lambda vs conditional braces
+    macro_table: std::collections::HashSet<String>, // <-- Add macro table
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +105,13 @@ impl Parser {
     pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
         let line = tokens.get(0).map(|t| t.line).unwrap_or(1);
         let position_in_line = tokens.get(0).map(|t| t.start_pos).unwrap_or(1);
+        // Build macro table from tokens
+        let mut macro_table = std::collections::HashSet::new();
+        for t in &tokens {
+            if let Token::MacroDef(ref name) = t.token {
+                macro_table.insert(name.clone());
+            }
+        }
         Self {
             tokens,
             position: 0,
@@ -111,6 +120,7 @@ impl Parser {
             path,
             source,
             brace_stack: Vec::new(),
+            macro_table, // <-- initialize
         }
     }
 
@@ -136,7 +146,7 @@ impl Parser {
                     continue;
                 }
                 Token::Comment(comment) => {
-                    println!("Comment({:?})", comment);
+                    // println!("Comment({:?})", comment);
                     self.advance();
                     continue;
                 }
@@ -147,7 +157,7 @@ impl Parser {
                 }
                 _ => {
                     let node = self.parse_node()?;
-                    println!("{:?}", node);
+                    // println!("{:?}", node);
                     nodes.push(node);
                 }
             }
@@ -171,9 +181,28 @@ impl Parser {
             }
         }
         let token = &self.current_token().token;
+        let path = if self.path.is_empty() { "(input)".to_string() } else { self.path.clone() };
         match token {
+            Token::Word(name) => {
+                // If the word is a macro name, treat it as a macro call
+                let name = name.clone();
+                let line = self.current_token().line;
+                let position = self.current_token().start_pos;
+                if self.is_macro_defined(&name) {
+                    self.advance();
+                    return Ok(AstNode::MacroCall(name, line, position));
+                }
+                Err(AssemblerError::SyntaxError {
+                    path: path.clone(),
+                    line,
+                    position,
+                    message: format!("Unexpected word '{}': not a macro or instruction", name),
+                    source_line: self.get_source_line(line),
+                })
+            }
             Token::HexLiteral(hex) => {
-                let value = self.parse_hex_literal(hex)?;
+                let hex = hex.clone();
+                let value = self.parse_hex_literal(&hex)?;
                 let hex_len = hex.len();
                 self.advance();
                 if hex_len <= 2 {
@@ -190,7 +219,8 @@ impl Parser {
                 if hex_len <= 2 {
                     Ok(AstNode::Byte(value as u8))
                 } else {
-                    Ok(AstNode::Short(value))
+                    // PATCH: always mask to 16 bits for >2 digits
+                    Ok(AstNode::Short(value & 0xffff))
                 }
             }
             Token::DecLiteral(dec) => {
@@ -257,14 +287,18 @@ impl Parser {
                 }
             }
             Token::LabelDef(label) => {
+                // Avoid holding a reference to self across self.advance()
                 let label = label.clone();
                 self.advance();
                 Ok(AstNode::LabelDef(label))
             }
-            Token::LabelRef(_) => {
+            Token::LabelRef(label, rune) => {
+                // Clone the values before advancing to avoid borrow checker issues
+                let label = label.to_string();
+                let rune = *rune;
                 let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::LabelRef(tok))
+                Ok(AstNode::LabelRef{label, rune, token: tok})
             }
             Token::SublabelDef(sublabel) => {
                 let sublabel = sublabel.clone();
@@ -309,7 +343,7 @@ impl Parser {
             }
             Token::UnderscoreRef(_) => {
                 let tok = self.current_token().clone();
-                println!("DEBUG PARSER: Processing underscore reference: {:?}", tok);
+                // println!("DEBUG PARSER: Processing underscore reference: {:?}", tok);
                 self.advance();
                 Ok(AstNode::UnderscoreRef(tok))
             }
@@ -371,6 +405,20 @@ impl Parser {
             }
             Token::PaddingLabel(_) => {
                 let tok = self.current_token().clone();
+                // Check for empty or invalid label
+                if let Token::PaddingLabel(ref label) = tok.token {
+                    if label.trim().is_empty() {
+                        let line = tok.line;
+                        let position = tok.start_pos;
+                        return Err(AssemblerError::SyntaxError {
+                            path: self.path.clone(),
+                            line,
+                            position,
+                            message: "Expected identifier after '|' for padding label".to_string(),
+                            source_line: self.get_source_line(line),
+                        });
+                    }
+                }
                 self.advance();
                 Ok(AstNode::PaddingLabel(tok))
             }
@@ -394,7 +442,7 @@ impl Parser {
                 ) {
                     self.advance();
                 }
-
+                println!("MacroDef: {}", name);
                 match &self.current_token().token {
                     Token::BraceOpen => {
                         self.advance();
@@ -432,6 +480,7 @@ impl Parser {
                         Ok(AstNode::MacroDef(name, body))
                     }
                     _ => {
+                        println!("DEBUG: Unexpected token after macro name: {:?}", self.current_token().token);
                         let line = self.current_token().line;
                         let position = self.current_token().start_pos;
                         Err(AssemblerError::SyntaxError {
@@ -449,10 +498,10 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::RawString(bytes))
             }
-            Token::Include(path) => {
-                let path = path.clone();
+            Token::Include(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::Include(path))
+                Ok(AstNode::Include(tok))
             }
             Token::ConditionalBlockStart => {
                 let tok = self.current_token().clone();
@@ -479,7 +528,7 @@ impl Parser {
                 let line = self.current_token().line;
                 let position = self.current_token().start_pos;
                 Err(AssemblerError::SyntaxError {
-                    path: self.path.clone(),
+                    path: path.clone(),
                     line,
                     position,
                     message: format!("Unexpected token: {:?}", self.current_token().token),
@@ -608,5 +657,10 @@ impl Parser {
             .nth(line.saturating_sub(1))
             .unwrap_or("")
             .to_string()
+    }
+
+    /// Returns true if the macro name is defined in the macro table
+    fn is_macro_defined(&self, name: &str) -> bool {
+        self.macro_table.contains(name)
     }
 }

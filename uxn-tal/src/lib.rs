@@ -38,6 +38,8 @@ pub mod opcodes;
 pub mod rom;
 pub mod assembler;
 pub mod devicemap;
+pub mod debug;
+pub mod runes;
 
 pub use assembler::Assembler;
 pub use error::AssemblerError;
@@ -136,6 +138,16 @@ pub fn assemble_directory<P: AsRef<std::path::Path>>(
     Ok(results)
 }
 
+pub fn assemble_with_rust_interface_module(
+    source: &str,
+    module_name: &str
+) -> Result<(Vec<u8>, String), AssemblerError> {
+    let mut a = Assembler::new();
+    let rom = a.assemble(source, None)?;
+    let module = a.generate_rust_interface_module(module_name);
+    Ok((rom, module))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,9 +235,6 @@ mod tests {
         // #12 -> LIT 0x12
         assert_eq!(rom[0], 0x80); // LIT
         assert_eq!(rom[1], 0x12); // byte
-        let rom = assembler
-            .assemble(source, Some("(test_hex_literals2)".to_string()))
-            .expect("Assembly failed");
         assert_eq!(rom[2], 0xa0); // LIT2
         assert_eq!(rom[3], 0x34); // high byte
         assert_eq!(rom[4], 0x56); // low byte
@@ -236,9 +245,6 @@ mod tests {
         assert_eq!(rom[7], 0xa0); // LIT2
         assert_eq!(rom[8], 0xcd); // high byte
         assert_eq!(rom[9], 0xef); // low byte
-        let rom = assembler
-            .assemble(source, Some("(test_hex_literals3)".to_string()))
-            .expect("Assembly failed");
     }
 
     #[test]

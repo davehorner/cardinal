@@ -34,6 +34,18 @@ impl Rom {
         self.source = source;
     }
 
+    pub fn get_source_line(&self, line: Option<usize>) -> String {
+        if let Some(src) = &self.source {
+            match line {
+            Some(line) if line > 0 => src.lines().nth(line - 1).map(|s| s.to_string()).unwrap_or_default(),
+            None => src.clone(),
+            _ => String::new(),
+            }
+        } else {
+            String::new()
+        }
+    }
+
     pub fn source(&self) -> Option<&String> {
         self.source.as_ref()
     }
