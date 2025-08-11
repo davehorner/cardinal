@@ -1,10 +1,11 @@
 //! Lexer for TAL assembly language
 
-use crate::error::{AssemblerError, Result};
+use crate::{error::{AssemblerError, Result}, runes::Rune};
 
 /// Token types in TAL assembly
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    Word(String), // could be a macro name before syntax error.
     /// Hexadecimal literal (e.g., #1234, #ab)
     HexLiteral(String),
     /// Raw hexadecimal byte (e.g., 20, ff)
@@ -20,7 +21,7 @@ pub enum Token {
     /// Label definition (e.g., @main)
     LabelDef(String),
     /// Label reference (e.g., ;main)
-    LabelRef(String),
+    LabelRef(String, Rune),
     /// Sublabel definition (e.g., &loop)
     SublabelDef(String),
     /// Sublabel reference (e.g., ,loop)
@@ -204,18 +205,30 @@ impl Lexer {
                         Token::LabelDef(label) => {
                             self.current_scope = Some(label.clone());
                         }
-                        Token::SublabelDef(sublabel) => {
-                            if let Some(ref parent) = self.current_scope {
-                                self.current_scope = Some(format!("{}/{}", parent, sublabel));
-                            } else {
-                                self.current_scope = Some(sublabel.clone());
-                            }
-                        }
+                        // Token::SublabelDef(sublabel) => {
+                        //     if let Some(ref parent) = self.current_scope {
+                        //         self.current_scope = Some(format!("{}/{}", parent, sublabel));
+                        //     } else {
+                        //         self.current_scope = Some(sublabel.clone());
+                        //     }
+                        // }
                         _ => {}
                     }
 
                     // For sublabel definition, set scope to parent label (not full sublabel path)
                     let token_scope = match &token {
+                        Token::RelativeRef(_) => {
+                            // For /down, use parent label scope (not full sublabel scope)
+                            if let Some(ref scope) = self.current_scope {
+                                if let Some(pos) = scope.find('/') {
+                                    Some(scope[..pos].to_string())
+                                } else {
+                                    Some(scope.clone())
+                                }
+                            } else {
+                                None
+                            }
+                        }
                         Token::SublabelDef(_) | Token::SublabelRef(_) | Token::CommaRef(_) | Token::UnderscoreRef(_) => {
                             // Use parent label as scope
                             if let Some(ref scope) = self.current_scope {
@@ -241,7 +254,7 @@ impl Lexer {
                         line: start_line,
                         start_pos,
                         end_pos: token_end_pos,
-                        scope: token_scope, // <-- Use parent label for sublabel tokens
+                        scope: token_scope,
                     });
                 }
             }
@@ -411,36 +424,43 @@ impl Lexer {
     }
 
     /// Read an identifier (labels, instructions, etc.)
-    /// Allows alphanumeric characters, underscores, hyphens, and forward slashes
+    /// Allows alphanumeric characters, underscores, hyphens, forward slashes, asterisks, etc.
     fn read_identifier(&mut self) -> Result<String> {
         let mut result = String::new();
         let mut first = true;
+        // Special handling: if the previous character was '%', read until whitespace or '{'
+        // This ensures macro names like '\;#' are read as a single name.
+        let mut macro_mode = false;
+        if self.position > 0 && self.input.chars().nth(self.position - 1) == Some('%') {
+            macro_mode = true;
+        }
         while self.position < self.input.len() {
-            let ch = self.current_char();
-            // Accept alphanumeric, underscore, hyphen, slash, angle brackets, allow '@', '{' , '&', and '"' as first char
-            if ch.is_ascii_alphanumeric()
-                || ch == '_'
-                || ch == '-'
-                || ch == '/'
-                || ch == '<'
-                || ch == '>'
-                || ch == '"'
-                || ch == '#'
-                || (first && (ch == '@' || ch == '{' || ch == '&'))
-            {
-                // Special case: treat "" as a CharLiteral('"')
-                if first && ch == '"' && self.input.chars().nth(self.position + 1) == Some('"') {
-                    self.advance(); // skip first "
-                    self.advance(); // skip second "
-                                    // Return as CharLiteral token, not identifier
-                    return Ok(String::from("\"")); // This will be handled as a CharLiteral by the parser
-                }
-                result.push(ch);
+            let mut ch = self.current_char();
+            // Skip tab characters entirely (do not include in identifiers)
+            while ch == '\t' {
                 self.advance();
-                first = false;
-            } else {
-                break;
+                ch = self.current_char();
             }
+            if macro_mode {
+                // Accept any non-whitespace, non-'{' character as part of macro name
+                if ch.is_whitespace() || ch == '{' {
+                    break;
+                }
+            } else {
+                // Accept any non-whitespace, non-parenthesis character as part of identifier
+                if ch.is_whitespace() || ch == '(' || ch == ')' {
+                    break;
+                }
+            }
+            // Special case: treat "" as a CharLiteral('"')
+            if first && ch == '"' && self.input.chars().nth(self.position + 1) == Some('"') {
+                self.advance();
+                self.advance();
+                return Ok(String::from("\""));
+            }
+            result.push(ch);
+            self.advance();
+            first = false;
         }
         // If the identifier is just "_", skip it and try to read the next identifier
         if result == "_" {
@@ -459,11 +479,14 @@ impl Lexer {
             {
                 return Ok(String::from("\""));
             }
+            if self.position >= self.input.len()-1 && self.current_char() == '\n' {
+                return Ok(String::new());
+            }
             return Err(AssemblerError::SyntaxError {
                 path: self.path.clone().unwrap_or_default(),
                 line: self.line,
                 position: self.position_on_line,
-                message: "Expected identifier".to_string(),
+                message: format!("Expected identifier @ position {}", self.position_on_line),
                 source_line: self.get_current_line(),
             });
         }
@@ -560,8 +583,8 @@ impl Lexer {
                 break;
             }
 
-            // Allow alphanumeric, hyphens, underscores, and slashes in macro names
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '/' {
+            // Allow alphanumeric, hyphens, underscores, slashes, and '?' in macro names
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '/' || ch == '?' {
                 name.push(ch);
                 self.advance();
             } else {
@@ -603,9 +626,12 @@ impl Lexer {
                 ));
             }
             if label.starts_with('<') {
-                return Ok(Token::LabelRef(label.trim_start_matches('<').to_string()));
+                let rune = Rune::from('<');
+                return Ok(Token::LabelRef(label.trim_start_matches('<').to_string(), rune));
             }
-            return Ok(Token::LabelRef(label));
+            // Use Rune based on the first character of the label
+            // let rune = Rune::from(label.chars().next().unwrap_or('\0'));
+            return Ok(Token::LabelRef(label, ' '.into()));
         }
 
         // Robustly skip all whitespace except newlines before tokenizing
@@ -800,11 +826,11 @@ impl Lexer {
                     self.advance();
                 }
                 let label = self.read_identifier()?;
-                println!("DEBUG: Read underscore label: '{}'", label);
+                // println!("DEBUG: Read underscore label: '{}'", label);
                 if label == "_" {
                     // If the label is just "_", skip and try to read the next identifier
                     let label = self.read_identifier()?;
-                    println!("DEBUG: Read underscore label (after skip): '{}'", label);
+                    // println!("DEBUG: Read underscore label (after skip): '{}'", label);
                     return Ok(Token::UnderscoreRef(label));
                 }
                 Ok(Token::UnderscoreRef(label))
@@ -904,17 +930,28 @@ impl Lexer {
                         full.push_str(&sub);
                     }
                 }
-                Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
+                let rune = Rune::from(' ');
+                return Ok(Token::LabelRef(full, rune));
+                // Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
             }
             _ if ch.is_ascii_digit() => {
                 let number = self.read_hex_number()?;
-                Ok(Token::RawHex(number))
+                // PATCH: treat 4 hex digits as a short, 2 as a byte
+                if number.len() == 4 && number.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // This will be handled as AstNode::Short in parser
+                    Ok(Token::RawHex(number))
+                } else if number.len() == 2 && number.chars().all(|c| c.is_ascii_hexdigit()) {
+                    Ok(Token::RawHex(number))
+                } else {
+                    Ok(Token::LabelRef(number, Rune::from(' '))) // Use Rune::from(' ') for numeric labels
+                }
             }
             _ if ch.is_ascii_alphabetic() || ch == '_' => {
                 let identifier = self.read_identifier()?;
                 // Only treat as hex if it's a simple pattern like "ff", "1234", etc.
                 // Don't treat words with hyphens or complex patterns as hex
                 // Also don't treat known instruction names as hex
+                // Don't treat instruction names as hex
                 if identifier.len() >= 2
                     && identifier.len() <= 4
                     && identifier.len() % 2 == 0
@@ -923,14 +960,13 @@ impl Lexer {
                     && !identifier.contains('/')  // No slashes in hex values
                     && !identifier.contains('_')  // No underscores in hex values
                     && !is_instruction_name(&identifier)
-                // Don't treat instruction names as hex
                 {
                     Ok(Token::RawHex(identifier))
                 } else if is_instruction_name(&identifier) {
                     Ok(Token::Instruction(identifier))
                 } else {
                     // If not a known instruction, treat as a label reference (bare word)
-                    Ok(Token::LabelRef(identifier))
+                    Ok(Token::LabelRef(identifier, Rune::from(' ')))
                 }
             }
             '|' => {
@@ -978,7 +1014,21 @@ impl Lexer {
                 // In uxnasm.c, '&' always creates a sublabel definition (makelabel)
                 Ok(Token::SublabelDef(sublabel))
             }
-            _ => Err(self.syntax_error(format!("Unexpected character: '{}'", ch))),
+            // Try to parse as macro call if it looks like a macro invocation (e.g., MACRO_NAME!)
+            _ => {
+                // If at EOF or at a newline, return Eof (don't error on trailing empty lines)
+                if self.position >= self.input.len() || ch == '\0' || ch == '\n' {
+                    return Ok(Token::Eof);
+                }
+                let name = self.read_identifier().ok();
+                if let Some(name) = name {
+                    if name.is_empty() && (self.position >= self.input.len() || self.current_char() == '\0') {
+                        return Ok(Token::Eof);
+                    }
+                    return Ok(Token::Word(name));
+                }
+                Err(self.syntax_error(format!("Unexpected character: '{}'", ch)))
+            },
         }
     }
 }

@@ -165,6 +165,8 @@ fn main() -> Result<(), AssemblerError> {
             println!("\n== Disassembly Diffs (first differing line) ==");
             if dis_ok(&internal_out_path) {
                 let uxntal_dis = disassemble(&internal_out_path).unwrap_or_default();
+                // Print the internal ROM path for clarity
+                println!("(disassemble) backend=uxntal rom={}", internal_out_path);
                 for r in [&uxna, &drif] {
                     if r.ok {
                         if let Some(ref rp) = r.rom_path {

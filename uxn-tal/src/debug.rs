@@ -217,6 +217,7 @@ impl DebugAssembler {
         &self,
         tal_file: &str,
         tal_source: &str,
+        verbose: bool,
     ) -> Result<DebugAssembleResult, AssemblerError> {
         let backends: Vec<Box<dyn AssemblerBackend>> = vec![
             Box::new(UxntalBackend),
@@ -230,49 +231,139 @@ impl DebugAssembler {
 
         for b in backends {
             match b.assemble(tal_file, tal_source) {
-                Ok(out) => match b.name() {
-                    "uxntal" => uxntal = Some(out),
-                    "uxnasm" => uxnasm = Some(out),
-                    "drifblim" => drif = Some(out),
-                    _ => {}
-                },
+                Ok(out) => {
+                    // Always write .sym file for each backend's ROM if possible
+                    let sym_path = format!("{}.sym", out.rom_path);
+                    if !out.rom_bytes.is_empty() {
+                        // Use the internal assembler for symbol generation if possible
+                        if b.name() == "uxntal" {
+                            let mut assembler = Assembler::new();
+                            if let Ok(_) = assembler.assemble(tal_source, Some(tal_file.to_string())) {
+                                let sym_bytes = assembler.generate_symbol_file();
+                                let _ = fs::write(&sym_path, &sym_bytes);
+                            }
+                        }
+                    }
+                    match b.name() {
+                        "uxntal" => uxntal = Some(out),
+                        "uxnasm" => uxnasm = Some(out),
+                        "drifblim" => drif = Some(out),
+                        _ => {}
+                    }
+                }
                 Err(e) => backend_errors.push((b.name().to_string(), e.to_string())),
             }
         }
 
-        let uxntal = uxntal.ok_or_else(|| syntax_err(tal_file, "uxntal backend failed"))?;
-        let uxnasm = uxnasm.unwrap_or_default();
-        let drif = drif.unwrap_or_default();
+        // Print summary and diffs for all three backends, even if one fails
+        if verbose {
+            println!("\n== Backend Summary ==");
+            println!(
+                "  {:<9} {:<5} {:>8}  {}",
+                "backend", "stat", "bytes", "output/summary"
+            );
+            for (name, out) in [
+                ("uxntal", &uxntal),
+                ("uxnasm", &uxnasm),
+                ("drifblim", &drif),
+            ] {
+                if let Some(ref o) = out {
+                    println!("  {:<9} {:<5} {:>8}  {}", name, "OK", o.rom_bytes.len(), o.rom_path);
+                } else {
+                    let summary = backend_errors
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, e)| e.as_str())
+                        .unwrap_or("-");
+                    println!("  {:<9} {:<5} {:>8}  {}", name, "FAIL", 0, summary);
+                }
+            }
 
-        let diff_uxntal_uxnasm = if !uxnasm.rom_path.is_empty() {
-            diff_first(&uxntal.disassembly, &uxnasm.disassembly)
-        } else {
-            None
-        };
-        let diff_uxntal_drifblim = if !drif.rom_path.is_empty() {
-            diff_first(&uxntal.disassembly, &drif.disassembly)
-        } else {
-            None
-        };
-        let diff_uxnasm_drifblim = if !uxnasm.rom_path.is_empty() && !drif.rom_path.is_empty() {
-            diff_first(&uxnasm.disassembly, &drif.disassembly)
-        } else {
-            None
-        };
+            // Print byte diffs for all pairs
+            println!("\n== Byte Diffs ==");
+            let pairs = [
+                ("uxntal", &uxntal, "uxnasm", &uxnasm),
+                ("uxntal", &uxntal, "drifblim", &drif),
+                ("uxnasm", &uxnasm, "drifblim", &drif),
+            ];
+            for (a_name, a, b_name, b) in pairs {
+                print!("{:<8} vs {:<9}: ", a_name, b_name);
+                if let (Some(ref a), Some(ref b)) = (a, b) {
+                    if let Some(d) = first_byte_diff(&a.rom_bytes, &b.rom_bytes) {
+                        println!(
+                            "first diff at 0x{:04X}: {:02X} != {:02X}",
+                            d.index, d.a, d.b
+                        );
+                    } else {
+                        println!("identical");
+                    }
+                } else {
+                    println!("skipped (missing backend)");
+                }
+            }
+
+            // Print disassembly diffs for all pairs
+            println!("\n== Disassembly Diffs (first differing line) ==");
+            let dis_pairs = [
+                ("uxntal", &uxntal, "uxnasm", &uxnasm),
+                ("uxntal", &uxntal, "drifblim", &drif),
+                ("uxnasm", &uxnasm, "drifblim", &drif),
+            ];
+            for (a_name, a, b_name, b) in dis_pairs {
+                print!("{:<8} vs {:<9}: ", a_name, b_name);
+                if let (Some(ref a), Some(ref b)) = (a, b) {
+                    match diff_first(&a.disassembly, &b.disassembly) {
+                        Some((ln, la, lb)) => {
+                            println!("line {}:\n  {}: {}\n  {}: {}", ln, a_name, la, b_name, lb);
+                        }
+                        None => println!("identical"),
+                    }
+                } else {
+                    println!("skipped (missing backend)");
+                }
+            }
+
+            // Print backend errors if any
+            if !backend_errors.is_empty() {
+                println!("\n== Backend Errors ==");
+                for (name, err) in &backend_errors {
+                    println!("{}: {}", name, err);
+                }
+            }
+        }
+
+        // Prepare summary fields
+        let uxntal_rom_path = uxntal.as_ref().map(|x| x.rom_path.clone()).unwrap_or_default();
+        let uxnasm_rom_path = uxnasm.as_ref().map(|x| x.rom_path.clone()).unwrap_or_default();
+        let drifblim_rom_path = drif.as_ref().map(|x| x.rom_path.clone()).unwrap_or_default();
+        let uxntal_rom_bytes = uxntal.as_ref().map(|x| x.rom_bytes.clone()).unwrap_or_default();
+        let uxnasm_rom_bytes = uxnasm.as_ref().map(|x| x.rom_bytes.clone()).unwrap_or_default();
+        let drifblim_rom_bytes = drif.as_ref().map(|x| x.rom_bytes.clone()).unwrap_or_default();
+        let uxntal_output = uxntal.as_ref().map(|x| x.stdout.clone()).unwrap_or_default();
+        let uxnasm_output = uxnasm.as_ref().map(|x| x.stdout.clone()).unwrap_or_default();
+        let drifblim_output = drif.as_ref().map(|x| x.stdout.clone()).unwrap_or_default();
+        let uxntal_dis_output = uxntal.as_ref().map(|x| x.disassembly.clone()).unwrap_or_default();
+        let uxnasm_dis_output = uxnasm.as_ref().map(|x| x.disassembly.clone()).unwrap_or_default();
+        let drifblim_dis_output = drif.as_ref().map(|x| x.disassembly.clone()).unwrap_or_default();
+
+        // Disassembly diffs for all pairs
+        let diff_uxntal_uxnasm = diff_first(&uxntal_dis_output, &uxnasm_dis_output);
+        let diff_uxntal_drifblim = diff_first(&uxntal_dis_output, &drifblim_dis_output);
+        let diff_uxnasm_drifblim = diff_first(&uxnasm_dis_output, &drifblim_dis_output);
 
         Ok(DebugAssembleResult {
-            uxntal_rom_path: uxntal.rom_path,
-            uxnasm_rom_path: uxnasm.rom_path,
-            drifblim_rom_path: drif.rom_path,
-            uxntal_rom_bytes: uxntal.rom_bytes,
-            uxnasm_rom_bytes: uxnasm.rom_bytes,
-            drifblim_rom_bytes: drif.rom_bytes,
-            uxntal_output: uxntal.stdout,
-            uxnasm_output: uxnasm.stdout,
-            drifblim_output: drif.stdout,
-            uxntal_dis_output: uxntal.disassembly,
-            uxnasm_dis_output: uxnasm.disassembly,
-            drifblim_dis_output: drif.disassembly,
+            uxntal_rom_path,
+            uxnasm_rom_path,
+            drifblim_rom_path,
+            uxntal_rom_bytes,
+            uxnasm_rom_bytes,
+            drifblim_rom_bytes,
+            uxntal_output,
+            uxnasm_output,
+            drifblim_output,
+            uxntal_dis_output,
+            uxnasm_dis_output,
+            drifblim_dis_output,
             diff_uxntal_uxnasm,
             diff_uxntal_drifblim,
             diff_uxnasm_drifblim,
@@ -296,4 +387,32 @@ fn diff_first(a: &str, b: &str) -> Option<(usize, String, String)> {
     } else {
         None
     }
+}
+
+fn first_byte_diff(a: &[u8], b: &[u8]) -> Option<ByteDiff> {
+    let len = std::cmp::min(a.len(), b.len());
+    for i in 0..len {
+        if a[i] != b[i] {
+            return Some(ByteDiff {
+                index: i,
+                a: a[i],
+                b: b[i],
+            });
+        }
+    }
+    if a.len() != b.len() {
+        Some(ByteDiff {
+            index: len,
+            a: if a.len() > len { a[len] } else { 0 },
+            b: if b.len() > len { b[len] } else { 0 },
+        })
+    } else {
+        None
+    }
+}
+
+struct ByteDiff {
+    index: usize,
+    a: u8,
+    b: u8,
 }
