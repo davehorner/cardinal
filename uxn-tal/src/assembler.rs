@@ -28,6 +28,7 @@ pub struct Symbol {
 
 /// TAL assembler
 pub struct Assembler {
+    rom: Rom,
     opcodes: Opcodes,
     symbols: HashMap<String, Symbol>,
     symbol_order: Vec<String>, // preserve insertion order like uxnasm
@@ -42,6 +43,7 @@ pub struct Assembler {
     lambda_counter: usize,
     lambda_stack: Vec<usize>,
     last_top_label: Option<String>, // remember last top-level label to scope stray sublabels
+    macro_expansion_stack: Vec<String>, // Add macro expansion stack
 }
 
 /// Represents a forward reference that needs to be resolved
@@ -105,6 +107,7 @@ impl Assembler {
     /// Create a new assembler instance
     pub fn new() -> Self {
         Self {
+            rom: Rom::new(),
             opcodes: Opcodes::new(),
             symbols: HashMap::new(),
             symbol_order: Vec::new(),
@@ -118,6 +121,7 @@ impl Assembler {
 lambda_counter: 0,
 lambda_stack: Vec::new(),
 last_top_label: None,
+macro_expansion_stack: Vec::new(), // Initialize stack
         }
     }
 
@@ -130,8 +134,8 @@ last_top_label: None,
     }
 
     /// Update effective length if current position has non-zero content
-    fn update_effective_length(&mut self, rom: &Rom) {
-        self.effective_length = self.effective_length.max(rom.position().into());
+    fn update_effective_length(&mut self) {
+        self.effective_length = self.effective_length.max (self.rom.position().into());
     }
 
     /// Assemble TAL source code into a ROM
@@ -159,17 +163,17 @@ last_top_label: None,
         let ast = parser.parse()?;
 
         // First pass: collect labels and generate code
-        let mut rom = Rom::new();
-        rom.set_source(Some(source.to_string()));
-        rom.set_path(path.clone());
+
+        self.rom.set_source(Some(source.to_string()));
+        self.rom.set_path(path.clone());
 
         // --- Ensure ROM pointer starts at 0x0100 (Varvara/uxn convention) ---
-        rom.pad_to(0x0100)?;
+        self.rom.pad_to(0x0100)?;
 
-        self.first_pass(&ast, &mut rom)?;
+        self.first_pass(&ast)?;
 
         // Second pass: resolve references and emit metadata header if needed
-        self.second_pass(&mut rom)?;
+        self.second_pass()?;
         println!("DEBUG: Resolved {} references", self.references.len());
 self.prune_lambda_aliases();
         // --- FIX: robust program extraction (supports two Rom storage strategies) ---
@@ -179,14 +183,14 @@ self.prune_lambda_aliases();
             println!("DEBUG: No non-zero bytes beyond PAGE (effective_length=0x{:04X})", end);
             return Ok(Vec::new());
         }
-        let mut rom_data = rom.data().to_vec();
+        let mut rom_data = self.rom.data().to_vec();
         // Ensure backing buffer can be sliced up to `end` like uxnasm's 64K `data[]`.
         if rom_data.len() < end {
             rom_data.resize(end, 0);
         }
         let result = &rom_data[page_start..end];
 
-       let mut prog = rom.data().to_vec();
+       let mut prog = self.rom.data().to_vec();
        // Use assembler’s absolute end to allow trailing zeros:
        let end_rel = end - page_start;
        if prog.len() < end_rel {
@@ -205,19 +209,79 @@ self.prune_lambda_aliases();
         Ok(result.to_vec())
     }
 
-    fn first_pass(&mut self, ast: &[AstNode], rom: &mut Rom) -> Result<()> {
+    fn first_pass(&mut self, ast: &[AstNode]) -> Result<()> {
+        let mut current_scope: Option<String> = None;
+        let mut last_top_label: Option<String> = None;
         let mut i = 0;
         while i < ast.len() {
-            // Remove special handling for SublabelDef here
-            self.process_node(&ast[i], rom)?;
+            match &ast[i] {
+                AstNode::LabelDef(_rune, label) => {
+                    let address = self.rom.position();
+                    let label_clone = label.clone();
+                    self.insert_symbol_if_new(&label_clone, Symbol {
+                        address,
+                        is_sublabel: label_clone.contains('/'),
+                        parent_label: label_clone.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
+                    });
+                    // For labels with '/', set current_scope and last_top_label to parent part.
+                    // For top-level labels, clear both.
+                    if let Some(pos) = label_clone.rfind('/') {
+                        let parent = label_clone[..pos].to_string();
+                        current_scope = Some(parent.clone());
+                        last_top_label = Some(parent);
+                    } else {
+                        current_scope = Some(label_clone.clone());
+                        last_top_label = Some(label_clone.clone());
+                    }
+                }
+                AstNode::SublabelDef(tok) => {
+                    let sublabel = match &tok.token {
+                        crate::lexer::Token::SublabelDef(s) => s.clone(),
+                        _ => return Err(AssemblerError::SyntaxError {
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
+                            line: tok.line,
+                            position: tok.start_pos,
+                            message: "Expected SublabelDef".to_string(),
+                            source_line: self.rom.get_source_line(Some(tok.line)),
+                        }),
+                    };
+                    // Use current_scope as parent for sublabel
+                    let parent_scope = current_scope.clone().or_else(|| last_top_label.clone()); 
+
+                    let full_name = if let Some(parent) = parent_scope {
+                        let parent = if parent.contains('/') {
+                            parent.split('/').next().unwrap().to_string()
+                        } else {
+                            parent
+                        };
+                        format!("{}/{}", parent, sublabel)
+                    } else {
+                        sublabel.clone()
+                    };
+                    if !self.symbols.contains_key(&full_name) {
+                        let parent = if full_name.contains('/') {
+                            Some(full_name[..full_name.rfind('/').unwrap()].to_string())
+                        } else { None };
+                        self.insert_symbol_if_new(&full_name, Symbol {
+                            address: self.rom.position(),
+                            is_sublabel: true,
+                            parent_label: parent.clone(),
+                        });
+                    }
+                }
+                _ => {
+                    self.process_node(&ast[i])?;
+                }
+            }
             i += 1;
         }
         Ok(())
     }
 
-    fn process_node(&mut self, node: &AstNode, rom: &mut Rom) -> Result<()> {
-        let path = rom.source_path().cloned().unwrap_or_default();
-        let _start_address = rom.position();
+
+    fn process_node(&mut self, node: &AstNode) -> Result<()> {
+        let path = self.rom.source_path().cloned().unwrap_or_default();
+        let _start_address = self.rom.position();
 
         // --- Rune table for reference ---
         // rune '?' : conditional branch (0x20 + rel word)
@@ -228,6 +292,9 @@ self.prune_lambda_aliases();
         // rune '_' / ',' : relative byte (+ int8 range check)
         // (see uxnasm.c resolve() switch)
         match node {
+            AstNode::Ignored | AstNode::Eof => {
+              return Ok(()); // Ignore empty nodes
+            }
             AstNode::ConditionalBlockStart(tok) => {
                 // 1) new lambda id
                 let id = self.lambda_counter;
@@ -238,7 +305,7 @@ self.prune_lambda_aliases();
                 let name = format_lambda_label(id);
 
                 // 3) record a reference at the first byte of the word (after opcode), rune '?'
-                let ref_addr = rom.position() + 1; // <-- FIX: was rom.position()
+                let ref_addr = self.rom.position() + 1; // <-- FIX: was self.rom.position()
                 self.references.push(Reference {
                     name: name.clone(),
                     rune: '?',
@@ -249,27 +316,31 @@ self.prune_lambda_aliases();
                     token: Some(tok.clone()),
                 });
                 // 4) emit JCN and 0xFFFF placeholder
-                rom.write_byte(0x20)?;        // JCN
-                rom.write_short(0xFFFF)?;     // placeholder for relative word
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x20)?;        // JCN
+                self.rom.write_short(0xFFFF)?;     // placeholder for relative word
+                self.update_effective_length();
             }
             AstNode::ConditionalBlockEnd(tok) => {
                 let id = match self.lambda_stack.pop() {
                     Some(id) => id,
                     None => {
+                        eprintln!("Unmatched '}}' at line {}. Current macro table:", tok.line);
+                        for (name, mac) in &self.macros {
+                            eprintln!("Macro '{}': {:?}", name, mac.body);
+                        }
                         return Err(AssemblerError::SyntaxError {
-                            path: String::new(),
+                            path: path.clone(),
                             line: tok.line,
-                            position: 0,
+                            position: tok.start_pos,
                             message: "Unmatched '}'".to_string(),
-                            source_line: String::new(),
+                            source_line: self.rom.get_source_line(Some(tok.line)),
                         });
                     }
                 };
                 let name = format_lambda_label(id);
 
                 // Only insert the lambda label if no non-lambda label exists at this address
-                let addr = rom.position() as u16;
+                let addr = self.rom.position() as u16;
                 let has_named_here = self.symbol_order.iter().any(|n| {
                     if let Some(s) = self.symbols.get(n) {
                         s.address == addr && !n.starts_with('λ')
@@ -290,61 +361,61 @@ self.prune_lambda_aliases();
                 if *pad_addr == 0x0100 && self.last_top_label.is_none() {
                     self.current_label = None;
                 }
-                rom.pad_to(*pad_addr)?;
-                // self.update_effective_length(rom);
+                self.rom.pad_to(*pad_addr)?;
+                // self.update_effective_length ();
             }
             AstNode::Byte(byte) => {
-                rom.write_byte(*byte)?;
-                //self.update_effective_length(rom);
+                self.rom.write_byte(*byte)?;
+                //self.update_effective_length ();
                 if *byte != 0 {
-                    self.update_effective_length(rom);
+                    self.update_effective_length();
                 }
 
             }
             AstNode::Short(short) => {
-//                 rom.write_short(*short)?;
-//    if *short != 0 {
-//        self.update_effective_length(rom);
-//    } 
-let hi = (*short >> 8) as u8;
-let lo = (*short & 0xFF) as u8;
+                    //                 self.rom.write_short(*short)?;
+                    //    if *short != 0 {
+                    //        self.update_effective_length ();
+                    //    } 
+                    let hi = (*short >> 8) as u8;
+                    let lo = (*short & 0xFF) as u8;
 
-rom.write_byte(hi)?;
-if hi != 0 { self.update_effective_length(rom); }
+                    self.rom.write_byte(hi)?;
+                    if hi != 0 { self.update_effective_length(); }
 
-rom.write_byte(lo)?;
-if lo != 0 { self.update_effective_length(rom); }
-                    //self.update_effective_length(rom);
+                    self.rom.write_byte(lo)?;
+                    if lo != 0 { self.update_effective_length(); }
+                    //self.update_effective_length ();
                 
             }
             AstNode::LiteralByte(byte) => {
                 // Only emit LIT for explicit byte literals (#xx)
-                rom.write_byte(0x80)?; // LIT opcode (always non-zero)
-                self.update_effective_length(rom);
-                rom.write_byte(*byte)?;
+                self.rom.write_byte(0x80)?; // LIT opcode (always non-zero)
+                self.update_effective_length();
+                self.rom.write_byte(*byte)?;
                 // Always update effective length for literal bytes, even if zero
-                self.update_effective_length(rom);
+                self.update_effective_length ();
             }
             AstNode::LiteralShort(short) => {
                 // Only emit LIT2 for explicit short literals (#xxxx)
-                rom.write_byte(0xa0)?; // LIT2 opcode (always non-zero)
-                self.update_effective_length(rom);
-                rom.write_short(*short)?;
+                self.rom.write_byte(0xa0)?; // LIT2 opcode (always non-zero)
+                self.update_effective_length ();
+                self.rom.write_short(*short)?;
                 // Always update effective length for literal shorts, even if zero
-                self.update_effective_length(rom);
+                self.update_effective_length ();
             }
             AstNode::Instruction(inst) => {
                 eprintln!(
                     "DEBUG: Processing instruction: '{}' at address {:04X}",
                     inst.opcode,
-                    rom.position()
+                    self.rom.position()
                 );
                 // Special-case BRK: always emit 0x00, matching uxnasm.c
                 if inst.opcode.eq_ignore_ascii_case("BRK") {
-                    rom.write_byte(0x00)?;
+                    self.rom.write_byte(0x00)?;
                     eprintln!(
                         "DEBUG: Wrote opcode 0x00 (BRK) at {:04X}",
-                        rom.position() - 1
+                        self.rom.position() - 1
                     );
                     // Do not update effective_length for BRK (matches C)
                     return Ok(());
@@ -358,21 +429,21 @@ if lo != 0 { self.update_effective_length(rom); }
                             inst.return_mode,
                             inst.keep_mode,
                         );
-                        rom.write_byte(final_opcode)?;
+                        self.rom.write_byte(final_opcode)?;
                         eprintln!(
                             "DEBUG: Wrote opcode 0x{:02X} ({}) at {:04X}",
                             final_opcode,
                             inst.opcode,
-                            rom.position() - 1
+                            self.rom.position() - 1
                         );
-                         if final_opcode != 0 {
-     self.update_effective_length(rom);
- }
-                            //self.update_effective_length(rom);
+                        if final_opcode != 0 {
+                            self.update_effective_length();
+                        }
+                        //self.update_effective_length ();
                         // Only expand macro if found and handled as instruction
                         if let Some(macro_def) = self.macros.get(&inst.opcode).cloned() {
                             for macro_node in &macro_def.body {
-                                self.process_node(macro_node, rom)?;
+                                self.process_node(macro_node)?;
                             }
                         }
                     }
@@ -384,35 +455,36 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name: inst.opcode.clone(),
                             rune: ' ',
-                            address: rom.position() + 1,
+                            address: self.rom.position() + 1,
                             line: self.line_number,
                             path: path.clone(),
                             scope: self.current_label.clone(),
                             token: None,
                         });
-                        rom.write_byte(0x60)?; // JSR opcode
+                        self.rom.write_byte(0x60)?; // JSR opcode
                         eprintln!(
                             "DEBUG: Wrote JSR opcode 0x60 at {:04X}",
-                            rom.position() - 1
+                            self.rom.position() - 1
                         );
-                        self.update_effective_length(rom);
-                        rom.write_short(0xffff)?; // Placeholder
+                        self.update_effective_length ();
+                        self.rom.write_short(0xffff)?; // Placeholder
                         eprintln!(
                             "DEBUG: Wrote JSR placeholder 0xFFFF at {:04X}-{:04X}",
-                            rom.position() - 2,
-                            rom.position() - 1
+                            self.rom.position() - 2,
+                            self.rom.position() - 1
                         );
-                        self.update_effective_length(rom);
+                        self.update_effective_length ();
                     }
                 }
             }
-            AstNode::LabelRef { label,rune,token} => {
+            AstNode::LabelRef { label, rune, token } => {
+                self.line_number = token.line;
                 // DEBUG: Log when a bare label reference is encountered
                 println!(
                     "DEBUG: AstNode::LabelRef encountered at line {}, emitting JSR to label {:?} at address {:04X}",
                     token.line,
                     token,
-                    rom.position()
+                    self.rom.position()
                 );
                 // // Extract the bare word
                 // let label = if let crate::lexer::Token::LabelRef(s,r) = &token.token {
@@ -428,17 +500,22 @@ if lo != 0 { self.update_effective_length(rom); }
                 //         line: self.line_number,
                 //         position: self.position_in_line,
                 //         message: format!("Expected LabelRef, found {:?}", token.token),
-                //         source_line: String::new(),
+                //         source_line: self.rom.get_source_line(Some(tok.line)),
                 //     });
                 // };
 
                 // NEW: If it’s a macro name, expand inline like uxnasm’s findmacro+walkmacro
                 if let Some(m) = self.macros.get(label.as_str()).cloned() {
-                    println!("DEBUG: Expanding macro '{}' at {:04X}", label, rom.position());
-                    for macro_node in &m.body {
-                        self.process_node(macro_node, rom)?;
+                    if self.macro_expansion_stack.contains(label) {
+                        // Already expanding this macro: treat as label reference (fall through)
+                    } else {
+                        self.macro_expansion_stack.push(label.clone());
+                        for macro_node in &m.body {
+                            self.process_node(macro_node)?;
+                        }
+                        self.macro_expansion_stack.pop();
+                        return Ok(());
                     }
-                    return Ok(());
                 }
       match rune {
     // '=': direct absolute word (big-endian), resolved in second_pass
@@ -446,60 +523,104 @@ if lo != 0 { self.update_effective_length(rom); }
         self.references.push(Reference {
             name: label.clone(),
             rune: '=',                                  // mark as absolute
-            address: rom.position() as u16,             // where the 16-bit will live
-            line: self.line_number,
-                    path: path.clone(),
+            address: self.rom.position() as u16,             // where the 16-bit will live
+            line: token.line,
+            path: path.clone(),
             scope: self.current_label.clone(),
             token: None, // or Some(tok) if you have one here
         });
-        rom.write_short(0xFFFF)?;                       // reserve space
-        self.update_effective_length(rom);
+        self.rom.write_short(0xFFFF)?;                       // reserve space
+        self.update_effective_length ();
     }
+    Rune::RawRelative => {
+        let label = if label.starts_with('&') {
+            label.trim_start_matches('&').to_string()
+        } else {
+            label.clone()
+        };
+        self.references.push(Reference {
+            name: label.clone(),
+            rune: '_',                                  // mark as relative
+            address: self.rom.position() as u16,             // where the 16-bit will live
+            line: self.line_number,
+            path: path.clone(),
+            scope: self.current_label.clone(),
+            token: None, // or Some(tok) if you have one here
+        });
+        self.rom.write_byte(0x60)?;                          // JSR
+        self.update_effective_length ();
 
+        self.rom.write_short(0xFFFF)?;                       // reserve space
+        self.update_effective_length ();
+    }
     // Everything else: treat as a call (JSR + rel16 placeholder)
     _ => {
                 self.references.push(Reference {
             name: label.clone(),
             rune: ' ',                                  // mark as relative
-            address: rom.position() + 1 as u16,             // start of the rel16 operand
+            address: self.rom.position() + 1 as u16,             // start of the rel16 operand
             line: self.line_number,
                     path: path.clone(),
             scope: self.current_label.clone(),
             token: None, // or Some(tok)
         });
-        rom.write_byte(0x60)?;                          // JSR
-        self.update_effective_length(rom);
+        self.rom.write_byte(0x60)?;                          // JSR
+        self.update_effective_length ();
 
 
 
-        rom.write_short(0xFFFF)?;                       // reserve space
-        self.update_effective_length(rom);
+        self.rom.write_short(0xFFFF)?;                       // reserve space
+        self.update_effective_length ();
     }
 }
 
             }
-            AstNode::LabelDef(label) => {
-                if !self.symbols.contains_key(label) {
-                    let address = rom.position();
-                    let label_clone = label.clone();
-                    self.insert_symbol_if_new(&label_clone, Symbol {
-                        address,
-                        is_sublabel: label_clone.contains('/'),
-                        parent_label: label_clone.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
-                    });
-                }
-                // Track full current label; also store its top-level base for later stray sublabels
-                let label_for_tracking = label.clone();
-                self.current_label = Some(label_for_tracking.clone());
-                let top = label_for_tracking.split('/').next().unwrap_or("").to_string();
-                self.last_top_label = Some(top);
+            AstNode::LabelDef(_rune, label) => {
+                // Always insert a symbol for every label, including those with slashes.
+                let address = self.rom.position();
+                let label_clone = label.clone();
                 eprintln!(
-                    "DEBUG: Defined label '{}' at address {:04X}",
-                    label_for_tracking,
-                    rom.position()
+                    "DEBUG: [process_node] Defining label '{}' at address {:0.4X} (line: {}, file: {})",
+                    label_clone,
+                    self.rom.position(),
+                    self.line_number,
+                    path
+                );
+                self.insert_symbol_if_new(&label_clone, Symbol {
+                    address,
+                    is_sublabel: label_clone.contains('/'),
+                    parent_label: label_clone.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
+                });
+                eprintln!("DEBUG: Symbol table now contains: {:?}", self.symbols.keys().collect::<Vec<_>>());
+
+                // For labels with '/', set current_label and last_top_label to parent part.
+                // For top-level labels, clear both.
+                if let Some(pos) = label_clone.rfind('/') {
+                    let parent = label_clone[..pos].to_string();
+                    self.current_label = Some(parent.clone());
+                    self.last_top_label = Some(parent);
+                } else {
+                    self.current_label = None;
+                    self.last_top_label = None;
+                }
+
+                eprintln!(
+                    "DEBUG: Defined label '{}' at address {:0.4X}",
+                    label_clone,
+                    self.rom.position()
                 );
             }
-            AstNode::SublabelDef(sublabel) => {
+            AstNode::SublabelDef(tok) => {
+                let sublabel = match &tok.token {
+                    crate::lexer::Token::SublabelDef(s) => s.clone(),
+                    _ => return Err(AssemblerError::SyntaxError {
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: tok.start_pos,
+                        message: "Expected SublabelDef".to_string(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
+                    }),
+                };
                 // If current_label lost due to padding but we have a remembered last_top_label, use it.
                 let parent_scope = if let Some(ref cur) = self.current_label {
                     if cur.trim().is_empty() {
@@ -516,12 +637,13 @@ if lo != 0 { self.update_effective_length(rom); }
                 } else {
                     sublabel.clone()
                 };
+                // --- PATCH: always define the sublabel, even if it's just "_" ---
                 if !self.symbols.contains_key(&full_name) {
                     let parent = if full_name.contains('/') {
                         Some(full_name[..full_name.rfind('/').unwrap()].to_string())
                     } else { None };
                     self.insert_symbol_if_new(&full_name, Symbol {
-                        address: rom.position(),
+                        address: self.rom.position(),
                         is_sublabel: true,
                         parent_label: parent.clone(),
                     });
@@ -543,7 +665,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 eprintln!(
                     "DEBUG: Defined sublabel '{}' at address {:04X}",
                     full_name,
-                    rom.position()
+                    self.rom.position()
                 );
             }
             AstNode::ExclamationRef(tok) => {
@@ -559,17 +681,17 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name: name,
                             rune: '!',
-                            address: rom.position() + 1,
+                            address: self.rom.position() + 1,
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
                         // emit opcode + placeholder (same as normal !label)
-                        rom.write_byte(0x40)?;
-                        self.update_effective_length(rom);
-                        rom.write_short(0xffff)?;
-                        self.update_effective_length(rom);
+                        self.rom.write_byte(0x40)?;
+                        self.update_effective_length ();
+                        self.rom.write_short(0xffff)?;
+                        self.update_effective_length ();
                         return Ok(());
                     }
                 }
@@ -581,7 +703,7 @@ if lo != 0 { self.update_effective_length(rom); }
                         line: self.line_number,
                         position: self.position_in_line,
                         message: "Expected ExclamationRef".to_string(),
-                        source_line: String::new(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     }),
                 };
                 let resolved_name = if label.starts_with('/') {
@@ -594,19 +716,19 @@ if lo != 0 { self.update_effective_length(rom); }
                     }
                 } else { label };
 
-                rom.write_byte(0x40)?;
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x40)?;
+                self.update_effective_length ();
                 self.references.push(Reference {
                     name: resolved_name,
                     rune: '!',
-                    address: rom.position(),
+                    address: self.rom.position(),
                     line: tok.line,
                     path: path.clone(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
+                self.rom.write_short(0xffff)?;
+                self.update_effective_length ();
             }
             AstNode::PaddingLabel(tok) => {
                 // existing absolute padding by label (add support for leading '/' relative)
@@ -617,7 +739,7 @@ if lo != 0 { self.update_effective_length(rom); }
                         line: self.line_number,
                         position: self.position_in_line,
                         message: "Expected PaddingLabel".to_string(),
-                        source_line: String::new(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     }),
                 };
                 // --- PATCH: resolve &name as sublabel of current label, like uxnasm ---
@@ -625,37 +747,87 @@ if lo != 0 { self.update_effective_length(rom); }
                     // Resolve /name relative to main scope
                     self.resolve_relative_label(&raw, tok.scope.as_ref().or(self.current_label.as_ref()))
                 } else if raw.starts_with('&') {
-                    // Resolve as sublabel of current label's main scope
-                    if let Some(ref parent) = self.current_label {
-                        let sublabel = &raw[1..];
-                        let main_label = if let Some(slash) = parent.find('/') {
+                    // Always use the main scope from the *last top-level label* for padding, like uxnasm
+                    let sublabel = &raw[1..];
+                    let main_label = if let Some(ref last_top) = self.last_top_label {
+                        last_top.as_str()
+                    } else if let Some(ref parent) = self.current_label {
+                        if let Some(slash) = parent.find('/') {
                             &parent[..slash]
                         } else {
                             parent.as_str()
-                        };
+                        }
+                    } else {
+                        ""
+                    };
+                    if !main_label.is_empty() {
                         format!("{}/{}", main_label, sublabel)
                     } else {
-                        raw.clone()
+                        sublabel.to_string()
                     }
                 } else {
                     raw
                 };
-                if let Some(symbol) = self.symbols.get(&label) {
-                    rom.pad_to(symbol.address)?;
+                // --- PATCH: if label starts with "|&", strip the leading '|' (fixes '|&body/size' bug) ---
+                let label = if label.starts_with("|&") {
+                    label[2..].to_string()
                 } else {
+                    label
+                };
+                eprintln!("DEBUG: [PaddingLabel] Resolving padding label '{}'", label);
+                // --- PATCH: try current scope, then <main_scope>/<label> ---
+                let mut found = self.symbols.get(&label);
+                if found.is_none() {
+                    // Try current scope first (if available and not already tried)
+                    if let Some(ref cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
+                        let cur = cur.split('/').next().unwrap_or(cur); // scope is only up to the first /
+                        let scoped = format!("{}/{}", cur, label);
+                        if scoped != label {
+                            eprintln!("DEBUG: [PaddingLabel] Trying current scope: '{}' {:?}", scoped,tok.token);
+                            found = self.symbols.get(&scoped);
+                        }
+                    }
+                }
+                if found.is_none() {
+                    // Try main scope (last top label)
+                    let main_label = if let Some(ref last_top) = self.last_top_label {
+                        last_top.as_str()
+                    } else if let Some(ref parent) = self.current_label {
+                        if let Some(slash) = parent.find('/') {
+                            &parent[..slash]
+                        } else {
+                            parent.as_str()
+                        }
+                    } else {
+                        ""
+                    };
+                    if !main_label.is_empty() {
+                        let scoped = format!("{}/{}", main_label, label);
+                        eprintln!("DEBUG: [PaddingLabel] Trying main scope: '{}'", scoped);
+                        found = self.symbols.get(&scoped);
+                    }
+                }
+
+                if let Some(symbol) = found {
+                    self.rom.pad_to(symbol.address)?;
+                } else {
+                    eprintln!("DEBUG: Symbol table at padding label '{}':", label);
+                    for (name, sym) in &self.symbols {
+                        eprintln!("  {} -> {:04X}", name, sym.address);
+                    }
                     return Err(AssemblerError::SyntaxError {
-                        path: rom.source_path().cloned().unwrap_or_default(),
-                        line: self.line_number,
-                        position: self.position_in_line,
-                        message: format!("Padding label '{}' not found", label),
-                        source_line: String::new(),
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
+                        line: tok.line,
+                        position: tok.start_pos,
+                        message: format!("Padding label '{}' not found {:?}", label,tok.token),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     });
                 }
             }
             AstNode::RelativePadding(count) => {
                 // $HHHH : advance pointer by hex bytes (relative)
-                let new_addr = rom.position() as u16 + count;
-                rom.pad_to(new_addr)?;
+                let new_addr = self.rom.position() as u16 + count;
+                self.rom.pad_to(new_addr)?;
             }
             AstNode::RelativePaddingLabel(tok) => {
                 // $label : ptr = current + label.addr (label must exist already)
@@ -668,17 +840,45 @@ if lo != 0 { self.update_effective_length(rom); }
                 } else {
                     raw
                 };
-                let cur = rom.position() as u16;
-                if let Some(sym) = self.symbols.get(&label_name) {
+                // Try current scope + "/" + label_name if not found
+                let mut found = self.symbols.get(&label_name);
+                eprintln!("DEBUG: [RelativePaddingLabel] Trying label_name: '{}'", label_name);
+                if found.is_none() {
+                    if let Some(ref cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
+                        // Try all possible parent scopes by splitting at each '/'
+                        let mut scope = cur.as_str();
+                        loop {
+                            let scoped = format!("{}/{}", scope, label_name);
+                            eprintln!("DEBUG: [RelativePaddingLabel] Trying scoped: '{}'", scoped);
+                            if scoped != label_name {
+                                if let Some(sym) = self.symbols.get(&scoped) {
+                                    found = Some(sym);
+                                    break;
+                                }
+                            }
+                            if let Some(pos) = scope.rfind('/') {
+                                scope = &scope[..pos];
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let cur = self.rom.position() as u16;
+                if let Some(sym) = found {
                     let new_addr = cur.wrapping_add(sym.address);
-                    rom.pad_to(new_addr)?;
+                    self.rom.pad_to(new_addr)?;
                 } else {
+                    eprintln!("DEBUG: [RelativePaddingLabel] Symbol table:");
+                    for (name, sym) in &self.symbols {
+                        eprintln!("  {} -> {:04X}", name, sym.address);
+                    }
                     return Err(AssemblerError::SyntaxError {
-                        path: rom.source_path().cloned().unwrap_or_default(),
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
                         line: tok.line,
                         position: tok.start_pos,
                         message: format!("Relative padding label '{}' not found", label_name),
-                        source_line: String::new(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     });
                 }
             }
@@ -708,7 +908,7 @@ if lo != 0 { self.update_effective_length(rom); }
                             self.symbols.insert(
                                 scoped.clone(),
                                 Symbol {
-                                    address: rom.position(),
+                                    address: self.rom.position(),
                                     is_sublabel: true,
                                     parent_label: Some(parent.clone()),
                                 },
@@ -717,24 +917,35 @@ if lo != 0 { self.update_effective_length(rom); }
                     }
                 }
                 if let Some(macro_def) = self.macros.get(name).cloned() {
-                    for macro_node in &macro_def.body {
-                        self.process_node(macro_node, rom)?;
+                    if self.macro_expansion_stack.contains(name) {
+                        // Already expanding this macro: treat as label reference (fall through)
+                    } else {
+                        self.macro_expansion_stack.push(name.clone());
+                        println!("DEBUG: Macro '{}' body nodes: {:#?}", name, macro_def.body);
+                        for macro_node in &macro_def.body {
+                            self.process_node(macro_node)?;
+                        }
+                        self.macro_expansion_stack.pop();
+                        unsafe {
+                            MACRO_EXPAND_DEPTH -= 1;
+                        }
+                        return Ok(());
                     }
                 } else {
                     // If macro is not defined, treat as JSR reference (matches uxnasm for <pdec>)
                     self.references.push(Reference {
                         name: name.clone(),
                         rune: ' ',
-                        address: rom.position() + 1,
+                        address: self.rom.position() + 1,
                         line: self.line_number,
-                        path: rom.source_path().cloned().unwrap_or_default(),
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
                         scope: self.current_label.clone(),
                         token: None,
                     });
-                    rom.write_byte(0x60)?; // JSR opcode
-                    self.update_effective_length(rom);
-                    rom.write_short(0xffff)?; // Placeholder
-                    self.update_effective_length(rom);
+                    self.rom.write_byte(0x60)?; // JSR opcode
+                    self.update_effective_length();
+                    self.rom.write_short(0xffff)?; // Placeholder
+                    self.update_effective_length();
                 }
                 unsafe {
                     MACRO_EXPAND_DEPTH -= 1;
@@ -743,9 +954,9 @@ if lo != 0 { self.update_effective_length(rom); }
             AstNode::RawString(bytes) => {
                 // Write string data byte by byte, updating effective length for each non-zero byte
                 for &byte in bytes {
-                    rom.write_byte(byte)?;
+                    self.rom.write_byte(byte)?;
                     if byte != 0 {
-                        self.update_effective_length(rom);
+                        self.update_effective_length ();
                     }
                 }
             }
@@ -753,7 +964,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 // Save/restore current_label around includes
                 let saved_label = self.current_label.clone();
                 if let crate::lexer::Token::Include(ref path) = tok.token {
-                    self.process_include_with_token(path, tok, rom)?;
+                    self.process_include_with_token(path, tok)?;
                 }
                 self.current_label = saved_label;
             }
@@ -768,16 +979,16 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: name.clone(),
                     rune: ' ',               // same rune as unknown token (JSR)
-                    address: (rom.position() + 1) as u16,
+                    address:  (self.rom.position() + 1) as u16,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x60)?;       // JSR opcode
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?;    // placeholder relative word
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x60)?;       // JSR opcode
+                self.update_effective_length ();
+                self.rom.write_short(0xffff)?;    // placeholder relative word
+                self.update_effective_length ();
                 // Code of lambda body now follows; label defined at LambdaEnd
             }
             AstNode::LambdaEnd(tok) => {
@@ -786,16 +997,16 @@ if lo != 0 { self.update_effective_length(rom); }
                     Some(id) => id,
                     None => {
                         return Err(AssemblerError::SyntaxError {
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             line: tok.line,
                             position: 0,
                             message: "Unmatched '}' (lambda)".to_string(),
-                            source_line: String::new(),
+                            source_line: self.rom.get_source_line(Some(tok.line)),
                         });
                     }
                 };
 
-                let addr = rom.position() as u16;
+                let addr = self.rom.position() as u16;
                 // Only insert the lambda label if no non-lambda label exists at this address
                 let has_named_here = self.symbol_order.iter().any(|n| {
                     if let Some(s) = self.symbols.get(n) {
@@ -817,34 +1028,34 @@ if lo != 0 { self.update_effective_length(rom); }
                 let sublabel = match &tok.token {
                     crate::lexer::Token::SublabelRef(s) => s.clone(),
                     _ => return Err(AssemblerError::SyntaxError {
-                        path: rom.source_path().cloned().unwrap_or_default(),
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
                         line: tok.line,
                         position: tok.start_pos,
                         message: "Expected SublabelRef".to_string(),
-                        source_line: String::new(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     }),
                 };
                 let full_name = if let Some(ref parent) = self.current_label {
                     format!("{}/{}", parent, sublabel)
                 } else {
                     return Err(AssemblerError::SyntaxError {
-                        path: rom.source_path().cloned().unwrap_or_default(),
+                        path: self.rom.source_path().cloned().unwrap_or_default(),
                         line: tok.line,
                         position: tok.start_pos,
                         message: "Sublabel reference outside of label scope".to_string(),
-                        source_line: String::new(),
+                        source_line: self.rom.get_source_line(Some(tok.line)),
                     });
                 };
                 self.references.push(Reference {
                     name: full_name,
                     rune: '_',
-                    address: rom.position(),
+                    address: self.rom.position(),
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0xff)?;
+                self.rom.write_byte(0xff)?;
             }
             AstNode::RelativeRef(tok) => {
                 let label = match &tok.token {
@@ -854,14 +1065,14 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '/',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x60)?;
-                rom.write_short(0xffff)?;
+                self.rom.write_byte(0x60)?;
+                self.rom.write_short(0xffff)?;
             }
             AstNode::ConditionalRef(tok) => {
                 let label = match &tok.token {
@@ -871,14 +1082,14 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '?',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
-                    scope: tok.scope.clone(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     token: Some(tok.clone()),
+                    scope: tok.scope.clone(),
                 });
-                rom.write_byte(0x20)?;
-                rom.write_short(0xffff)?;
+                self.rom.write_byte(0x20)?;
+                self.rom.write_short(0xffff)?;
             }
             AstNode::RawAddressRef(tok) => {
                 let label = match &tok.token {
@@ -888,13 +1099,13 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '=',
-                    address: rom.position(),
+                    address: self.rom.position(),
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_short(0xffff)?;
+                self.rom.write_short(0xffff)?;
             }
             AstNode::JSRRef(tok) => {
                 let label = match &tok.token {
@@ -904,14 +1115,14 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '!',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x60)?;
-                rom.write_short(0xffff)?;
+                self.rom.write_byte(0x60)?;
+                self.rom.write_short(0xffff)?;
             }
             AstNode::HyphenRef(tok) => {
                 let label = match &tok.token {
@@ -921,13 +1132,13 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '-',
-                    address: rom.position(),
+                    address: self.rom.position(),
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0xff)?;
+                self.rom.write_byte(0xff)?;
             }
             AstNode::DotRef(tok) => {
                 let label = match &tok.token {
@@ -937,16 +1148,16 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '.',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x80)?;
-                self.update_effective_length(rom);
-                rom.write_byte(0xff)?;
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x80)?;
+                self.update_effective_length ();
+                self.rom.write_byte(0xff)?;
+                self.update_effective_length ();
             }
             AstNode::SemicolonRef(tok) => {
                 // Special-case ;{ (lambda via LIT2 form)
@@ -959,16 +1170,16 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name,
                             rune: ';',
-                            address: rom.position() + 1,
+                            address: self.rom.position() + 1,
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
-                        rom.write_byte(0xa0)?; // LIT2
-                        self.update_effective_length(rom);
-                        rom.write_short(0xffff)?; // placeholder
-                        self.update_effective_length(rom);
+                        self.rom.write_byte(0xa0)?; // LIT2
+                        self.update_effective_length ();
+                        self.rom.write_short(0xffff)?; // placeholder
+                        self.update_effective_length ();
                         return Ok(());
                     }
                 }
@@ -980,16 +1191,16 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: ';',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
                     path: path.clone(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0xa0)?; // LIT2 opcode
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?; // Placeholder
-                self.update_effective_length(rom);
+                self.rom.write_byte(0xa0)?; // LIT2 opcode
+                self.update_effective_length ();
+                self.rom.write_short(0xffff)?; // Placeholder
+                self.update_effective_length ();
             }
             AstNode::EqualsRef(tok) => {
                 // SPECIAL-CASE: "={" start of a lambda producing a raw 16-bit address(=rune)
@@ -1002,15 +1213,15 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name,
                             rune: '=',
-                            address: rom.position(),
+                            address: self.rom.position(),
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
                         // emit placeholder 16-bit (raw address form for '=' rune)
-                        rom.write_short(0xffff)?;
-                        self.update_effective_length(rom);
+                        self.rom.write_short(0xffff)?;
+                        self.update_effective_length ();
                         return Ok(());
                     }
                 }
@@ -1021,14 +1232,14 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '=',
-                    address: rom.position(),
+                    address: self.rom.position(),
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
+                self.rom.write_short(0xffff)?;
+                self.update_effective_length ();
             }
             AstNode::CommaRef(tok) => {
                 // Special-case ,{ (lambda via LIT + relative byte)
@@ -1041,16 +1252,16 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name,
                             rune: ',',
-                            address: rom.position() + 1,
+                            address: self.rom.position() + 1,
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
-                        rom.write_byte(0x80)?; // LIT
-                        self.update_effective_length(rom);
-                        rom.write_byte(0xff)?; // placeholder byte
-                        self.update_effective_length(rom);
+                        self.rom.write_byte(0x80)?; // LIT
+                        self.update_effective_length ();
+                        self.rom.write_byte(0xff)?; // placeholder byte
+                        self.update_effective_length ();
                         return Ok(());
                     }
                 }
@@ -1062,16 +1273,16 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: ',',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
                     path: path.clone(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x80)?; // LIT opcode
-                self.update_effective_length(rom);
-                rom.write_byte(0xff)?; // Placeholder byte
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x80)?; // LIT opcode
+                self.update_effective_length ();
+                self.rom.write_byte(0xff)?; // Placeholder byte
+                self.update_effective_length ();
             }
             AstNode::UnderscoreRef(tok) => {
                 // Special-case _{ (lambda via relative byte)
@@ -1084,14 +1295,14 @@ if lo != 0 { self.update_effective_length(rom); }
                         self.references.push(Reference {
                             name,
                             rune: '_',
-                            address: rom.position(),
+                            address: self.rom.position(),
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
-                        rom.write_byte(0xff)?; // placeholder byte
-                        self.update_effective_length(rom);
+                        self.rom.write_byte(0xff)?; // placeholder byte
+                        self.update_effective_length ();
                         return Ok(());
                     }
                 }
@@ -1103,14 +1314,14 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '_',
-                    address: rom.position(),
+                    address: self.rom.position(),
                             line: tok.line,
-                            path: rom.source_path().cloned().unwrap_or_default(),
+                            path: self.rom.source_path().cloned().unwrap_or_default(),
                             scope: tok.scope.clone(),
                             token: Some(tok.clone()),
                         });
-                        rom.write_byte(0xff)?; // placeholder byte
-                        self.update_effective_length(rom);
+                        self.rom.write_byte(0xff)?; // placeholder byte
+                        self.update_effective_length ();
             }
             AstNode::QuestionRef(tok) => {
                 let label = match &tok.token {
@@ -1120,23 +1331,23 @@ if lo != 0 { self.update_effective_length(rom); }
                 self.references.push(Reference {
                     name: label,
                     rune: '?',
-                    address: rom.position() + 1,
+                    address: self.rom.position() + 1,
                     line: tok.line,
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
                     token: Some(tok.clone()),
                 });
-                rom.write_byte(0x20)?;
-                self.update_effective_length(rom);
-                rom.write_short(0xffff)?;
-                self.update_effective_length(rom);
+                self.rom.write_byte(0x20)?;
+                self.update_effective_length ();
+                self.rom.write_short(0xffff)?;
+                self.update_effective_length ();
             }
             // AstNode::RawString(bytes) => {
             //     // Write string data byte by byte, updating effective length for each non-zero byte
             //     for &byte in bytes {
-            //         rom.write_byte(byte)?;
+            //         self.rom.write_byte(byte)?;
             //         if byte != 0 {
-            //             self.update_effective_length(rom);
+            //             self.update_effective_length ();
             //         }
             //     }
             // }
@@ -1144,7 +1355,7 @@ if lo != 0 { self.update_effective_length(rom); }
             //     // Save/restore current_label around includes
             //     let saved_label = self.current_label.clone();
             //     if let crate::lexer::Token::Include(ref path) = tok.token {
-            //         self.process_include_with_token(path, tok, rom)?;
+            //         self.process_include_with_token(path, tok, self.rom)?;
             //     }
             //     self.current_label = saved_label;
             // }
@@ -1159,16 +1370,16 @@ if lo != 0 { self.update_effective_length(rom); }
             //     self.references.push(Reference {
             //         name: name.clone(),
             //         rune: ' ',               // same rune as unknown token (JSR)
-            //         address: (rom.position() + 1) as u16,
+            //         address:  (self.rom.position() + 1) as u16,
             //         line: tok.line,
-            //         path: rom.source_path().cloned().unwrap_or_default(),
+            //         path: self.rom.source_path().cloned().unwrap_or_default(),
             //         scope: tok.scope.clone(),
             //         token: Some(tok.clone()),
             //     });
-            //     rom.write_byte(0x60)?;       // JSR opcode
-            //     self.update_effective_length(rom);
-            //     rom.write_short(0xffff)?;    // placeholder relative word
-            //     self.update_effective_length(rom);
+            //     self.rom.write_byte(0x60)?;       // JSR opcode
+            //     self.update_effective_length ();
+            //     self.rom.write_short(0xffff)?;    // placeholder relative word
+            //     self.update_effective_length ();
             //     // Code of lambda body now follows; label defined at LambdaEnd
             // }
             // AstNode::LambdaEnd(tok) => {
@@ -1177,26 +1388,26 @@ if lo != 0 { self.update_effective_length(rom); }
             //         Some(id) => id,
             //         None => {
             //             return Err(AssemblerError::SyntaxError {
-            //                 path: rom.source_path().cloned().unwrap_or_default(),
+            //                 path: self.rom.source_path().cloned().unwrap_or_default(),
             //                 line: tok.line,
             //                 position: 0,
             //                 message: "Unmatched '}' (lambda)".to_string(),
-            //                 source_line: String::new(),
+            //                 source_line: self.rom.get_source_line(Some(tok.line)),
             //             });
             //         }
             //     };
             //     let name = format_lambda_label(id);
             //     if self.symbols.contains_key(&name) {
             //         return Err(AssemblerError::SyntaxError {
-            //             path: rom.source_path().cloned().unwrap_or_default(),
+            //             path: self.rom.source_path().cloned().unwrap_or_default(),
             //             line: tok.line,
             //             position: 0,
             //             message: format!("Duplicate lambda label {}", name),
-            //             source_line: String::new(),
+            //             source_line: self.rom.get_source_line(Some(tok.line)),
             //         });
             //     }
             //     self.insert_symbol_if_new(&name, Symbol {
-            //         address: rom.position() as u16,
+            //         address: self.rom.position() as u16,
             //         is_sublabel: false,
             //         parent_label: None
             //     });
@@ -1209,26 +1420,26 @@ if lo != 0 { self.update_effective_length(rom); }
             //         Some(id) => id,
             //         None => {
             //             return Err(AssemblerError::SyntaxError {
-            //                 path: rom.source_path().cloned().unwrap_or_default(),
+            //                 path: self.rom.source_path().cloned().unwrap_or_default(),
             //                 line: tok.line,
             //                 position: 0,
             //                 message: "Unmatched '}' (lambda)".to_string(),
-            //                 source_line: String::new(),
+            //                 source_line: self.rom.get_source_line(Some(tok.line)),
             //             });
             //         }
             //     };
             //     let name = format_lambda_label(id);
             //     if self.symbols.contains_key(&name) {
             //         return Err(AssemblerError::SyntaxError {
-            //             path: rom.source_path().cloned().unwrap_or_default(),
+            //             path: self.rom.source_path().cloned().unwrap_or_default(),
             //             line: tok.line,
             //             position: 0,
             //             message: format!("Duplicate lambda label {}", name),
-            //             source_line: String::new(),
+            //             source_line: self.rom.get_source_line(Some(tok.line)),
             //         });
             //     }
             //     self.insert_symbol_if_new(&name, Symbol {
-            //         address: rom.position() as u16,
+            //         address: self.rom.position() as u16,
             //         is_sublabel: false,
             //         parent_label: None
             //     });
@@ -1357,7 +1568,7 @@ if lo != 0 { self.update_effective_length(rom); }
         }
     }
 
-    fn second_pass(&mut self, rom: &mut Rom) -> Result<()> {
+    fn second_pass(&mut self) -> Result<()> {
         // Debug: print available symbols like WSL does
         if true { // Enable debug output
             println!("DEBUG: Available labels ({}):", self.symbols.len());
@@ -1376,12 +1587,12 @@ if lo != 0 { self.update_effective_length(rom); }
         //     meta_addr & 0xff
         // );
         // let page = 0x0100;
-        // rom.write_byte_at(page, 0xa0)?;
-        // rom.write_byte_at(page + 1, ((meta_addr >> 8) & 0xff) as u8)?;
-        // rom.write_byte_at(page + 2, (meta_addr & 0xff) as u8)?;
-        // rom.write_byte_at(page + 3, 0x80)?;
-        // rom.write_byte_at(page + 4, 0x06)?;
-        // rom.write_byte_at(page + 5, 0x37)?;
+        // self.rom.write_byte_at(page, 0xa0)?;
+        // self.rom.write_byte_at(page + 1, ((meta_addr >> 8) & 0xff) as u8)?;
+        // self.rom.write_byte_at(page + 2, (meta_addr & 0xff) as u8)?;
+        // self.rom.write_byte_at(page + 3, 0x80)?;
+        // self.rom.write_byte_at(page + 4, 0x06)?;
+        // self.rom.write_byte_at(page + 5, 0x37)?;
         // println!(
         //     "DEBUG: Patched |0100 with metadata header (a0 {:02x} {:02x} 80 06 37) for Varvara/uxn compatibility",
         //     (meta_addr >> 8) & 0xff,
@@ -1452,6 +1663,7 @@ if lo != 0 { self.update_effective_length(rom); }
                     let mut scope = reference.scope.clone();
                     while let Some(ref s) = scope {
                         let candidate = format!("{}/{}", s, reference.name);
+                        eprintln!("DEBUG: [PaddingLabel] Trying scope: '{}' {}", s, candidate);
                         if let Some(sym) = self.symbols.get(&candidate) {
                             found = Some(sym);
                             break;
@@ -1465,21 +1677,25 @@ if lo != 0 { self.update_effective_length(rom); }
                     }
                     // If not found, try just the name as a global label
                     if found.is_none() {
+                        eprintln!("DEBUG: [PaddingLabel] Trying global label: '{}'", reference.name);
                         self.symbols.get(&reference.name)
                     } else {
                         found
                     }
                 } else {
+                    let cur = reference.scope.as_deref().and_then(|s| s.split('/').next()).unwrap_or("");
+                    eprintln!("DEBUG: [PaddingLabel] Trying current scope: '{}' {}", cur, resolved_name);
                     // For all other runes, only try the full name
                     self.symbols.get(&resolved_name)
                 }
             } else {
-                symbol
+                symbol.as_ref()
             };
 
             // NEW: attempt device injection before failing
             if symbol.is_none() {
                 let resolved_name_clone = resolved_name.clone();
+                eprintln!("DEBUG: [PaddingLabel] Attempting device injection for '{}'", resolved_name_clone);
                 self.try_inject_device_symbols(&resolved_name_clone);
                 // retry lookup after injection
                 symbol = self.symbols.get(&resolved_name_clone);
@@ -1500,7 +1716,7 @@ if lo != 0 { self.update_effective_length(rom); }
                     resolved_name, reference.scope
                 );
 
-                let source_line = rom
+                let source_line = self.rom
                     .source()
                     .and_then(|src| {
                         if reference.line > 0 {
@@ -1542,7 +1758,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 '_' | ',' => {
                     // case '_': case ',': *rom = rel = l->addr - r->addr - 2;
                     let rel = (symbol.address as i32 - reference.address as i32 - 2) as i8;
-                    rom.write_byte_at(reference.address, rel as u8)?;
+                    self.rom.write_byte_at(reference.address, rel as u8)?;
                     // Update effective length if resolved value is non-zero
                     let end = reference.address as usize + 1;
                     if rel as u8 != 0 {
@@ -1555,13 +1771,13 @@ if lo != 0 { self.update_effective_length(rom); }
                             line: reference.line,
                             position: 0,
                             message: "Reference too far".to_string(),
-                            source_line: String::new(),
+                            source_line: self.rom.get_source_line(Some(reference.line)),
                         });
                     }
                 }
                 '-' | '.' => {
                     // case '-': case '.': *rom = l->addr;
-                    rom.write_byte_at(reference.address, symbol.address as u8)?;
+                    self.rom.write_byte_at(reference.address, symbol.address as u8)?;
                     let end = reference.address as usize + 1;
                     if symbol.address as u8 != 0 {
                         self.effective_length = self.effective_length.max(end);
@@ -1571,8 +1787,8 @@ if lo != 0 { self.update_effective_length(rom); }
 
                     //                     // Write absolute ROM address (uxnasm.c starts ROM at PAGE)
                     // let absolute_addr = symbol.address + 0x0100;
-                    // rom.write_byte_at(reference.address, (absolute_addr >> 8) as u8)?;
-                    // rom.write_byte_at(reference.address + 1, (absolute_addr & 0xff) as u8)?;
+                    // self.rom.write_byte_at(reference.address, (absolute_addr >> 8) as u8)?;
+                    // self.rom.write_byte_at(reference.address + 1, (absolute_addr & 0xff) as u8)?;
                     // eprintln!(
                     //     "DEBUG: Resolved reference '{}' at {:04X}: wrote address 0x{:04X} (absolute)",
                     //     reference.name, reference.address, absolute_addr
@@ -1584,8 +1800,8 @@ if lo != 0 { self.update_effective_length(rom); }
                     // }
 
                     // Write raw ROM address (no offset)
-                    rom.write_byte_at(reference.address, (symbol.address >> 8) as u8)?;
-                    rom.write_byte_at(reference.address + 1, (symbol.address & 0xff) as u8)?;
+                    self.rom.write_byte_at(reference.address, (symbol.address >> 8) as u8)?;
+                    self.rom.write_byte_at(reference.address + 1, (symbol.address & 0xff) as u8)?;
                     let end = reference.address as usize + 2;
                     if symbol.address != 0 {
                         self.effective_length = self.effective_length.max(end);
@@ -1601,9 +1817,9 @@ if lo != 0 { self.update_effective_length(rom); }
                         reference.rune, symbol.address, reference.address, rel, rel as u16
                     );
                     // Write as little-endian (low byte first)
-                                      rom.write_short_at(reference.address, rel as u16)?;
-                    // rom.write_byte_at(reference.address, (rel & 0xff) as u8)?;
-                    // rom.write_byte_at(reference.address + 1, ((rel >> 8) & 0xff) as u8)?;
+                    self.rom.write_short_at(reference.address, rel as u16)?;
+                    // self.rom.write_byte_at(reference.address, (rel & 0xff) as u8)?;
+                    // self.rom.write_byte_at(reference.address + 1, ((rel >> 8) & 0xff) as u8)?;
                     eprintln!("DEBUG: Resolved reference '{}' at {:04X}: wrote relative address 0x{:04X} ({})", 
                              reference.name, reference.address, rel as u16, rel);
                     if rel != 0 {
@@ -1617,7 +1833,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 //         line: reference.line,
                 //         position: 0,
                 //         message: format!("Unknown reference rune: {}", reference.rune),
-                //         source_line: String::new(),
+                //         source_line: self.rom.get_source_line(Some(tok.line)),
                 //     });
                 }
             }
@@ -1627,7 +1843,7 @@ if lo != 0 { self.update_effective_length(rom); }
         Ok(())
     }
 
-    fn find_symbol(&self, name: &str, reference_scope: Option<&String>) -> Option<&Symbol> {
+    fn find_symbol(&self, name: &str, reference_scope: Option<&String>) -> Option<Symbol> {
         eprintln!(
             "DEBUG: find_symbol called with name='{}', reference_scope={:?}",
             name, reference_scope
@@ -1651,7 +1867,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 eprintln!("DEBUG: Trying main scope lookup: '{}'", scoped);
                 if let Some(symbol) = self.symbols.get(&scoped) {
                     eprintln!("DEBUG: Found main scope symbol: {:?}", symbol);
-                    return Some(symbol);
+                    return Some(symbol.clone());
                 }
             }
 
@@ -1667,7 +1883,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 eprintln!("DEBUG: Trying current main scope lookup: '{}'", scoped);
                 if let Some(symbol) = self.symbols.get(&scoped) {
                     eprintln!("DEBUG: Found current main scope symbol: {:?}", symbol);
-                    return Some(symbol);
+                    return Some(symbol.clone());
                 }
             }
 
@@ -1675,13 +1891,39 @@ if lo != 0 { self.update_effective_length(rom); }
             eprintln!("DEBUG: Trying global lookup: '{}'", sublabel_name);
             if let Some(symbol) = self.symbols.get(sublabel_name) {
                 eprintln!("DEBUG: Found global symbol: {:?}", symbol);
-                return Some(symbol);
+                return Some(symbol.clone());
             }
         }
 
         // Try direct match
         if let Some(symbol) = self.symbols.get(name) {
-            return Some(symbol);
+            return Some(symbol.clone());
+        }
+
+        // Fallback: if name contains '/', try last segment as a global label (e.g. textarea/max-lines -> max-lines)
+        if name.contains('/') {
+            if let Some(last) = name.rsplit('/').next() {
+                if let Some(symbol) = self.symbols.get(last) {
+                    return Some(symbol.clone());
+                }
+            }
+        }
+
+        // Try match for sublabel of a global label (e.g. textarea/max-lines)
+        if name.contains('/') {
+            let mut parts = name.splitn(2, '/');
+            if let (Some(parent), Some(child)) = (parts.next(), parts.next()) {
+                // Try as sublabel of parent (e.g. "textarea/max-lines")
+                let candidate = format!("{}/{}", parent, child);
+                if let Some(symbol) = self.symbols.get(&candidate) {
+                    return Some(symbol.clone());
+                }
+                // Try as sublabel of parent with angle brackets (e.g. "<textarea>/max-lines")
+                let candidate_bracket = format!("<{}>/{}", parent, child);
+                if let Some(symbol) = self.symbols.get(&candidate_bracket) {
+                    return Some(symbol.clone());
+                }
+            }
         }
 
         // For /down, try scope + "/" + name if not already present
@@ -1690,7 +1932,7 @@ if lo != 0 { self.update_effective_length(rom); }
                 let main_scope = if let Some(pos) = scope.find('/') { &scope[..pos] } else { scope };
                 let candidate = format!("{}/{}", main_scope, &name[1..]);
                 if let Some(symbol) = self.symbols.get(&candidate) {
-                    return Some(symbol);
+                    return Some(symbol.clone());
                 }
             }
         }
@@ -1699,14 +1941,14 @@ if lo != 0 { self.update_effective_length(rom); }
         if !name.starts_with('<') && !name.ends_with('>') {
             let bracketed = format!("<{}>", name);
             if let Some(symbol) = self.symbols.get(&bracketed) {
-                return Some(symbol);
+                return Some(symbol.clone());
             }
         }
 
         if name.starts_with('<') && name.ends_with('>') && name.len() > 2 {
             let unbracketed = &name[1..name.len() - 1];
             if let Some(symbol) = self.symbols.get(unbracketed) {
-                return Some(symbol);
+                return Some(symbol.clone());
             }
         }
 
@@ -1714,7 +1956,7 @@ if lo != 0 { self.update_effective_length(rom); }
     }
 
     /// Process an include directive by reading and assembling the included file, using token for error context
-    fn process_include_with_token(&mut self, path: &str, tok: &TokenWithPos, rom: &mut Rom) -> Result<()> {
+    fn process_include_with_token(&mut self, path: &str, tok: &TokenWithPos) -> Result<()> {
         println!("DEBUG: Current working directory: {:?}", std::env::current_dir());
         println!("DEBUG: Including file at path: {}", path);
         let content = match fs::read_to_string(path) {
@@ -1729,20 +1971,20 @@ if lo != 0 { self.update_effective_length(rom); }
                 content2
                 } else {
                 return Err(AssemblerError::SyntaxError {
-                    path: rom.source_path().cloned().unwrap_or_default(),
+                    path: self.rom.source_path().cloned().unwrap_or_default(),
                     line: tok.line,
                     position: tok.start_pos,
                     message: format!("Failed to read include file '{}' '{}': {}", filename_str.as_ref(), path, e),
-                    source_line: String::new(),
+                    source_line: self.rom.get_source_line(Some(tok.line)),
                 });
                 }
             } else {
                 return Err(AssemblerError::SyntaxError {
-                path: rom.source_path().cloned().unwrap_or_default(),
+                path: self.rom.source_path().cloned().unwrap_or_default(),
                 line: tok.line,
                 position: tok.start_pos,
                 message: format!("Failed to read include file '{}': {}", path, e),
-                source_line: String::new(),
+                source_line: self.rom.get_source_line(Some(tok.line)),
                 });
             }
             }
@@ -1777,6 +2019,12 @@ if lo != 0 { self.update_effective_length(rom); }
                         }
                         // Register each field as a sublabel with correct offset
                         while let Some(field_name) = iter.next() {
+                            // Accept both &field and -field as field names
+                            let is_field = field_name.starts_with('&') || field_name.starts_with('-');
+                            if !is_field {
+                                continue;
+                            }
+                            let clean_field = &field_name[1..];
                             let size_str = iter.next();
                             let size = if let Some(size_str) = size_str {
                                 if let Ok(sz) = size_str.parse::<u16>() {
@@ -1787,7 +2035,7 @@ if lo != 0 { self.update_effective_length(rom); }
                             } else {
                                 1
                             };
-                            let sublabel = format!("{}/{}", device, field_name);
+                            let sublabel = format!("{}/{}", device, clean_field);
                             if !self.symbols.contains_key(&sublabel) {
                                 self.insert_symbol_if_new(&sublabel, Symbol {
                                     address: base_addr + offset,
@@ -1807,15 +2055,16 @@ if lo != 0 { self.update_effective_length(rom); }
         let tokens = lexer.tokenize()?;
 
         // Parse the included file
+
         let mut parser = Parser::new_with_source(tokens, path.to_string(), content);
         let ast = parser.parse()?;
 
         // Set the ROM path to the included file path for error context
-        rom.set_path(Some(path.to_string()));
+        self.rom.set_path(Some(path.to_string()));
 
         // Process the included AST nodes in first pass
         for node in ast {
-            self.process_node(&node, rom)?;
+            self.process_node(&node)?;
         }
 
         Ok(())
@@ -1831,7 +2080,11 @@ if lo != 0 { self.update_effective_length(rom); }
         let name = &raw[1..];
         if let Some(scope) = scope_opt {
             // Main scope is the part before the first '/'
-            let main_scope = if let Some(pos) = scope.find('/') { &scope[..pos] } else { scope };
+            let main_scope = if let Some(pos) = scope.find('/') {
+                &scope[..pos]
+            } else {
+                scope
+            };
             format!("{}/{}", main_scope, name)
         } else {
             name.to_string()

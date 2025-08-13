@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.6...uxn-tal-v0.1.7) - 2025-08-13
+
+### Added
+
+- deluge.tal assembles. \n macro, use of _ name, sublabel registration on a padding label, \t cant be skipped
+
 ## [0.1.6](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.5...uxn-tal-v0.1.6) - 2025-08-11
 
 ### Added
