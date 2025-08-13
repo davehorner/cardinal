@@ -30,11 +30,11 @@ pub enum AstNode {
     /// Instruction with mode flags
     Instruction(Instruction),
     /// Label definition
-    LabelDef(String),
+    LabelDef(Rune, String),
     /// Label reference
     LabelRef{label: String, rune: Rune, token: TokenWithPos},
     /// Sublabel definition
-    SublabelDef(String),
+    SublabelDef(TokenWithPos),
     /// Sublabel reference
     SublabelRef(TokenWithPos),
     /// Relative address reference
@@ -84,6 +84,8 @@ pub enum AstNode {
     LambdaStart(TokenWithPos),
     /// Lambda block end '}' corresponding to LambdaStart
     LambdaEnd(TokenWithPos),
+    Eof,    
+    Ignored, // Used for stray '}' after macro body or block
 }
 
 /// Parser for TAL assembly
@@ -120,7 +122,7 @@ impl Parser {
             path,
             source,
             brace_stack: Vec::new(),
-            macro_table, // <-- initialize
+            macro_table: macro_table, // <-- initialize
         }
     }
 
@@ -157,7 +159,7 @@ impl Parser {
                 }
                 _ => {
                     let node = self.parse_node()?;
-                    // println!("{:?}", node);
+                    println!("{:?}", node);
                     nodes.push(node);
                 }
             }
@@ -180,17 +182,22 @@ impl Parser {
                 _ => break,
             }
         }
-        let token = &self.current_token().token;
+        let token = self.current_token().token.clone();
         let path = if self.path.is_empty() { "(input)".to_string() } else { self.path.clone() };
+        let line = self.current_token().line;
+        let position = self.current_token().start_pos;
         match token {
+            Token::Comment(_) => {
+                // Comments are already skipped in the main loop
+                self.advance();
+                Ok(AstNode::Ignored)
+            }
             Token::Word(name) => {
                 // If the word is a macro name, treat it as a macro call
-                let name = name.clone();
-                let line = self.current_token().line;
-                let position = self.current_token().start_pos;
+
                 if self.is_macro_defined(&name) {
                     self.advance();
-                    return Ok(AstNode::MacroCall(name, line, position));
+                    return Ok(AstNode::MacroCall(name.clone(), line, position));
                 }
                 Err(AssemblerError::SyntaxError {
                     path: path.clone(),
@@ -213,7 +220,7 @@ impl Parser {
             }
             Token::RawHex(hex) => {
                 // Match uxnasm: 1–2 hex digits => byte, 3–4 hex digits => short.
-                let value = self.parse_hex_literal(hex)?;
+                let value = self.parse_hex_literal(&hex)?;
                 let hex_len = hex.len();
                 self.advance();
                 if hex_len <= 2 {
@@ -246,7 +253,7 @@ impl Parser {
                 let line = self.current_token().line;
                 let position = self.current_token().start_pos;
                 let value =
-                    u16::from_str_radix(bin, 2).map_err(|_| AssemblerError::SyntaxError {
+                    u16::from_str_radix(&bin, 2).map_err(|_| AssemblerError::SyntaxError {
                         path: self.path.clone(),
                         line,
                         position,
@@ -261,7 +268,7 @@ impl Parser {
                 }
             }
             Token::CharLiteral(ch) => {
-                let value = *ch as u8;
+                let value = ch as u8;
                 self.advance();
                 Ok(AstNode::Byte(value))
             }
@@ -286,24 +293,27 @@ impl Parser {
                     })
                 }
             }
-            Token::LabelDef(label) => {
+            Token::LabelDef(rune, label) => {
                 // Avoid holding a reference to self across self.advance()
+                let rune = rune;
                 let label = label.clone();
                 self.advance();
-                Ok(AstNode::LabelDef(label))
+                println!("DEBUG: Parsed label definition: @{}", label);
+                Ok(AstNode::LabelDef(rune, label))
             }
-            Token::LabelRef(label, rune) => {
+            Token::LabelRef(rune, label) => {
                 // Clone the values before advancing to avoid borrow checker issues
                 let label = label.to_string();
-                let rune = *rune;
+                let rune = rune;
                 let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::LabelRef{label, rune, token: tok})
+                println!("LabelRef: label='{}', rune={:?}, token=({}:{}:{})", label, rune, self.path, tok.line, tok.start_pos);
+                Ok(AstNode::LabelRef{label, rune: Rune::from(rune), token: tok})
             }
-            Token::SublabelDef(sublabel) => {
-                let sublabel = sublabel.clone();
+            Token::SublabelDef(_) => {
+                let tok = self.current_token().clone();
                 self.advance();
-                Ok(AstNode::SublabelDef(sublabel))
+                Ok(AstNode::SublabelDef(tok))
             }
             Token::SublabelRef(_) => {
                 let tok = self.current_token().clone();
@@ -326,26 +336,46 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::DotRef(tok))
             }
-            Token::SemicolonRef(_) => {
+            Token::EqualsRef(label) => {
                 let tok = self.current_token().clone();
-                self.advance();
-                Ok(AstNode::SemicolonRef(tok))
+                if label == "{" {
+                    // Anonymous lambda: ={ ... }
+                    self.advance();
+                    self.brace_stack.push(BraceKind::Lambda);
+                    Ok(AstNode::EqualsRef(tok))
+                } else {
+                    self.advance();
+                    Ok(AstNode::EqualsRef(tok))
+                }
             }
-            Token::EqualsRef(_) => {
+            Token::SemicolonRef(label) => {
                 let tok = self.current_token().clone();
-                self.advance();
-                Ok(AstNode::EqualsRef(tok))
+                if label == "{" {
+                    // Anonymous lambda: ;{ ... }
+                    self.advance();
+                    self.brace_stack.push(BraceKind::Lambda);
+                    Ok(AstNode::SemicolonRef(tok))
+                } else {
+                    self.advance();
+                    Ok(AstNode::SemicolonRef(tok))
+                }
             }
             Token::CommaRef(_) => {
                 let tok = self.current_token().clone();
                 self.advance();
                 Ok(AstNode::CommaRef(tok))
             }
-            Token::UnderscoreRef(_) => {
+            Token::UnderscoreRef(label) => {
                 let tok = self.current_token().clone();
-                // println!("DEBUG PARSER: Processing underscore reference: {:?}", tok);
-                self.advance();
-                Ok(AstNode::UnderscoreRef(tok))
+                if label == "{" {
+                    // Anonymous lambda: _{ ... }
+                    self.advance();
+                    self.brace_stack.push(BraceKind::Lambda);
+                    Ok(AstNode::UnderscoreRef(tok))
+                } else {
+                    self.advance();
+                    Ok(AstNode::UnderscoreRef(tok))
+                }
             }
             Token::QuestionRef(_) => {
                 let tok = self.current_token().clone();
@@ -399,7 +429,7 @@ impl Parser {
                 Ok(AstNode::HyphenRef(tok))
             }
             Token::Padding(addr) => {
-                let addr = *addr;
+                let addr = addr;
                 self.advance();
                 Ok(AstNode::Padding(addr))
             }
@@ -423,7 +453,7 @@ impl Parser {
                 Ok(AstNode::PaddingLabel(tok))
             }
             Token::RelativePadding(count) => {
-                let c = *count;
+                let c = count;
                 self.advance();
                 Ok(AstNode::RelativePadding(c))
             }
@@ -433,7 +463,10 @@ impl Parser {
                 Ok(AstNode::RelativePaddingLabel(tok))
             }
             Token::MacroDef(name) => {
+                // Accept macro names like '=' for ={ ... } blocks
                 let name = name.clone();
+                println!("MacroDef: {} {}:{}:{}:{} {:?}", name, self.path, self.current_token().line, self.current_token().start_pos, self.current_token().end_pos, self.current_token().token);
+
                 self.advance();
 
                 while matches!(
@@ -442,42 +475,81 @@ impl Parser {
                 ) {
                     self.advance();
                 }
-                println!("MacroDef: {}", name);
-                match &self.current_token().token {
-                    Token::BraceOpen => {
-                        self.advance();
-                        let mut body = Vec::new();
+                println!("MacroDef: {} {}:{}:{}:{} {:?}", name, self.path, self.current_token().line, self.current_token().start_pos, self.current_token().end_pos, self.current_token().token);
 
-                        while !matches!(&self.current_token().token, Token::BraceClose | Token::Eof)
-                        {
-                            let token = &self.current_token().token;
-                            match token {
-                                Token::Comment(_) | Token::Newline
-                                | Token::BracketOpen | Token::BracketClose => {
+                let mut body = Vec::new();
+                let mut depth = 1;
+                match &self.current_token().token {
+                    Token::BraceOpen | Token::ConditionalBlockStart => {
+                        // Accept either '{' or '?{' as block openers
+                        self.advance();
+                        while matches!(
+                            &self.current_token().token,
+                            Token::Comment(_) | Token::Newline
+                        ) {
+                            self.advance();
+                        }
+                        println!("DEBUG: Macro body starts at token: {:?}", self.current_token());
+                        while !self.is_at_end() && depth > 0 {
+                            match &self.current_token().token {
+                                Token::Comment(_) | Token::Newline | Token::BracketClose | Token::BracketOpen => {
                                     self.advance();
-                                    continue;
+                                }
+                                Token::BraceOpen | Token::ConditionalBlockStart => {
+                                    depth += 1;
+                                    println!("BraceOpen Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    body.push(self.parse_node()?);
+                                    println!("BraceOpen Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                }
+                                Token::BraceClose => {
+                                    depth -= 1;
+                                    if depth == 0 {
+                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        self.advance();
+                                        break;
+                                    } else {
+                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        let n = self.parse_node()?;
+                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        body.push(n);
+                                    }
+                                }
+                                Token::Eof => {
+                                    println!("Eof Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    break;
                                 }
                                 _ => {
+                                    // if matches!(self.current_token().token, Token::Eof) {
+                                    //     break;
+                                    // }
+                                    println!("Unexpected token inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    // Only parse and push if not a macro name
+                                    if let Token::Word(ref w) = self.current_token().token {
+                                        if self.is_macro_defined(w) {
+                                            // Don't expand macro calls inside macro definitions
+                                            self.advance();
+                                            continue;
+                                        }
+                                    }
                                     body.push(self.parse_node()?);
                                 }
                             }
                         }
-
-                        if matches!(&self.current_token().token, Token::BraceClose) {
-                            self.advance();
-                        } else {
+                        if depth != 0 && self.current_token().token != Token::Eof {
                             let line = self.current_token().line;
                             let position = self.current_token().start_pos;
                             return Err(AssemblerError::SyntaxError {
                                 path: self.path.clone(),
                                 line,
                                 position,
-                                message: "Expected '}' after macro body".to_string(),
+                                message: format!("Expected '}}' after macro body for macro '{}', depth={} token={:?}", name, depth, self.current_token()),
                                 source_line: self.get_source_line(line),
                             });
                         }
-
                         Ok(AstNode::MacroDef(name, body))
+                    }
+                    Token::Eof => {
+                        return Ok(AstNode::Ignored)
                     }
                     _ => {
                         println!("DEBUG: Unexpected token after macro name: {:?}", self.current_token().token);
@@ -499,6 +571,7 @@ impl Parser {
                 Ok(AstNode::RawString(bytes))
             }
             Token::Include(_) => {
+                println!("DEBUG: Include directive found: {:?}", self.current_token().token);
                 let tok = self.current_token().clone();
                 self.advance();
                 Ok(AstNode::Include(tok))
@@ -518,12 +591,35 @@ impl Parser {
             Token::BraceClose => {
                 let tok = self.current_token().clone();
                 self.advance();
-                let kind = self.brace_stack.pop().unwrap_or(BraceKind::Lambda);
-                Ok(match kind {
+                
+                // if self.brace_stack.is_empty() {
+                //     // Ignore stray '}' after macro body or after macro block just closed
+                //     return Ok(AstNode::Ignored);
+                // }
+                // if self.brace_stack.is_empty() {
+                  
+                //         // Ignore stray '}' after macro body or after macro block just closed
+                //         return Ok(AstNode::Ignored);
+                    
+                //     eprintln!("Unmatched '}}' at line {}. Current macro table:", tok.line);
+                //     for name in &self.macro_table {
+                //         eprintln!("Macro '{}'", name);
+                //     }
+                //     eprintln!("Brace stack: {:?}", self.brace_stack);
+                //     return Err(AssemblerError::SyntaxError {
+                //         path: self.path.clone(),
+                //         line: tok.line,
+                //         position: tok.start_pos,
+                //         message: "Unmatched '}' (no open '{' or '?{')".to_string(),
+                //         source_line: self.get_source_line(tok.line),
+                //     });
+                // }
+                Ok(match self.brace_stack.pop().unwrap_or(BraceKind::Lambda) {
                     BraceKind::Conditional => AstNode::ConditionalBlockEnd(tok),
                     BraceKind::Lambda => AstNode::LambdaEnd(tok),
                 })
             }
+            Token::Eof => Ok(AstNode::Eof),
             _ => {
                 let line = self.current_token().line;
                 let position = self.current_token().start_pos;
@@ -629,12 +725,12 @@ impl Parser {
         })
     }
 
-    fn current_token(&self) -> &TokenWithPos {
-        self.tokens.get(self.position).unwrap_or(&TokenWithPos {
+    fn current_token(&self) -> TokenWithPos {
+        self.tokens.get(self.position).cloned().unwrap_or(TokenWithPos {
             token: Token::Eof,
-            line: 0,
-            start_pos: 0,
-            end_pos: 0,
+            line: self.line,
+            start_pos: self.position_in_line,
+            end_pos: self.position_in_line,
             scope: None, // <-- Add default scope
         })
     }
