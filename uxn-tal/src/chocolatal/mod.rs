@@ -1,15 +1,18 @@
+#!/usr/bin/env rust-script
+//! ```cargo
+//! [dependencies]
+//! glob = "0.3"
+//! ```
 //! Chocolatal: TAL Preprocessor for uxn-tal
 //
 // This module provides preprocessing for Uxn TAL assembly files, inspired by preprocess-tal.sh.
 // It operates purely on &str, performing file inclusion, label/prefix expansion, lambda/loop label generation,
-// path rewriting, and special token rewrites. See README.md for details.
-
+// path rewriting, and special token rewrites. See README.md for details and comments at the end of this file.
+extern crate glob;
 use std::fs;
 use std::path::{Path, PathBuf};
 use glob::glob;
 use std::env;
-
-use crate::debug;
 
 #[derive(Debug)]
 pub enum PreprocessError {
@@ -108,7 +111,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                     .unwrap_or("");
                 let prefix_label = format!("{}{}", prefix, label);
                 prefix_stack.push(current_prefix.clone());
-                current_prefix = prefix_label.clone();
+                //current_prefix = prefix_label.clone();
                 let input_dir = std::path::Path::new(path).parent().map(|p| p.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
                 let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let path_part = path_part.trim_start_matches("./").trim_start_matches('/');
@@ -364,7 +367,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
     Ok(output)
 }
 
-fn process_include_pattern(incl_pattern_str: &str, output: &mut String, sep: &String, path_part: &str, debug_enabled: bool) -> Result<()> {
+fn process_include_pattern(incl_pattern_str: &str, output: &mut String, sep: &String, _path_part: &str, debug_enabled: bool) -> Result<()> {
     macro_rules! debug {
         ($($arg:tt)*) => {
             if debug_enabled {
@@ -508,7 +511,7 @@ fn process_include_pattern(incl_pattern_str: &str, output: &mut String, sep: &St
 }
 
 fn preprocess_include_file(current_dir: &PathBuf, path: &PathBuf) -> Result<String> {
-    let mut rel_path = path.strip_prefix(current_dir).unwrap_or(path);
+    let rel_path = path.strip_prefix(current_dir).unwrap_or(path);
     let rel_str = rel_path.to_str().unwrap_or("");
     let rel_str = rel_str.strip_prefix("./").or(rel_str.strip_prefix('/')).unwrap_or(rel_str);
     eprintln!("Including file (rewritten path): {}", rel_str);
@@ -529,7 +532,7 @@ fn preprocess_include_file(current_dir: &PathBuf, path: &PathBuf) -> Result<Stri
 
 
 /// Runs the deluge docker container and returns the output as a String.
-pub fn deluge_preprocess(input_path: &str) -> std::io::Result<String> {
+pub fn deluge_preprocess(_input_path: &str) -> std::io::Result<String> {
 // pub fn deluge_preprocess() -> std::io::Result<String> {
     use std::env;
     use std::process::Command;
@@ -544,14 +547,154 @@ pub fn deluge_preprocess(input_path: &str) -> std::io::Result<String> {
     // eprintln!("[deluge_preprocess:debug] stderr:\n{}", String::from_utf8_lossy(&output.stderr));
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
-fn resolve_include_path(pattern: &str, cwd: &std::path::Path, input_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    let candidate_cwd = cwd.join(pattern);
-    if candidate_cwd.exists() {
-        return Some(candidate_cwd);
+
+// --- Standalone CLI for Chocolatal Preprocessor ---
+// This allows you to compile and run this file directly with rustc, for quick testing or scripting.
+// Usage: rustc -o chocolatal_preprocessor src/chocolatal/mod.rs && ./chocolatal_preprocessor <input.tal> [output.tal]
+
+#[cfg(not(test))]
+fn main() {
+    use std::env;
+    use std::fs;
+    use std::io::{self, Read, Write};
+    use std::process;
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: {} <input1.tal> [input2.tal ...] [output.tal|-]", args[0]);
+        eprintln!("       If no input files or '-' is given, reads from stdin. If no output is given or '-' is given, writes to stdout.");
+        process::exit(1);
     }
-    let candidate_input = input_dir.join(pattern);
-    if candidate_input.exists() {
-        return Some(candidate_input);
+
+    // Determine output path: if last arg is not a .tal file and not '-', treat as output
+    let (input_files, output_path): (Vec<&str>, Option<&str>) = {
+        if args.len() == 2 {
+            // One arg: could be input or '-'
+            if args[1] == "-" {
+                (vec!["-"], None)
+            } else if args[1].ends_with(".tal") {
+                (vec![&args[1]], None)
+            } else {
+                (vec!["-"], Some(&args[1]))
+            }
+        } else {
+            let last = &args[args.len()-1];
+            if last == "-" || last.ends_with(".tal") {
+                (args[1..].iter().map(|s| s.as_str()).collect(), None)
+            } else {
+                (args[1..args.len()-1].iter().map(|s| s.as_str()).collect(), Some(last.as_str()))
+            }
+        }
+    };
+
+    // Read and concatenate all input files (or stdin)
+    let mut input = String::new();
+    let mut input_path = String::new();
+    for (i, file) in input_files.iter().enumerate() {
+        let (content, path) = if *file == "-" {
+            let mut buf = String::new();
+            if let Err(e) = io::stdin().read_to_string(&mut buf) {
+                eprintln!("Failed to read from stdin: {}", e);
+                process::exit(1);
+            }
+            (buf, "<stdin>".to_string())
+        } else {
+            let content = match fs::read_to_string(file) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Failed to read {}: {}", file, e);
+                    process::exit(1);
+                }
+            };
+            (content, file.to_string())
+        };
+        if i > 0 {
+            input.push_str("\n"); // Separate files with newline
+        }
+        input.push_str(&content);
+        if input_path.is_empty() {
+            input_path = path;
+        }
     }
-    None
+
+    match preprocess(&input, &input_path) {
+        Ok(result) => {
+            match output_path {
+                Some(out) if out != "-" => {
+                    if let Err(e) = fs::write(out, &result) {
+                        eprintln!("Failed to write {}: {}", out, e);
+                        process::exit(1);
+                    }
+                }
+                _ => {
+                    // Write to stdout
+                    if let Err(e) = io::stdout().write_all(result.as_bytes()) {
+                        eprintln!("Failed to write to stdout: {}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Preprocess error: {:?}", e);
+            process::exit(1);
+        }
+    }
 }
+
+// # Running with rust-script or as a CLI
+//
+// supports any number of .tal input files (or - for stdin), concatenates and preprocesses them in order, and writes to the specified output or stdout.
+// 
+// This file is designed to be executable directly using [`rust-script`](https://rust-script.org/) or as a compiled binary.
+// The shebang (`#!/usr/bin/env rust-script`) and the embedded Cargo manifest allow you to run it as a script:
+//
+// ```sh
+// rust-script src/chocolatal/mod.rs file1.tal file2.tal ... [output.tal|-]
+// ```
+//
+// - You can specify as many input `.tal` files as you want; they will be concatenated in order and preprocessed as one.
+// - If any input is `-`, it will read from stdin at that position.
+// - If the last argument is not a `.tal` file or `-`, it is treated as the output file. Otherwise, output goes to stdout.
+//
+// ## Example usage
+//
+// ```sh
+// rust-script src/chocolatal/mod.rs foo.tal bar.tal baz.tal > preprocessed.tal
+// rust-script src/chocolatal/mod.rs foo.tal - bar.tal output.tal
+// rust-script src/chocolatal/mod.rs - output.tal
+// ```
+//
+// ## Dependencies
+//
+// The embedded manifest ensures that the `glob` crate is available when running with rust-script.
+//
+// ## Notes
+//
+// - You can set the environment variable `CHOCOLATAL_DEBUG=1` to enable debug output to stderr.
+// - This script can also be compiled and run as a standalone binary (see the comments at the end of the file).
+/*
+To build and run this file directly with rustc (bypassing Cargo):
+
+    git clone https://github.com/rust-lang/glob.git
+    # For Linux/macOS:
+    rustc --crate-type=lib glob/src/lib.rs -o libglob.rlib
+    rustc -L . -o chocolatal_preprocessor src/chocolatal/mod.rs --extern glob=libglob.rlib
+
+    # For Windows (PowerShell or CMD):
+    rustc --crate-type=lib glob\src\lib.rs -o libglob.rlib
+    rustc -L . -o chocolatal_preprocessor.exe src\chocolatal\mod.rs --extern glob=libglob.rlib
+
+    # Read from a file, write to stdout:
+    ./chocolatal_preprocessor input.tal > output.tal
+
+    # Read from stdin, write to stdout:
+    cat input.tal | ./chocolatal_preprocessor - > output.tal
+
+    # Read from a file, write to a file:
+    ./chocolatal_preprocessor input.tal output.tal
+
+    # Read from stdin, write to a file:
+    cat input.tal | ./chocolatal_preprocessor - output.tal
+*/
+
+// MIT License - Copyright 2025 @notchoc, David Horner
