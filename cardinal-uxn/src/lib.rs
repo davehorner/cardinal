@@ -316,16 +316,16 @@ impl Stack {
 /// The virtual machine itself
 pub struct Uxn<'a> {
     /// Device memory
-    dev: [u8; 256],
+    pub dev: [u8; 256],
     /// 64 KiB of VM memory
-    ram: &'a mut [u8; 65536],
+    pub ram: &'a mut [u8; 65536],
     /// 256-byte data stack
-    stack: Stack,
+    pub stack: Stack,
     /// 256-byte return stack
-    ret: Stack,
+    pub ret: Stack,
 
     /// Preferred evaluation backend
-    backend: Backend,
+    pub backend: Backend,
 }
 
 macro_rules! op_cmp {
@@ -1634,6 +1634,16 @@ impl<'a> Uxn<'a> {
         let v = s.pop();
         s.push(v.shr(shr).shl(shl));
         Some(pc)
+    }
+
+    /// Returns a shared reference to the RAM buffer
+    pub fn ram(&self) -> &[u8] {
+        &self.ram[..]
+    }
+
+    /// Returns a mutable reference to the RAM buffer
+    pub fn ram_mut(&mut self) -> &mut [u8] {
+        &mut self.ram[..]
     }
 }
 
