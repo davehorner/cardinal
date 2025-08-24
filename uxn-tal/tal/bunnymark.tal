@@ -218,4 +218,3 @@
 
 @sprite &length $2
 	&array &x 0600 &y 0500 &xvel 0060 &yvel 0010
-
