@@ -2,6 +2,8 @@ use std::{env, fs, path::{PathBuf, Path}, process::exit};
 use uxn_tal::{Assembler, AssemblerError};
 use std::collections::VecDeque;
 use uxn_tal::debug;
+use uxn_tal::chocolatal;
+
 fn main() {
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
@@ -11,16 +13,14 @@ fn main() {
 
 fn real_main() -> Result<(), AssemblerError> {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    if args.is_empty() || needs_help(&args) {
-        print_usage();
-        if args.is_empty() { exit(1); }
-        return Ok(());
-    }
-
-    // Flags
+    let mut no_pre = false;
+    let mut preprocess_only = false;
+    let mut no_intermediate = false;
     let mut want_version = false;
     let mut want_verbose = false;
     let mut want_cmp = false;
+    let mut want_cmp_pp = false;
+    let mut want_stdin = false;
     let mut rust_iface: Option<String> = None; // module name (None => not requested)
 
     // Collect positional (non-flag) args after flag parsing
@@ -33,6 +33,10 @@ fn real_main() -> Result<(), AssemblerError> {
             want_verbose = true;
         } else if a == "--cmp" {
             want_cmp = true;
+        } else if a == "--cmp-pp" {
+            want_cmp_pp = true;
+        } else if a == "--stdin" {
+            want_stdin = true;
         } else if a.starts_with("--rust-interface") {
             // Forms:
             //   --rust-interface
@@ -47,6 +51,12 @@ fn real_main() -> Result<(), AssemblerError> {
             } else {
                 rust_iface = Some("symbols".to_string());
             }
+        } else if a == "--no-pre" {
+            no_pre = true;
+        } else if a == "--preprocess" {
+            preprocess_only = true;
+        } else if a == "--no-intermediate" {
+            no_intermediate = true;
         } else if a.starts_with('-') {
             eprintln!("unknown flag: {a}");
             print_usage();
@@ -55,33 +65,80 @@ fn real_main() -> Result<(), AssemblerError> {
             positional.push(a);
         }
     }
+    if want_cmp_pp {
+        if positional.is_empty() {
+            eprintln!("missing input file for --cmp-pp");
+            print_usage();
+            exit(2);
+        }
+        // Use canonical path resolution as in normal mode
+        let raw_input = &positional[0];
+        let input_path = match resolve_input_path(raw_input) {
+            Some(p) => p,
+            None => {
+                return Err(simple_err(
+                    std::path::Path::new(raw_input),
+                    "input file not found (tried direct, +.tal, multi-root recursive scan)",
+                ));
+            }
+        };
+        // Call debug::compare_preprocessors and exit
+        if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string()) {
+            eprintln!("compare_preprocessors error: {e}");
+            exit(1);
+        }
+        exit(0);
+    }
 
     if want_version {
         println!("uxntal {} (library)", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
-    if positional.is_empty() {
-        eprintln!("missing input file");
-        print_usage();
-        exit(2);
-    }
-
-    // NEW: robust resolution of the input path (expanded search roots)
-    let raw_input = &positional[0];
-    let input_path = match resolve_input_path(raw_input) {
-        Some(p) => p,
-        None => {
-            return Err(simple_err(
-                std::path::Path::new(raw_input),
-                "input file not found (tried direct, +.tal, multi-root recursive scan)",
-            ));
+    let mut source = String::new();
+    let mut canon_input = PathBuf::new();
+    let mut input_from_stdin = false;
+    if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
+        // Read from stdin
+        use std::io::{self, Read};
+        io::stdin().read_to_string(&mut source).map_err(|e| simple_err(Path::new("/dev/stdin"), &format!("failed to read from stdin: {e}")))?;
+        canon_input = PathBuf::from("/dev/stdin");
+        input_from_stdin = true;
+    } else {
+        if positional.is_empty() {
+            eprintln!("missing input file");
+            print_usage();
+            exit(2);
         }
-    };
-    // Canonical (or absolute fallback) before chdir so later paths remain valid
-    let canon_input = input_path
-        .canonicalize()
-        .unwrap_or_else(|_| input_path.clone());
+        // NEW: robust resolution of the input path (expanded search roots)
+        let raw_input = &positional[0];
+        let input_path = match resolve_input_path(raw_input) {
+            Some(p) => p,
+            None => {
+                return Err(simple_err(
+                    std::path::Path::new(raw_input),
+                    "input file not found (tried direct, +.tal, multi-root recursive scan)",
+                ));
+            }
+        };
+        // Canonical (or absolute fallback) before chdir so later paths remain valid
+        canon_input = input_path
+            .canonicalize()
+            .unwrap_or_else(|_| input_path.clone());
+
+        // Change current working directory to the input file's directory (for relative includes)
+        if let Some(parent) = canon_input.parent() {
+            if let Err(e) = std::env::set_current_dir(parent) {
+                if want_verbose {
+                    eprintln!("warning: failed to chdir to {}: {e}", parent.display());
+                }
+            } else if want_verbose {
+                eprintln!("Changed working directory to {}", parent.display());
+            }
+        }
+        source = fs::read_to_string(&canon_input)
+            .map_err(|e| simple_err(&canon_input, &format!("failed to read: {e}")))?;
+    }
 
     // Compute rom path (absolute) before changing directory
     let rom_path = if positional.len() > 1 {
@@ -91,24 +148,13 @@ fn real_main() -> Result<(), AssemblerError> {
         } else {
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(supplied)
         }
+    } else if input_from_stdin {
+        // If reading from stdin and no output specified, default to "out.rom"
+        PathBuf::from("out.rom")
     } else {
         // If no explicit output, derive sibling .rom next to input file
         canon_input.with_extension("rom")
     };
-
-    // Change current working directory to the input file's directory (for relative includes)
-    if let Some(parent) = canon_input.parent() {
-        if let Err(e) = std::env::set_current_dir(parent) {
-            if want_verbose {
-                eprintln!("warning: failed to chdir to {}: {e}", parent.display());
-            }
-        } else if want_verbose {
-            eprintln!("Changed working directory to {}", parent.display());
-        }
-    }
-
-    let source = fs::read_to_string(&canon_input)
-        .map_err(|e| simple_err(&canon_input, &format!("failed to read: {e}")))?;
 
     if want_verbose {
         eprintln!("Resolved input : {}", canon_input.display());
@@ -118,6 +164,40 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
+    let preprocessed = if no_pre {
+        source.clone()
+    } else {
+        match chocolatal::preprocess(&source, &canon_input.display().to_string()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Preprocessor error: {:?}", e);
+                std::process::exit(1);
+            }
+        }
+    };
+
+    if preprocess_only {
+        print!("{}", preprocessed);
+        std::process::exit(0);
+    }
+
+    // Write preprocessed output to .pre.tal in cwd
+    let mut pre_path = PathBuf::from(&canon_input);
+    pre_path.set_extension("pre.tal");
+    if let Err(e) = fs::write(&pre_path, &preprocessed) {
+        eprintln!("Failed to write intermediate file {}: {}", pre_path.display(), e);
+        std::process::exit(1);
+    }
+
+    // Use the intermediate file for assembly
+    let pre_source = match fs::read_to_string(&pre_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to read intermediate file {}: {}", pre_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+
     let mut asm = Assembler::new();
 
     // --- ADD: cmp mode ---
@@ -125,14 +205,14 @@ fn real_main() -> Result<(), AssemblerError> {
         // Use DebugAssembler from the debug module
         let mut dbg = debug::DebugAssembler::default();
         let res = dbg.assemble_and_compare(
-            &source,
+            &preprocessed,
             &canon_input.display().to_string()
             ,true
         );
         return res.map(|_| ());
     }
 
-    let rom = asm.assemble(&source, Some(canon_input.display().to_string()))?;
+    let rom = asm.assemble(&pre_source, Some(pre_path.to_string_lossy().to_string()))?;
     fs::write(&rom_path, &rom)
         .map_err(|e| simple_err(&rom_path, &format!("failed to write rom: {e}")))?;
 
@@ -143,7 +223,7 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     if let Some(module_name) = rust_iface {
-        let mod_src = asm.generate_rust_interface_module(&module_name);
+        let mod_src = uxn_tal::generate_rust_interface_module(&asm, &module_name);
         let iface_path = rom_path.with_extension("rom.symbols.rs");
         fs::write(&iface_path, mod_src)
             .map_err(|e| simple_err(&iface_path, &format!("failed to write rust interface: {e}")))?;
@@ -154,6 +234,11 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
+    // Remove intermediate file unless --no-intermediate is set
+    if !no_intermediate {
+        let _ = fs::remove_file(&pre_path);
+    }
+
     Ok(())
 }
 
@@ -162,21 +247,27 @@ fn needs_help(args: &[String]) -> bool {
 }
 
 fn print_usage() {
-    eprintln!(
+        eprintln!(
 "Usage:
-  uxntal [flags] <input.tal> [output.rom]
+    uxntal [flags] <input.tal|/dev/stdin> [output.rom]
 
 Flags:
-  --version, -V         Show version and exit
-  --verbose, -v         Verbose output
-  --rust-interface[=M]  Emit Rust symbols module (default module name: symbols)
-  --cmp                 Compare disassembly for all backends
-  --help, -h            Show this help
+    --version, -V         Show version and exit
+    --verbose, -v         Verbose output
+    --rust-interface[=M]  Emit Rust symbols module (default module name: symbols)
+    --cmp                 Compare disassembly for all backends
+    --stdin               Read input.tal from stdin
+    --cmp-pp             Compare preprocessor output (Rust vs deluge)
+    --no-pre              Disable preprocessing
+    --preprocess          Print preprocessed output and exit
+    --help, -h            Show this help
 
 Behavior:
-  If output.rom omitted, use input path with .rom extension.
-  Rust interface file path: <output>.rom.symbols.rs"
-    );
+    By default, input is preprocessed using chocolatal.
+    If output.rom omitted, use input path with .rom extension, or 'out.rom' if reading from stdin.
+    You can also pass /dev/stdin as the input filename to read from stdin.
+    Rust interface file path: <output>.rom.symbols.rs"
+        );
 }
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {

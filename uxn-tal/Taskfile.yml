@@ -1,0 +1,58 @@
+
+version: "3"
+
+vars:
+  REPO_URL: https://git.sr.ht/~angelwood/combee
+  REPO_DIR: combee
+
+tasks:
+  default:
+    deps: [build]
+
+  # Cross-platform wrapper
+  build:
+    desc: Clone/update and build combee
+    deps: [clone]
+    cmds:
+      - task: build:posix
+      - task: build:win
+
+  # --- Clone/update ---
+  clone:
+    desc: Clone or update the repository
+    cmds:
+      - task: clone:posix
+      - task: clone:win
+
+  clone:posix:
+    platforms: [linux, darwin]
+    desc: Clone/update on macOS/Linux
+    cmds:
+      - >
+        [ -d "{{.REPO_DIR}}" ]
+        && git -C "{{.REPO_DIR}}" pull --rebase
+        || git clone "{{.REPO_URL}}" "{{.REPO_DIR}}"
+
+  clone:win:
+    platforms: [windows]
+    desc: Clone/update on Windows
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.REPO_DIR}}') { git -C '{{.REPO_DIR}}' pull --rebase } else { git clone '{{.REPO_URL}}' '{{.REPO_DIR}}' }" 
+
+  # --- Build ---
+  build:posix:
+    platforms: [linux, darwin]
+    desc: Build on macOS/Linux using build-smol.sh
+    dir: "{{.REPO_DIR}}"
+    cmds:
+      - chmod +x build-smol.sh
+      - ./build-smol.sh
+
+  build:win:
+    platforms: [windows]
+    desc: Build on Windows (no strip needed)
+    dir: "{{.REPO_DIR}}"
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - cmd: go build -ldflags "-s -w" -o combee.exe
