@@ -40,7 +40,7 @@ pub mod assembler;
 pub mod devicemap;
 pub mod debug;
 pub mod runes;
-
+pub mod chocolatal;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
 
@@ -144,8 +144,73 @@ pub fn assemble_with_rust_interface_module(
 ) -> Result<(Vec<u8>, String), AssemblerError> {
     let mut a = Assembler::new();
     let rom = a.assemble(source, None)?;
-    let module = a.generate_rust_interface_module(module_name);
+    let module = generate_rust_interface_module(&a, module_name);
     Ok((rom, module))
+}
+
+pub fn generate_rust_interface_module(
+    assembler: &crate::assembler::Assembler,
+    module_name: &str,
+) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("pub mod {} {{\n", module_name));
+    out.push_str("    #![allow(non_upper_case_globals)]\n");
+    out.push_str("    // Auto-generated: label address & size constants\n");
+    // Address and size constants
+    for name in &assembler.symbol_order {
+        if let Some(sym) = assembler.symbols.get(name) {
+            let id = {
+                let mut s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                if s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    s.insert(0, '_');
+                }
+                s.to_ascii_uppercase()
+            };
+            out.push_str(&format!("    pub const _c{}: usize = 0x{:04X};\n", id, sym.address));
+            // Compute size
+            let next_addr = assembler.symbol_order.iter()
+                .skip_while(|n| *n != name)
+                .skip(1)
+                .filter_map(|n| assembler.symbols.get(n))
+                .map(|s| s.address)
+                .find(|&a| a > sym.address)
+                .unwrap_or(assembler.effective_length as u16);
+            let size = if next_addr > sym.address { next_addr - sym.address } else { 0 };
+            out.push_str(&format!("    pub const _c{}_SIZE: usize = 0x{:04X};\n", id, size));
+        }
+    }
+    // Helper function to get a slice for a label
+    out.push_str(
+        r#"
+    /// Returns a slice of RAM for a label by name (address, size)
+    pub fn get_slice<'a>(ram: &'a [u8], label: &str) -> Option<&'a [u8]> {
+        match label {
+"#,
+    );
+    for name in &assembler.symbol_order {
+        if let Some(_sym) = assembler.symbols.get(name) {
+            let id = {
+                let mut s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                if s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    s.insert(0, '_');
+                }
+                s.to_ascii_uppercase()
+            };
+            out.push_str(&format!(
+                "            \"{name}\" => Some(&ram[_c{}..{}]),\n",
+                id,
+                format!("_c{}+_c{}_SIZE", id, id)
+            ));
+        }
+    }
+    out.push_str(
+        r#"            _ => None,
+        }
+    }
+"#,
+    );
+    out.push_str("}\n");
+    out
 }
 
 #[cfg(test)]

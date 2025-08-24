@@ -1,3 +1,5 @@
+use crate::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice; 
+
 impl<'a> Stage<'a> {
     /// Load symbols from a byte slice (for embedded .sym files)
     pub fn load_symbols(&mut self, data: &[u8]) {
@@ -418,6 +420,11 @@ impl<'a> Stage<'a> {
             texture,
         }
     }
+
+    pub fn get_bang(&self) {
+       get_slice(self.vm.ram,"*");
+    }
+
     pub fn set_resize_callback(&mut self, f: Box<dyn FnMut(u16, u16)>) {
         self.resized = Some(f);
     }

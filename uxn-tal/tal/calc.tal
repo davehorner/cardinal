@@ -603,8 +603,8 @@ JMP2r
 	&color
 	0101 0102 0101 0102 0101 0102 0102 0202
 	&ops
-	:do-add :do-sub :do-mul :do-div
-	:do-and :do-ora :do-eor :do-not
+	=do-add =do-sub =do-mul =do-div
+	=do-and =do-ora =do-eor =do-not
 
 @sin-pcm
 	8083 8689 8c8f 9295 989b 9ea1 a4a7 aaad
