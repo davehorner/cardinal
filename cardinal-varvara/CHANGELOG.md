@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.9](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.8...cardinal-varvara-v0.4.9) - 2025-08-08
+
+### Added
+
+- *(unx-tal)* initial developer release of unx-tal
+
+### Other
+
+- *(gui+build)* add e_midi support and aarch64 cross-compilation via Docker  - Enabled `uses_e_midi` feature in `cardinal-demo` (enabled by default). - Added `e_midi.rs` module with MidiPlayerThread lifecycle management. - Cleanly shuts down MIDI thread on GUI close via `AppWithClose` wrapper.  NOT TRUE - CTRL+C to EXIT.  TODO. - Reduced USB controller logging noise for cleaner output. - Added `Dockerfile.aarch64` and Windows `build_aarch64.cmd` to support   cross-compilation of cardinal-orcas for `aarch64-unknown-linux-gnu`.
+
 ## [0.4.8](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.7...cardinal-varvara-v0.4.8) - 2025-07-31
 
 ### Added

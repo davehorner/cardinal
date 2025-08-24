@@ -4,7 +4,6 @@
 use cardinal_gui::uxn_panel;
 use eframe::egui;
 use egui::{StrokeKind, ViewportBuilder, ViewportId}; // Import the UxnPanel module
-                                                     // use std::sync::Mutex; // No longer needed here
 mod monitor_info;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -474,7 +473,12 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                 let panel_id_str = if let Some(idx) = self.focused_panel {
                     if let Some(uxn_panels) = self.uxn_panels.as_ref() {
                         if let Some(panel) = uxn_panels.get(idx) {
-                            format!("{:?}", panel.last_response_id())
+                            use cardinal_gui::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice;
+                            let bang=get_slice(panel.stage.vm.ram(),"*");
+                            let x = get_slice(panel.stage.vm.ram(),"Mouse/x");
+                            let posx = get_slice(panel.stage.vm.ram(),"cursor/x");
+                            let grid = get_slice(panel.stage.vm.ram(),"grid/buf");
+                            format!("{:?} bang  {:?} x {:?} posx {:?} grid {:?}", panel.last_response_id(), bang, x, posx, grid)
                         } else {
                             "None".to_string()
                         }
