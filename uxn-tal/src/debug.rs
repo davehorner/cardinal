@@ -416,3 +416,49 @@ struct ByteDiff {
     a: u8,
     b: u8,
 }
+
+
+// debug_preprocess.rs: Compare chocolatal (Rust) vs deluge (Docker) preprocessors
+//
+// This module provides a CLI and helpers to run both preprocessors on the same input,
+// diff the results, and print diagnostics for debugging and regression testing.
+
+use std::io::{self, Write};
+use crate::chocolatal::{preprocess, deluge_preprocess};
+
+/// Run both preprocessors on the given file and print a diff.
+pub fn compare_preprocessors(input_path: &str) -> io::Result<()> {
+    // Read input file
+    let input = fs::read_to_string(input_path)?;
+    // Run chocolatal (Rust)
+    let rust_out = match preprocess(&input, input_path) {
+        Ok(s) => s,
+        Err(e) => format!("[chocolatal error: {:?}]\n", e),
+    };
+    let rust_path = "chocolatal.tal";
+    let mut file = fs::File::create(rust_path)?;
+    file.write_all(rust_out.as_bytes())?;
+    // Run deluge (Docker)
+    let deluge_out = deluge_preprocess(input_path)?;
+    let deluge_pp_path = "deluge_pp_cmp.tal";
+    let mut file = fs::File::create(deluge_pp_path)?;
+    file.write_all(deluge_out.as_bytes())?;
+    // Diff the outputs (simple line-by-line)
+    let rust_lines: Vec<_> = rust_out.lines().collect();
+    let deluge_lines: Vec<_> = deluge_out.lines().collect();
+    let max = rust_lines.len().max(deluge_lines.len());
+    let mut found = false;
+    for i in 0..max {
+        let r = rust_lines.get(i).map_or("", |v| v);
+        let d = deluge_lines.get(i).map_or("", |v| v);
+        if r != d {
+            println!("First difference at line {}:{}:\n  chocolatal : {}\n  deluge_pp  : {}\n{}:{}:\n", rust_path, i+1, r, d, deluge_pp_path, i+1);
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        println!("No differences found.");
+    }
+    Ok(())
+}

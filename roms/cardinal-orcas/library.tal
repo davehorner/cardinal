@@ -457,5 +457,5 @@
 	POP2
 	JMP2r
 
-~src/assets.tal
+~assets.tal
 

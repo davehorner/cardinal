@@ -951,4 +951,4 @@
 	&select "Select $1
 	&guide "Ctrl+h 20 "to 20 "toggle 20 "guide. $1
 
-~src/library.tal
+~library.tal

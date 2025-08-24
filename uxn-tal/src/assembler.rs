@@ -28,34 +28,33 @@ pub struct Symbol {
 
 /// TAL assembler
 pub struct Assembler {
-    rom: Rom,
-    opcodes: Opcodes,
-    symbols: HashMap<String, Symbol>,
-    symbol_order: Vec<String>, // preserve insertion order like uxnasm
-    macros: HashMap<String, Macro>,
-    current_label: Option<String>,
-    references: Vec<Reference>,
-    device_map: HashMap<String, Device>, // device name -> Device
-    line_number: usize,
-    position_in_line: usize,
-    effective_length: usize, // Track effective length like uxnasm.c
-    //lambda_counter: u16, // Add lambda counter as a field
-    lambda_counter: usize,
-    lambda_stack: Vec<usize>,
-    last_top_label: Option<String>, // remember last top-level label to scope stray sublabels
-    macro_expansion_stack: Vec<String>, // Add macro expansion stack
+    pub rom: Rom,
+    pub opcodes: Opcodes,
+    pub symbols: HashMap<String, Symbol>,
+    pub symbol_order: Vec<String>, // preserve insertion order like uxnasm
+    pub macros: HashMap<String, Macro>,
+    pub current_label: Option<String>,
+    pub references: Vec<Reference>,
+    pub device_map: HashMap<String, Device>, // device name -> Device
+    pub line_number: usize,
+    pub position_in_line: usize,
+    pub effective_length: usize, // Track effective length like uxnasm.c
+    pub lambda_counter: usize,
+    pub lambda_stack: Vec<usize>,
+    pub last_top_label: Option<String>, // remember last top-level label to scope stray sublabels
+    pub macro_expansion_stack: Vec<String>, // Add macro expansion stack
 }
 
 /// Represents a forward reference that needs to be resolved
 #[derive(Debug, Clone)]
-struct Reference {
-    name: String,
-    rune: char,
-    address: u16,
-    line: usize,
-    path: String,
-    scope: Option<String>, // Add scope context
-    token: Option<TokenWithPos>,
+pub struct Reference {
+    pub name: String,
+    pub rune: char,
+    pub address: u16,
+    pub line: usize,
+    pub path: String,
+    pub scope: Option<String>, // Add scope context
+    pub token: Option<TokenWithPos>,
 }
 
 impl Assembler {
@@ -1446,82 +1445,6 @@ self.prune_lambda_aliases();
             // }
         }
         Ok(())
-    }
-
-    /// Generate a Rust module exposing all labels as pub const u16 plus *_SIZE constants.
-    /// Size rule:
-    ///   size(label) = next_greater_label_address - label.address
-    ///   (last label uses program_end = effective_length)
-    ///   labels sharing an address get size 0.
-    /// NOTE: Addresses are absolute (include zero-page); consumer usually subtracts 0x0100 for ROM offset.
-    pub fn generate_rust_interface_module(&self, module_name: &str) -> String {
-        fn norm(raw: &str) -> String {
-            let mut s: String =
-                raw.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-            if s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-                s.insert(0, '_');
-            }
-            s.to_ascii_uppercase()
-        }
-        // Gather (name, address) sorted by address to derive sizes.
-        let mut by_addr: Vec<(&str, u16)> =
-            self.symbols.iter().map(|(n, s)| (n.as_str(), s.address)).collect();
-        by_addr.sort_by_key(|(_, a)| *a);
-        // Precompute next greater address map.
-        use std::collections::HashMap;
-        let mut next_map: HashMap<u16, u16> = HashMap::new();
-        for (idx, &(_, addr)) in by_addr.iter().enumerate() {
-            if next_map.contains_key(&addr) {
-                continue; // already set (we only care about first greater)
-            }
-            let next_greater = by_addr
-                .iter()
-                .skip(idx + 1)
-                .find(|(_, a2)| *a2 > addr)
-                .map(|(_, a2)| *a2)
-                .unwrap_or(self.effective_length as u16);
-            next_map.insert(addr, next_greater);
-        }
-
-        let mut used = std::collections::HashSet::new();
-        let mut lines = Vec::new();
-        lines.push(format!("pub mod {} {{", module_name));
-        lines.push("    #![allow(non_upper_case_globals)]".into());
-        lines.push("    // Auto-generated: label address & size constants".into());
-        for name in &self.symbol_order {
-            if let Some(sym) = self.symbols.get(name) {
-                let mut id = norm(name);
-                if id.is_empty() {
-                    continue;
-                }
-                if used.contains(&id) {
-                    let base = id.clone();
-                    let mut n = 2;
-                    while used.contains(&format!("{}_{}", base, n)) {
-                        n += 1;
-                    }
-                    id = format!("{}_{}", base, n);
-                }
-                used.insert(id.clone());
-                // Address constant
-                lines.push(format!("    pub const {id}: u16 = 0x{:04X};", sym.address));
-                // Size constant (avoid collision)
-                let mut size_ident = format!("{}_SIZE", id);
-                if used.contains(&size_ident) {
-                    let mut n = 2;
-                    while used.contains(&format!("{}_SIZE_{n}", id)) {
-                        n += 1;
-                    }
-                    size_ident = format!("{}_SIZE_{n}", id);
-                }
-                let next = *next_map.get(&sym.address).unwrap_or(&(self.effective_length as u16));
-                let size = if next > sym.address { next - sym.address } else { 0 };
-                used.insert(size_ident.clone());
-                lines.push(format!("    pub const {size_ident}: u16 = 0x{:04X};", size));
-            }
-        }
-        lines.push("}".into());
-        lines.join("\n")
     }
 
     // NEW: inject default device + its fields if referenced but not declared
