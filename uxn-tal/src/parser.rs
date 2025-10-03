@@ -2,10 +2,8 @@
 
 use crate::error::{AssemblerError, Result};
 use crate::lexer::{Token, TokenWithPos};
-use crate::opcode_table::UXN_OPCODE_TABLE;
 use crate::opcodes::Opcodes;
 use crate::runes::Rune;
-use std::collections::HashMap;
 
 /// Represents a parsed instruction with modes
 #[derive(Debug, Clone)]
@@ -32,7 +30,11 @@ pub enum AstNode {
     /// Label definition
     LabelDef(Rune, String),
     /// Label reference
-    LabelRef{label: String, rune: Rune, token: TokenWithPos},
+    LabelRef {
+        label: String,
+        rune: Rune,
+        token: TokenWithPos,
+    },
     /// Sublabel definition
     SublabelDef(TokenWithPos),
     /// Sublabel reference
@@ -84,7 +86,7 @@ pub enum AstNode {
     LambdaStart(TokenWithPos),
     /// Lambda block end '}' corresponding to LambdaStart
     LambdaEnd(TokenWithPos),
-    Eof,    
+    Eof,
     Ignored, // Used for stray '}' after macro body or block
 }
 
@@ -101,7 +103,10 @@ pub struct Parser {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BraceKind { Conditional, Lambda }
+enum BraceKind {
+    Conditional,
+    Lambda,
+}
 
 impl Parser {
     pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
@@ -174,8 +179,7 @@ impl Parser {
         loop {
             let token = &self.current_token().token;
             match token {
-                Token::Newline | Token::Comment(_)
-                | Token::BracketOpen | Token::BracketClose => {
+                Token::Newline | Token::Comment(_) | Token::BracketOpen | Token::BracketClose => {
                     self.advance();
                     continue;
                 }
@@ -183,7 +187,11 @@ impl Parser {
             }
         }
         let token = self.current_token().token.clone();
-        let path = if self.path.is_empty() { "(input)".to_string() } else { self.path.clone() };
+        let path = if self.path.is_empty() {
+            "(input)".to_string()
+        } else {
+            self.path.clone()
+        };
         let line = self.current_token().line;
         let position = self.current_token().start_pos;
         match token {
@@ -307,8 +315,15 @@ impl Parser {
                 let rune = rune;
                 let tok = self.current_token().clone();
                 self.advance();
-                println!("LabelRef: label='{}', rune={:?}, token=({}:{}:{})", label, rune, self.path, tok.line, tok.start_pos);
-                Ok(AstNode::LabelRef{label, rune: Rune::from(rune), token: tok})
+                println!(
+                    "LabelRef: label='{}', rune={:?}, token=({}:{}:{})",
+                    label, rune, self.path, tok.line, tok.start_pos
+                );
+                Ok(AstNode::LabelRef {
+                    label,
+                    rune: Rune::from(rune),
+                    token: tok,
+                })
             }
             Token::SublabelDef(_) => {
                 let tok = self.current_token().clone();
@@ -387,32 +402,32 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::ExclamationRef(tok))
             }
-                // Token::ConditionalOperator => {
-                //     self.advance();
-                //     // Skip any newlines or comments after '?'
-                //     while matches!(
-                //         &self.current_token().token,
-                //         Token::Newline | Token::Comment(_)
-                //     ) {
-                //         self.advance();
-                //     }
-                //     &self.current_token().token
-                //     // let next_token = &self.current_token().token;
-                //     // match next_token {
-                //     //     _ => {
-                //     //         let line = self.current_token().line;
-                //     //         let position = self.current_token().start_pos;
-                //     //         Err(AssemblerError::SyntaxError {
-                //     //             path: self.path.clone(),
-                //     //             line,
-                //     //             position,
-                //     //             message: "Conditional operator '?' must be followed by a block"
-                //     //                 .to_string(),
-                //     //             source_line: self.get_source_line(line),
-                //     //         })
-                //     //     }
-                //     // }
-                // }
+            // Token::ConditionalOperator => {
+            //     self.advance();
+            //     // Skip any newlines or comments after '?'
+            //     while matches!(
+            //         &self.current_token().token,
+            //         Token::Newline | Token::Comment(_)
+            //     ) {
+            //         self.advance();
+            //     }
+            //     &self.current_token().token
+            //     // let next_token = &self.current_token().token;
+            //     // match next_token {
+            //     //     _ => {
+            //     //         let line = self.current_token().line;
+            //     //         let position = self.current_token().start_pos;
+            //     //         Err(AssemblerError::SyntaxError {
+            //     //             path: self.path.clone(),
+            //     //             line,
+            //     //             position,
+            //     //             message: "Conditional operator '?' must be followed by a block"
+            //     //                 .to_string(),
+            //     //             source_line: self.get_source_line(line),
+            //     //         })
+            //     //     }
+            //     // }
+            // }
             Token::RawAddressRef(_) => {
                 let tok = self.current_token().clone();
                 self.advance();
@@ -465,7 +480,15 @@ impl Parser {
             Token::MacroDef(name) => {
                 // Accept macro names like '=' for ={ ... } blocks
                 let name = name.clone();
-                println!("MacroDef: {} {}:{}:{}:{} {:?}", name, self.path, self.current_token().line, self.current_token().start_pos, self.current_token().end_pos, self.current_token().token);
+                println!(
+                    "MacroDef: {} {}:{}:{}:{} {:?}",
+                    name,
+                    self.path,
+                    self.current_token().line,
+                    self.current_token().start_pos,
+                    self.current_token().end_pos,
+                    self.current_token().token
+                );
 
                 self.advance();
 
@@ -475,7 +498,15 @@ impl Parser {
                 ) {
                     self.advance();
                 }
-                println!("MacroDef: {} {}:{}:{}:{} {:?}", name, self.path, self.current_token().line, self.current_token().start_pos, self.current_token().end_pos, self.current_token().token);
+                println!(
+                    "MacroDef: {} {}:{}:{}:{} {:?}",
+                    name,
+                    self.path,
+                    self.current_token().line,
+                    self.current_token().start_pos,
+                    self.current_token().end_pos,
+                    self.current_token().token
+                );
 
                 let mut body = Vec::new();
                 let mut depth = 1;
@@ -489,17 +520,33 @@ impl Parser {
                         ) {
                             self.advance();
                         }
-                        println!("DEBUG: Macro body starts at token: {:?}", self.current_token());
+                        println!(
+                            "DEBUG: Macro body starts at token: {:?}",
+                            self.current_token()
+                        );
                         while !self.is_at_end() && depth > 0 {
                             match &self.current_token().token {
-                                Token::Comment(_) | Token::Newline | Token::BracketClose | Token::BracketOpen => {
+                                Token::Comment(_)
+                                | Token::Newline
+                                | Token::BracketClose
+                                | Token::BracketOpen => {
                                     self.advance();
                                 }
                                 Token::BraceOpen | Token::ConditionalBlockStart => {
                                     depth += 1;
-                                    println!("BraceOpen Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    println!(
+                                        "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
+                                        name,
+                                        depth,
+                                        self.current_token()
+                                    );
                                     body.push(self.parse_node()?);
-                                    println!("BraceOpen Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    println!(
+                                        "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
+                                        name,
+                                        depth,
+                                        self.current_token()
+                                    );
                                 }
                                 Token::BraceClose => {
                                     depth -= 1;
@@ -515,7 +562,12 @@ impl Parser {
                                     }
                                 }
                                 Token::Eof => {
-                                    println!("Eof Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    println!(
+                                        "Eof Inside macro '{}', depth = {}, token = {:?}",
+                                        name,
+                                        depth,
+                                        self.current_token()
+                                    );
                                     break;
                                 }
                                 _ => {
@@ -548,11 +600,12 @@ impl Parser {
                         }
                         Ok(AstNode::MacroDef(name, body))
                     }
-                    Token::Eof => {
-                        return Ok(AstNode::Ignored)
-                    }
+                    Token::Eof => return Ok(AstNode::Ignored),
                     _ => {
-                        println!("DEBUG: Unexpected token after macro name: {:?}", self.current_token().token);
+                        println!(
+                            "DEBUG: Unexpected token after macro name: {:?}",
+                            self.current_token().token
+                        );
                         let line = self.current_token().line;
                         let position = self.current_token().start_pos;
                         Err(AssemblerError::SyntaxError {
@@ -571,7 +624,10 @@ impl Parser {
                 Ok(AstNode::RawString(bytes))
             }
             Token::Include(_) => {
-                println!("DEBUG: Include directive found: {:?}", self.current_token().token);
+                println!(
+                    "DEBUG: Include directive found: {:?}",
+                    self.current_token().token
+                );
                 let tok = self.current_token().clone();
                 self.advance();
                 Ok(AstNode::Include(tok))
@@ -591,16 +647,16 @@ impl Parser {
             Token::BraceClose => {
                 let tok = self.current_token().clone();
                 self.advance();
-                
+
                 // if self.brace_stack.is_empty() {
                 //     // Ignore stray '}' after macro body or after macro block just closed
                 //     return Ok(AstNode::Ignored);
                 // }
                 // if self.brace_stack.is_empty() {
-                  
+
                 //         // Ignore stray '}' after macro body or after macro block just closed
                 //         return Ok(AstNode::Ignored);
-                    
+
                 //     eprintln!("Unmatched '}}' at line {}. Current macro table:", tok.line);
                 //     for name in &self.macro_table {
                 //         eprintln!("Macro '{}'", name);
@@ -678,7 +734,7 @@ impl Parser {
             }
         } else {
             opcode = name.clone();
-                // eprintln!("DEBUG: base '{}' not found in opcode table, using original name '{}'", base, name);
+            // eprintln!("DEBUG: base '{}' not found in opcode table, using original name '{}'", base, name);
         }
 
         // For LIT/LIT2/LITr/LIT2r, always use base "LIT" and set flags accordingly
@@ -698,8 +754,8 @@ impl Parser {
         }
 
         // eprintln!(
-            // "DEBUG: parse_instruction result: opcode='{}', short_mode={}, return_mode={}, keep_mode={}",
-            // opcode, short_mode, return_mode, keep_mode
+        // "DEBUG: parse_instruction result: opcode='{}', short_mode={}, return_mode={}, keep_mode={}",
+        // opcode, short_mode, return_mode, keep_mode
         // );
 
         Ok(AstNode::Instruction(Instruction {
@@ -726,13 +782,16 @@ impl Parser {
     }
 
     fn current_token(&self) -> TokenWithPos {
-        self.tokens.get(self.position).cloned().unwrap_or(TokenWithPos {
-            token: Token::Eof,
-            line: self.line,
-            start_pos: self.position_in_line,
-            end_pos: self.position_in_line,
-            scope: None, // <-- Add default scope
-        })
+        self.tokens
+            .get(self.position)
+            .cloned()
+            .unwrap_or(TokenWithPos {
+                token: Token::Eof,
+                line: self.line,
+                start_pos: self.position_in_line,
+                end_pos: self.position_in_line,
+                scope: None, // <-- Add default scope
+            })
     }
 
     fn advance(&mut self) {

@@ -1,6 +1,3 @@
-
-
-
 /// Represents a "Rune" in the assembler, which is a symbolic character used to denote
 /// various syntactic and semantic elements in the language.
 ///
@@ -43,9 +40,9 @@ pub enum Rune {
     LiteralNumber, // '#'
 
     // Label Runes
-    Parent,        // '@'
-    Child,         // '&'
-    RawAscii,      // '"'
+    Parent,   // '@'
+    Child,    // '&'
+    RawAscii, // '"'
 
     // Addressing Runes
     LiteralRelative, // ','
@@ -62,14 +59,14 @@ pub enum Rune {
     IgnoredClose,    // ']'
 
     // Immediate Runes
-    Jmi,             // '!'
-    Jci,             // '?'
+    Jmi, // '!'
+    Jci, // '?'
 
     // Pre-processor Runes
-    MacroOpen,       // '%'
-    MacroClose,      // '}'
+    MacroOpen,  // '%'
+    MacroClose, // '}'
 
-    None,            // ' '
+    None, // ' '
 }
 
 impl From<char> for Rune {
