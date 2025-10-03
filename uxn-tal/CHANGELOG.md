@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.8...uxn-tal-v0.1.9) - 2025-10-03
+
+### Added
+
+- *(chocolatal)* add standalone CLI support and update README
+
+### Fixed
+
+- DEC2 in https://github.com/davehorner/uxn-minesweeper/ with the help of  @." soxfox" in uxn discord, hex literals should be restricted to lowercase/digit. also checkout https://codeberg.org/yorshex/minesweeper-uxn.git
+
 ## [0.1.8](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.7...uxn-tal-v0.1.8) - 2025-08-24
 
 ### Other

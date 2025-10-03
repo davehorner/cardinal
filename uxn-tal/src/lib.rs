@@ -30,17 +30,17 @@
 
 //! Public API for uxn-tal (minimal so examples compile).
 
+pub mod assembler;
+pub mod chocolatal;
+pub mod debug;
+pub mod devicemap;
 pub mod error;
 pub mod lexer;
-pub mod parser;
 pub mod opcode_table;
 pub mod opcodes;
+pub mod parser;
 pub mod rom;
-pub mod assembler;
-pub mod devicemap;
-pub mod debug;
 pub mod runes;
-pub mod chocolatal;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
 
@@ -140,7 +140,7 @@ pub fn assemble_directory<P: AsRef<std::path::Path>>(
 
 pub fn assemble_with_rust_interface_module(
     source: &str,
-    module_name: &str
+    module_name: &str,
 ) -> Result<(Vec<u8>, String), AssemblerError> {
     let mut a = Assembler::new();
     let rom = a.assemble(source, None)?;
@@ -160,23 +160,42 @@ pub fn generate_rust_interface_module(
     for name in &assembler.symbol_order {
         if let Some(sym) = assembler.symbols.get(name) {
             let id = {
-                let mut s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-                if s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                let mut s: String = name
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                    .collect();
+                if s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false)
+                {
                     s.insert(0, '_');
                 }
                 s.to_ascii_uppercase()
             };
-            out.push_str(&format!("    pub const _c{}: usize = 0x{:04X};\n", id, sym.address));
+            out.push_str(&format!(
+                "    pub const _c{}: usize = 0x{:04X};\n",
+                id, sym.address
+            ));
             // Compute size
-            let next_addr = assembler.symbol_order.iter()
+            let next_addr = assembler
+                .symbol_order
+                .iter()
                 .skip_while(|n| *n != name)
                 .skip(1)
                 .filter_map(|n| assembler.symbols.get(n))
                 .map(|s| s.address)
                 .find(|&a| a > sym.address)
                 .unwrap_or(assembler.effective_length as u16);
-            let size = if next_addr > sym.address { next_addr - sym.address } else { 0 };
-            out.push_str(&format!("    pub const _c{}_SIZE: usize = 0x{:04X};\n", id, size));
+            let size = if next_addr > sym.address {
+                next_addr - sym.address
+            } else {
+                0
+            };
+            out.push_str(&format!(
+                "    pub const _c{}_SIZE: usize = 0x{:04X};\n",
+                id, size
+            ));
         }
     }
     // Helper function to get a slice for a label
@@ -190,8 +209,15 @@ pub fn generate_rust_interface_module(
     for name in &assembler.symbol_order {
         if let Some(_sym) = assembler.symbols.get(name) {
             let id = {
-                let mut s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-                if s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                let mut s: String = name
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                    .collect();
+                if s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false)
+                {
                     s.insert(0, '_');
                 }
                 s.to_ascii_uppercase()

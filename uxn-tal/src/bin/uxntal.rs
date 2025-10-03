@@ -1,14 +1,82 @@
-use std::{env, fs, path::{PathBuf, Path}, process::exit};
-use uxn_tal::{Assembler, AssemblerError};
 use std::collections::VecDeque;
-use uxn_tal::debug;
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::exit,
+};
 use uxn_tal::chocolatal;
+use uxn_tal::debug;
+use uxn_tal::{Assembler, AssemblerError};
+use std::process::Command;
 
 fn main() {
+    println!("{:?}", ensure_drifblim_repo());
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
         exit(1);
     }
+}
+
+fn ensure_drifblim_repo() -> Option<PathBuf> {
+
+    let home_dir = dirs::home_dir()?;
+    let uxntal_path = home_dir.join(".uxntal");
+    let drifblim_path = uxntal_path.join(".drifblim");
+    if !drifblim_path.exists() {
+        let status = Command::new("git")
+            .arg("clone")
+            .arg("https://git.sr.ht/~rabbits/drifblim")
+            .arg(&drifblim_path)
+            .status()
+            .ok()?;
+        if !status.success() {
+            eprintln!("Failed to clone drifblim repository");
+            return None;
+        }
+    } else {
+        // If already exists, do a git pull
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(&drifblim_path)
+            .arg("pull")
+            .status()
+            .ok()?;
+        if !status.success() {
+            eprintln!("Failed to pull drifblim repository");
+            return None;
+        }
+    }
+    if !drifblim_path.exists() {
+        eprintln!("drifblim repository not found after clone/pull");
+        return None;
+    }
+    let drifloon_rom = drifblim_path.join("src").join("drifloon.rom");
+    if !drifloon_rom.exists() {
+            let mut asm = Assembler::new();
+
+        let drifloon_tal = drifblim_path.join("src").join("drifloon.tal");
+        if !drifloon_tal.exists() {
+            eprintln!("drifloon.tal not found in drifblim repository");
+            return None;
+        }
+        let ret=asm.assemble(&drifloon_tal.display().to_string(), Some(drifloon_rom.display().to_string()));
+        if ret.is_err() {
+            eprintln!("Failed to assemble drifloon.tal: {:?}", ret.err());
+            return None;
+        }
+       // fs::write(&drifloon_rom, ret.unwrap()).ok()?;
+        // let status = Command::new("uxntal")
+        //     .arg(&drifloon_tal)
+        //     .arg(&drifloon_rom)
+        //     .status()
+        //     .ok()?;
+        // if !status.success() {
+        //     eprintln!("Failed to assemble drifloon.tal");
+        //     return None;
+        // }
+    }
+
+    Some(drifblim_path)
 }
 
 fn real_main() -> Result<(), AssemblerError> {
@@ -42,7 +110,7 @@ fn real_main() -> Result<(), AssemblerError> {
             //   --rust-interface
             //   --rust-interface=ModuleName
             if let Some(eq) = a.find('=') {
-                let name = a[eq + 1 ..].trim();
+                let name = a[eq + 1..].trim();
                 if !name.is_empty() {
                     rust_iface = Some(name.to_string());
                 } else {
@@ -101,7 +169,13 @@ fn real_main() -> Result<(), AssemblerError> {
     if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
         // Read from stdin
         use std::io::{self, Read};
-        io::stdin().read_to_string(&mut source).map_err(|e| simple_err(Path::new("/dev/stdin"), &format!("failed to read from stdin: {e}")))?;
+
+        io::stdin().read_to_string(&mut source).map_err(|e| {
+            simple_err(
+                Path::new("/dev/stdin"),
+                &format!("failed to read from stdin: {e}"),
+            )
+        })?;
         canon_input = PathBuf::from("/dev/stdin");
         input_from_stdin = true;
     } else {
@@ -138,7 +212,12 @@ fn real_main() -> Result<(), AssemblerError> {
         }
         source = fs::read_to_string(&canon_input)
             .map_err(|e| simple_err(&canon_input, &format!("failed to read: {e}")))?;
-    }
+        // Write the source to a sibling file with .src.tal extension
+        let mut src_path = canon_input.clone();
+        src_path.set_extension("src.tal");
+        fs::write(&src_path, &source)
+            .map_err(|e| simple_err(&src_path, &format!("failed to write source: {e}")))?;
+        }
 
     // Compute rom path (absolute) before changing directory
     let rom_path = if positional.len() > 1 {
@@ -146,7 +225,9 @@ fn real_main() -> Result<(), AssemblerError> {
         if supplied.is_absolute() {
             supplied
         } else {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(supplied)
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(supplied)
         }
     } else if input_from_stdin {
         // If reading from stdin and no output specified, default to "out.rom"
@@ -185,7 +266,11 @@ fn real_main() -> Result<(), AssemblerError> {
     let mut pre_path = PathBuf::from(&canon_input);
     pre_path.set_extension("pre.tal");
     if let Err(e) = fs::write(&pre_path, &preprocessed) {
-        eprintln!("Failed to write intermediate file {}: {}", pre_path.display(), e);
+        eprintln!(
+            "Failed to write intermediate file {}: {}",
+            pre_path.display(),
+            e
+        );
         std::process::exit(1);
     }
 
@@ -193,7 +278,11 @@ fn real_main() -> Result<(), AssemblerError> {
     let pre_source = match fs::read_to_string(&pre_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Failed to read intermediate file {}: {}", pre_path.display(), e);
+            eprintln!(
+                "Failed to read intermediate file {}: {}",
+                pre_path.display(),
+                e
+            );
             std::process::exit(1);
         }
     };
@@ -203,12 +292,13 @@ fn real_main() -> Result<(), AssemblerError> {
     // --- ADD: cmp mode ---
     if want_cmp {
         // Use DebugAssembler from the debug module
-        let mut dbg = debug::DebugAssembler::default();
-        let res = dbg.assemble_and_compare(
-            &preprocessed,
-            &canon_input.display().to_string()
-            ,true
-        );
+        let dbg = debug::DebugAssembler::default();
+        let rel_path = match canon_input.strip_prefix(std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))) {
+            Ok(p) => p.display().to_string(),
+            Err(_) => canon_input.display().to_string(),
+        };
+        eprintln!("Relative path to input: {}", rel_path);
+        let res = dbg.assemble_and_compare( &rel_path,&preprocessed, true);
         return res.map(|_| ());
     }
 
@@ -225,8 +315,9 @@ fn real_main() -> Result<(), AssemblerError> {
     if let Some(module_name) = rust_iface {
         let mod_src = uxn_tal::generate_rust_interface_module(&asm, &module_name);
         let iface_path = rom_path.with_extension("rom.symbols.rs");
-        fs::write(&iface_path, mod_src)
-            .map_err(|e| simple_err(&iface_path, &format!("failed to write rust interface: {e}")))?;
+        fs::write(&iface_path, mod_src).map_err(|e| {
+            simple_err(&iface_path, &format!("failed to write rust interface: {e}"))
+        })?;
         if want_verbose {
             eprintln!("Wrote Rust interface module: {}", iface_path.display());
         } else {
@@ -243,12 +334,13 @@ fn real_main() -> Result<(), AssemblerError> {
 }
 
 fn needs_help(args: &[String]) -> bool {
-    args.iter().any(|a| a == "--help" || a == "-h" || a == "help")
+    args.iter()
+        .any(|a| a == "--help" || a == "-h" || a == "help")
 }
 
 fn print_usage() {
-        eprintln!(
-"Usage:
+    eprintln!(
+        "Usage:
     uxntal [flags] <input.tal|/dev/stdin> [output.rom]
 
 Flags:
@@ -267,7 +359,7 @@ Behavior:
     If output.rom omitted, use input path with .rom extension, or 'out.rom' if reading from stdin.
     You can also pass /dev/stdin as the input filename to read from stdin.
     Rust interface file path: <output>.rom.symbols.rs"
-        );
+    );
 }
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
@@ -282,7 +374,7 @@ fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
 
 // UPDATED: multi-root recursive search
 fn resolve_input_path(arg: &str) -> Option<PathBuf> {
-    use std::collections::VecDeque;
+    
     let direct = PathBuf::from(arg);
     if direct.exists() {
         return Some(direct);
@@ -317,7 +409,9 @@ fn resolve_input_path(arg: &str) -> Option<PathBuf> {
     }
 
     for root in roots {
-        if !root.is_dir() { continue; }
+        if !root.is_dir() {
+            continue;
+        }
         if let Some(found) = recursive_find(&root, arg, 12_000) {
             return Some(found);
         }
@@ -335,13 +429,17 @@ fn recursive_find(root: &Path, needle: &str, cap: usize) -> Option<PathBuf> {
     q.push_back(root.to_path_buf());
     let mut visited = 0usize;
     while let Some(dir) = q.pop_front() {
-        if visited >= cap { break; }
+        if visited >= cap {
+            break;
+        }
         visited += 1;
         let rd = fs::read_dir(&dir).ok()?;
         for entry in rd.flatten() {
             let p = entry.path();
             if p.is_dir() {
-                if q.len() < 4096 { q.push_back(p); }
+                if q.len() < 4096 {
+                    q.push_back(p);
+                }
                 continue;
             }
             if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
