@@ -32,7 +32,7 @@ macro_rules! debug {
 
 /// Preprocess a TAL source file, returning a preprocessed string.
 /// This function operates on raw text, not tokens.
-pub fn preprocess(input: &str, path: &str) -> Result<String> {
+pub fn preprocess(input: &str, path: &str, root_dir: &PathBuf) -> Result<String> {
     let mut output = String::new();
     let mut stack = Vec::new(); // For lambda/loop label tracking
     let mut lambda_counter = 0;
@@ -145,6 +145,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         &prefix_label,
+                        root_dir,
                     )?;
                 } else {
                     let incl_pattern = input_dir.join(path_part);
@@ -154,6 +155,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         &prefix_label,
+                        root_dir,
                     )?;
                 }
                 current_prefix = prefix_stack.pop().unwrap_or_default();
@@ -176,6 +178,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         path_part,
+                        root_dir,
                     )?;
                 } else {
                     let incl_pattern = input_dir.join(path_part);
@@ -185,6 +188,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         path_part,
+                        root_dir,
                     )?;
                 }
                 i += 1;
@@ -233,7 +237,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                 let incl_pattern_cwd = cwd.join(path_part);
                 let incl_pattern_cwd_str = incl_pattern_cwd.to_str().unwrap_or("");
                 debug!(
-                    "Including file(s) with pattern: {}",
+                    "Including file(s) with pattern1: {}",
                     incl_pattern_cwd.display()
                 );
                 if incl_pattern_cwd.exists() {
@@ -242,6 +246,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         &prefix_label,
+                        root_dir,
                     )?;
                 } else {
                     // Fallback: try relative to the parent of the current file
@@ -252,6 +257,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                         &mut output,
                         sep,
                         &prefix_label,
+                        root_dir,
                     )?;
                 }
                 i += 1;
@@ -285,8 +291,8 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
             let incl_pattern_cwd = cwd.join(path_part);
             let incl_pattern_cwd_str = incl_pattern_cwd.to_str().unwrap_or("");
             debug!(
-                "Including file(s) with pattern: {}",
-                incl_pattern_cwd.display()
+                "root:{} Including file(s) with pattern2: {}",
+               root_dir.display(), incl_pattern_cwd.display()
             );
             if incl_pattern_cwd.exists() {
                 process_include_pattern(
@@ -294,6 +300,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                     &mut output,
                     sep,
                     path_part,
+                    root_dir,
                 )?;
             } else {
                 // Fallback: try relative to the parent of the current file
@@ -304,6 +311,7 @@ pub fn preprocess(input: &str, path: &str) -> Result<String> {
                     &mut output,
                     sep,
                     path_part,
+                    root_dir,
                 )?;
             }
             i += 1;
@@ -462,6 +470,7 @@ fn process_include_pattern(
     output: &mut String,
     sep: &String,
     _path_part: &str,
+    root_dir: &PathBuf,
 ) -> Result<()> {
     // macro_rules! debug {
     //     ($($arg:tt)*) => {
@@ -471,7 +480,7 @@ fn process_include_pattern(
     //     }
     // }
     let input_path = Path::new(incl_pattern_str).to_path_buf();
-    debug!("Including file(s) with pattern: {}", incl_pattern_str);
+    debug!("root: {} Including file(s) with pattern3: {}", root_dir.display(), incl_pattern_str);
     if incl_pattern_str.contains('*')
         || incl_pattern_str.contains('?')
         || incl_pattern_str.contains('[')
@@ -481,10 +490,45 @@ fn process_include_pattern(
             Some(idx) => (&incl_pattern_str[..=idx], &incl_pattern_str[idx + 1..]),
             None => ("./", incl_pattern_str),
         };
-        let dir_path = Path::new(dir);
+        // Remove the trailing separator from dir, if present
+        let dir_trimmed = if dir.ends_with(std::path::MAIN_SEPARATOR) && dir.len() > 1 {
+            &dir[..dir.len() - 1]
+        } else {
+            dir
+        };
+        let dir_path = Path::new(dir_trimmed);
+
+                //         let file_pat_path = root_dir.join(file_pat);
+                // //debug!("Including file (from root_dir): {}", file_pat_path.display());
+                // if file_pat_path.exists() && file_pat_path.is_file() {
+                //     debug!("Including file (from root_dir): {}", file_pat_path.display());
+                //     if file_pat_path.extension().and_then(OsStr::to_str) == Some("tal") {
+                //         let incl_pre = preprocess_include_file(&root_dir, &file_pat_path)?;
+                //         output.push_str(&incl_pre);
+                //         output.push_str(sep);
+                //     } else {
+                //         hexdump(output, sep, file_pat_path)?;
+                //     }
+                //     return Ok(());
+                // }
+
         let read_dir = match fs::read_dir(dir_path) {
             Ok(rd) => rd,
             Err(e) => {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                let file_pat_path = cwd.join(file_pat);
+                if file_pat_path.exists() && file_pat_path.is_file() {
+                    debug!("Including file (from cwd): {}", file_pat_path.display());
+                    if file_pat_path.extension().and_then(OsStr::to_str) == Some("tal") {
+                        let incl_pre = preprocess_include_file(&cwd, &file_pat_path)?;
+                        output.push_str(&incl_pre);
+                        output.push_str(sep);
+                    } else {
+                        hexdump(output, sep, file_pat_path)?;
+                    }
+                    return Ok(());
+                }
+
                 return Err(PreprocessError::Other(format!(
                     "Failed to read directory '{}': {}",
                     dir_path.display(),
@@ -505,39 +549,16 @@ fn process_include_pattern(
                             let incl_pre = match preprocess_include_file(&PathBuf::from("."), &path)
                             {
                                 Ok(s) => s,
-                                Err(_) => preprocess_include_file(&input_path, &path)?,
+                                Err(_) => //preprocess_include_file(&input_path, &path)?,
+                                    match preprocess_include_file(&input_path, &path) {
+                                        Ok(s) => s,
+                                        Err(_) => preprocess_include_file(root_dir, &path)?,
+                                    }
                             };
                             output.push_str(&incl_pre);
                             output.push_str(sep);
                         } else {
-
                             hexdump(output, sep, input_path.clone())?;
-                            // // Not .tal: hex dump as in shell script
-                            // let bytes = match fs::read(&path) {
-                            //     Ok(b) => b,
-                            //     Err(e) => {
-                            //         return Err(PreprocessError::Other(format!(
-                            //             "Failed to read file '{}': {}",
-                            //             path.display(),
-                            //             e
-                            //         )));
-                            //     }
-                            // };
-                            // let mut line = String::new();
-                            // for chunk in bytes.chunks(16) {
-                            //     line.clear();
-                            //     for (j, group) in chunk.chunks(2).enumerate() {
-                            //         if j > 0 {
-                            //             line.push(' ');
-                            //         }
-                            //         for b in group {
-                            //             line.push_str(&format!("{:02x}", b));
-                            //         }
-                            //     }
-                            //     output.push_str(&line);
-                            //     output.push('\n');
-                            // }
-                            // output.push_str(sep);
                         }
                     }
                 }
@@ -547,53 +568,8 @@ fn process_include_pattern(
                 }
             }
         })
-        // match entry {
-        //     Ok(path) => {
-        //         if path.is_file() {
-        //             debug!("Including file: {}", path.display());
-        //             if path.extension().map(|e| e == "tal").unwrap_or(false) {
-        //                 // Try to include using cwd as current_dir first, then fallback to original logic if fails
-        //                 let incl_pre = match preprocess_include_file(&PathBuf::from("."), &path) {
-        //                     Ok(s) => s,
-        //                     Err(_) => preprocess_include_file(&input_path, &path)?,
-        //                 };
-        //                 output.push_str(&incl_pre);
-        //                 output.push_str(sep);
-        //             } else {
-        //                 // Not .tal: hex dump as in shell script
-        //                 let bytes = match fs::read(&path) {
-        //                     Ok(b) => b,
-        //                     Err(e) => {
-        //                         return Err(PreprocessError::Other(format!(
-        //                             "Failed to read file '{}': {}",
-        //                             path.display(), e
-        //                         )));
-        //                     }
-        //                 };
-        //                 let mut line = String::new();
-        //                 for chunk in bytes.chunks(16) {
-        //                     line.clear();
-        //                     for (j, group) in chunk.chunks(2).enumerate() {
-        //                         if j > 0 { line.push(' '); }
-        //                         for b in group {
-        //                             line.push_str(&format!("{:02x}", b));
-        //                         }
-        //                     }
-        //                     output.push_str(&line);
-        //                     output.push('\n');
-        //                 }
-        //                 output.push_str(sep);
-        //             }
-        //         }
-        //     }
-        //     Err(e) => {
-        //         debug!("Glob error: {}", e);
-        //         return Err(PreprocessError::Other(e.to_string()))
-        //     },
-        // }
-        // }
     } else {
-        process_single_file(incl_pattern_str, output, sep, input_path)?;
+        process_single_file(incl_pattern_str, output, sep, input_path, &root_dir)?;
         Ok(())
     }
 }
@@ -603,6 +579,7 @@ fn process_single_file(
     output: &mut String,
     sep: &String,
     input_path: PathBuf,
+    root_dir: &PathBuf,
 ) -> Result<()> {
     // Enable debug output if env var CHOCOLATAL_DEBUG=1
     let debug_enabled = env::var("CHOCOLATAL_DEBUG")
@@ -627,6 +604,20 @@ fn process_single_file(
                 match fs::read_to_string(&try_path) {
                     Ok(s) => break s,
                     Err(e) => {
+                        // Try root_dir as a fallback if not already tried
+                            if let Some(ref fname) = filename {
+                        if !tried_paths.contains(&root_dir.join(fname)) {
+
+                                let root_path = root_dir.join(fname);
+                                if !tried_paths.contains(&root_path) && root_path != try_path {
+                                    debug!("Trying filename in root_dir fallback: {}", root_path.display());
+                                    debug!("(was trying: {})", try_path.display());
+                                    try_path = root_dir.join(try_path.file_name().unwrap_or(&OsStr::new("")));
+                                                                        debug!("(was trying: {})", try_path.display());
+                                    continue;
+                                }
+                            }
+                        }
                         tried_paths.push(try_path.clone());
                         // Try all parent directories up to and including cwd with the same filename
                         if let Some(fname) = &filename {
@@ -634,7 +625,7 @@ fn process_single_file(
                             let mut tried_cwd = false;
                             loop {
                                 
-                                let parent_opt = match try_path.parent() {
+                                let mut parent_opt = match try_path.parent() {
                                     Some(parent) => Some(parent.to_path_buf()),
                                     None => {
                                         // If no parent, try the directory itself (for root or relative files)
@@ -646,7 +637,16 @@ fn process_single_file(
                                     }
                                 };
                                 if let Some(ref parent) = parent_opt {
+                                    // if parent == root_dir {
+                                    //     debug!("Reached root directory: {}", parent.display());
+                                    //     break;
+                                        
+                                    // }
                                     debug!("Trying parent directory: {}", parent.display());
+                                    if parent.display().to_string().is_empty() {
+                                        debug!("Reached root directory (empty path).");
+                                        parent_opt = Some(root_dir.clone());
+                                    }                                       
                                 } else {
                                     debug!("No parent directory found.");
                                 }
@@ -691,7 +691,7 @@ fn process_single_file(
                     }
                 }
             };
-            let incl_pre = preprocess(&incl_str, input_path.to_str().unwrap_or(""))?;
+            let incl_pre = preprocess(&incl_str, input_path.to_str().unwrap_or(""), &root_dir)?;
             let incl_pre = incl_pre.trim_end();
             output.push_str(&incl_pre);
             output.push_str(sep);
@@ -731,24 +731,25 @@ fn hexdump(output: &mut String, sep: &String, input_path: PathBuf) -> Result<()>
 }
 
 fn preprocess_include_file(current_dir: &PathBuf, path: &PathBuf) -> Result<String> {
-    let rel_path = path.strip_prefix(current_dir).unwrap_or(path);
-    let rel_str = rel_path.to_str().unwrap_or("");
-    let rel_str = rel_str
-        .strip_prefix("./")
-        .or(rel_str.strip_prefix('/'))
-        .unwrap_or(rel_str);
-    eprintln!("Including file (rewritten path): {}", rel_str);
-    let incl_str = match fs::read_to_string(&rel_str) {
+    // let rel_path = path.strip_prefix(current_dir).unwrap_or(path);
+    // let rel_str = rel_path.to_str().unwrap_or("");
+    // let rel_str = rel_str
+    //     .strip_prefix("./")
+    //     .or(rel_str.strip_prefix('/'))
+    //     .unwrap_or(rel_str);
+    // let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    // eprintln!("Including file curr: {} (path): {} (rewritten path): {} cwd: {}", current_dir.display(), path.display(), rel_str, cwd.display());
+    let incl_str = match fs::read_to_string(&path) {//(&rel_str) {
         Ok(s) => s,
         Err(e) => {
             return Err(PreprocessError::Other(format!(
                 "chocolatal: Failed to read file '{}': {}",
-                rel_str, e
+                path.display(), e
             )));
         }
     };
     let incl_str = incl_str.trim_end();
-    let incl_pre = preprocess(&incl_str, rel_str)?;
+    let incl_pre = preprocess(&incl_str, &path.display().to_string(), current_dir)?;
     Ok(incl_pre)
 }
 
@@ -824,6 +825,7 @@ fn main() {
     use std::fs;
     use std::io::{self, Read, Write};
     use std::process;
+    let root_dir = &std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!(
@@ -888,7 +890,7 @@ fn main() {
         }
     }
 
-    match preprocess(&input, &input_path) {
+    match preprocess(&input, &input_path, root_dir) {
         Ok(result) => {
             match output_path {
                 Some(out) if out != "-" => {

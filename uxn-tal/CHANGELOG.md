@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.9...uxn-tal-v0.1.10) - 2025-10-07
+
+### Fixed
+
+- preprocessor is not done so it should not be on by default!  a lot of changes to get binary equality with drifblim tal assemblers.  --cmp has been extended to test drif against uxnasm and uxntal.  acid.tal, opctest.tal, and drif tal asm to roms identically with drif asms.
+
 ## [0.1.9](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.8...uxn-tal-v0.1.9) - 2025-10-03
 
 ### Added

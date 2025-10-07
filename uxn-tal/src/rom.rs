@@ -86,8 +86,8 @@ impl Rom {
 
     // Write a 16-bit value at a specific address (big-endian: high byte first)
     pub fn write_short_at(&mut self, address: u16, value: u16) -> Result<()> {
-        self.write_byte_at(address, (value >> 8) as u8)?; // high
-        self.write_byte_at(address + 1, (value & 0xff) as u8)?; // low
+        self.write_byte_at(address, (value >> 8) as u8)?; // high byte first (big-endian for UXN)
+        self.write_byte_at(address + 1, (value & 0xff) as u8)?; // low byte second
         Ok(())
     }
 

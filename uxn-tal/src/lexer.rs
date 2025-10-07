@@ -676,7 +676,8 @@ impl Lexer {
                 self.advance();
                 if self.current_char() == '"' {
                     self.advance();
-                    return Ok(Token::RawString(String::new()));
+                    // "" represents the double-quote character itself (0x22)
+                    return Ok(Token::CharLiteral('"'));
                 }
                 let ch = self.current_char();
                 if ch != '\0' && !ch.is_whitespace() {

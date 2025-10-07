@@ -1,4 +1,4 @@
-use crate::{rom, Assembler, AssemblerError};
+use crate::{drif, rom, Assembler, AssemblerError};
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
@@ -45,13 +45,30 @@ pub struct DebugAssembleResult {
     pub backend_errors: Vec<(String, String)>,
 }
 
-pub struct UxntalBackend;
+pub struct UxntalBackend {
+    pub drif_mode: bool,
+}
+
+impl UxntalBackend {
+    pub fn new() -> Self {
+        Self { drif_mode: false }
+    }
+    
+    pub fn with_drif_mode(drif_mode: bool) -> Self {
+        Self { drif_mode }
+    }
+}
+
 impl AssemblerBackend for UxntalBackend {
     fn name(&self) -> &'static str {
         "uxntal"
     }
     fn assemble(&self, tal_file: &str, tal_source: &str) -> Result<AssemblyOutput, AssemblerError> {
-        let mut assembler = Assembler::new();
+        let mut assembler = if self.drif_mode {
+            Assembler::with_drif_mode(true)
+        } else {
+            Assembler::new()
+        };
         let rom = assembler.assemble(tal_source, Some(tal_file.to_string()))?;
         let rom_path = format!("{}_{}.rom", tal_file, self.name());
         fs::write(&rom_path, &rom).map_err(|e| io_err(&rom_path, e))?;
@@ -70,15 +87,47 @@ impl AssemblerBackend for UxnasmBackend {
         "uxnasm"
     }
     fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
-        let input = tal_file.replace('\\', "/");
-        let input = input.replace("//?/C:", "/mnt/c"); // Handle Windows long path prefix
+        // let input = tal_file.replace('\\', "/");
+        // let input = input.replace("//?/C:", "/mnt/c"); // Handle Windows long path prefix
+        let input = wslpath::windows_to_wsl(&tal_file)
+            .map_err(|e| syntax_err(&tal_file, &format!("Could not convert TAL path to WSL: {e}")))?;
         //let input = tal_file;//.replace("\\\\?\\", ""); // Handle Windows long path prefix
+            // let input = match Path::new(&input).canonicalize() {
+            //     Ok(abs_path) => {
+            //         let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+            //         match abs_path.strip_prefix(&cwd) {
+            //             Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+            //             Err(_) => abs_path.to_string_lossy().replace('\\', "/"),
+            //         }
+            //     }
+            //     Err(_) => input,
+            // };
         let rom_path = format!("{}_{}.rom", input, self.name());
-        let status = spawn_cmd("uxnasm", &["--verbose", &input, &rom_path])?;
-        if !status.success() {
-            return Err(syntax_err(&input, "uxnasm failed"));
+        let mut cmd = spawn_cmd("uxnasm", &["--verbose", &input, &rom_path]);
+        let output = cmd.output().map_err(|e| syntax_err(&input, &format!("Failed to run uxnasm: {e}")))?;
+        if !output.status.success() {
+            return Err(syntax_err(
+                &input,
+                &format!(
+                    "uxnasm failed {:?} {:?} stderr: {} stdout: {}",
+                    output.status,
+                    std::env::current_dir(),
+                    String::from_utf8_lossy(&output.stderr),
+                    String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .rev()
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+            ));
         }
-        let rom_path = rom_path.replace("/mnt/c/", "C:/"); // Handle Windows long path prefix
+        // let rom_path = rom_path.replace("/mnt/c/", "C:/"); // Handle Windows long path prefix
+        let rom_path = wslpath::wsl_to_windows(&rom_path)
+            .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
         let bytes = fs::read(&rom_path).unwrap_or_default();
         Ok(AssemblyOutput {
             rom_path: rom_path.clone(),
@@ -103,8 +152,7 @@ impl AssemblerBackend for DrifblimBackend {
         // let rom_path = format!("{}_{}.rom", tal_path, self.name());
         // println!("rom_path: {}", rom_path);
 
-
-                let input = tal_file.replace('\\', "/");
+        let input = tal_file.replace('\\', "/");
         let input = input.replace("//?/C:", "/mnt/c"); // Handle Windows long path prefix
         //let input = tal_file;//.replace("\\\\?\\", ""); // Handle Windows long path prefix
         let rom_path = format!("{}_{}.rom", input, self.name());
@@ -130,18 +178,19 @@ impl DrifblimBackend {
     fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
-
+    let drifblim_rom = crate::drif::drifblim_repo_get_drifblim();
+    let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
         let in_wsl = detect_wsl();
         let output = if in_wsl {
             Command::new("uxncli")
-                .arg("drifblim.rom")
+                .arg(drifblim_rom)
                 .arg(tal_path)
                 .arg(rom_path)
                 .output()
         } else {
             Command::new("wsl")
                 .arg("uxncli")
-                .arg("drifblim.rom")
+                .arg(drifblim_rom)
                 .arg(tal_path)
                 .arg(rom_path)
                 .output()
@@ -177,6 +226,120 @@ println!("drifblim stdout: {:?}", output);
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
+/////
+/// 
+pub struct DrifblimSeedBackend;
+impl AssemblerBackend for DrifblimSeedBackend {
+    fn name(&self) -> &'static str {
+        "drifblim-seed"
+    }
+    fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
+
+        // let mut temp_file = tempfile::NamedTempFile::new().map_err(|e| syntax_err(tal_file, &format!("tempfile error: {e}")))?;
+        // temp_file.write_all(_src.as_bytes()).map_err(|e| syntax_err(tal_file, &format!("tempfile write error: {e}")))?;
+        // let tal_path = temp_file.path().to_string_lossy().to_string();
+        // let tal_path = tal_path.replace('\\', "/");
+        // let rom_path = format!("{}_{}.rom", tal_path, self.name());
+        // println!("rom_path: {}", rom_path);
+        let tal_file = Path::new(tal_file)
+            .canonicalize()
+            .ok()
+            .and_then(|abs| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| abs.strip_prefix(&cwd).ok().map(|rel| rel.to_path_buf()))
+                .or(Some(abs))
+            })
+            .unwrap_or_else(|| Path::new(tal_file).to_path_buf());
+        let cwd_wsl = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| wslpath::windows_to_wsl(&cwd.display().to_string()).ok())
+            .unwrap_or_else(|| ".".to_string());
+        let input = wslpath::windows_to_wsl(&tal_file.display().to_string())
+            .map_err(|e| syntax_err(&tal_file.display().to_string(), &format!("Could not convert TAL path to WSL: {e}")))?;
+        let input = if input.starts_with(&cwd_wsl) {
+            input[cwd_wsl.len()..].trim_start_matches('/').to_string()
+        } else {
+            input
+        };
+        //let input = tal_file;//.replace("\\\\?\\", ""); // Handle Windows long path prefix
+        let rom_path = format!("{}_{}.rom", input, self.name());
+        println!("cwd_wsl: {}", cwd_wsl);
+        println!("rom_path: {}", rom_path);
+        println!("tal_file: {}", tal_file.display());
+        println!("input: {}", input);
+                        // std::process::exit(0);
+        let stdout = Self::run_drif(&input, &input, &rom_path)?;
+        let rom_path = wslpath::wsl_to_windows(&rom_path)
+            .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;   
+        let bytes = fs::read(&rom_path).unwrap_or_default();
+        println!("rom_path: {}", rom_path);
+
+        if bytes.is_empty() {
+            return Err(syntax_err(&rom_path, "drifblim produced empty ROM"));
+        }
+
+        Ok(AssemblyOutput {
+            rom_path: rom_path.clone(),
+            rom_bytes: bytes,
+            stdout,
+            disassembly: run_dis_file(&rom_path)?,
+        })
+    }
+}
+impl DrifblimSeedBackend {
+    fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
+            println!("tal_path: {}", tal_path);
+    println!("rom_path: {}", rom_path);
+    let drifblim_rom = crate::drif::drifblim_repo_get_drifblim_seed();
+    let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
+        let in_wsl = detect_wsl();
+        let output = if in_wsl {
+            Command::new("uxncli")
+                .arg(drifblim_rom)
+                .arg(tal_path)
+                .arg(rom_path)
+                .output()
+        } else {
+            Command::new("wsl")
+                .arg("uxncli")
+                .arg(drifblim_rom)
+                .arg(tal_path)
+                .arg(rom_path)
+                .output()
+        }
+        .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?;
+println!("drifblim stdout: {:?}", output);
+        if output.stderr.len() > 0 {
+            let stderr_str = String::from_utf8_lossy(&output.stderr);
+            if stderr_str.contains("Assembled ") {
+                // Write tal_file to a temp file with a short name
+                // println!("Path exceeded error from drifblim, retrying with short path");
+                // let tal_path_rel = Path::new(tal_path)
+                //     .file_name()
+                //     .map(|f| f.to_string_lossy().to_string())
+                //     .unwrap_or_else(|| "temp.tal".to_string());
+                // let temp_path = format!("./{}", tal_path_rel);
+                // let rom_path = format!("{}_{}.rom", temp_path, "drifblim");
+                // let tal_path = wslpath::wsl_to_windows(tal_path)
+                //     .or_else(|_| Err(syntax_err(&rom_path, "Could not convert TAL path to WSL")))?;
+                // fs::write(&temp_path, tal_file.as_bytes()).map_err(|e| syntax_err(&temp_path, &format!("Failed to write to temp path: {e}")))?;
+                // return Self::run_drif(&temp_path, &tal_file, &rom_path);
+            } else {
+            return Err(syntax_err(
+                rom_path,
+                &format!(
+                    "drifblim stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            ));
+            }
+
+        }   
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
 
 
 pub struct DrifloonBackend;
@@ -294,17 +457,19 @@ fn detect_wsl() -> bool {
                 .contains("microsoft"))
 }
 
-fn spawn_cmd(cmd: &str, args: &[&str]) -> Result<ExitStatus, AssemblerError> {
+fn spawn_cmd(cmd: &str, args: &[&str]) -> Command {
     let in_wsl = detect_wsl();
-    let status = if in_wsl {
-        Command::new(cmd).args(args).status()
+    if in_wsl {
+        let mut command = Command::new(cmd);
+        command.args(args);
+        command
     } else {
         let mut all = vec![cmd];
         all.extend(args);
-        Command::new("wsl").args(all).status()
+        let mut command = Command::new("wsl");
+        command.args(all);
+        command
     }
-    .map_err(|e| syntax_err("", &format!("Failed to spawn {cmd}: {e}")))?;
-    Ok(status)
 }
 
 fn run_vm_path(rom_path: &str) -> Result<String, AssemblerError> {
@@ -327,24 +492,40 @@ fn run_vm_last(bytes: &[u8]) -> Result<String, AssemblerError> {
 }
 
 fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
-    let sym = format!("{rom_path}.sym");
-    if Path::new(&sym).exists() {
-        let _ = fs::remove_file(&sym);
-    }
+        // let sym = format!("{rom_path}.sym");
+        // if Path::new(&sym).exists() {
+        //     let _ = fs::remove_file(&sym);
+        // }
     let in_wsl = detect_wsl();
+    let uxndis_path = crate::dis::uxndis_repo_get_uxndis();
+    let uxndis_path = wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
+        .map_err(|e| syntax_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?;
+    let rom_path = wslpath::windows_to_wsl(&rom_path)
+        .map_err(|e| syntax_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?;
+        //     println!("Disassembly command: uxncli {} {}", uxndis_path, rom_path);
+        // // println!("Disassembly written to {}", dis);
+        // std::process::exit(0);
     let output = if in_wsl {
         Command::new("uxncli")
-            .arg("uxndis.rom")
-            .arg(rom_path)
+            .arg(&uxndis_path)
+            .arg(&rom_path)
             .output()
     } else {
         Command::new("wsl")
             .arg("uxncli")
-            .arg("uxndis.rom")
-            .arg(rom_path)
+            .arg(&uxndis_path)
+            .arg(&rom_path)
             .output()
     }
-    .map_err(|e| syntax_err(rom_path, &format!("uxndis failed: {e}")))?;
+    .map_err(|e| syntax_err(&rom_path, &format!("uxndis failed: {e}")))?;
+    let rom_path = wslpath::wsl_to_windows(&rom_path)
+        .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
+    let dis = format!("{rom_path}.dis");
+        // Write disassembly output to .dis file
+        if let Err(e) = fs::write(&dis, &output.stdout) {
+            eprintln!("Failed to write disassembly to {}: {}", dis, e);
+        }
+
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
@@ -362,15 +543,25 @@ fn io_err(path: &str, e: std::io::Error) -> AssemblerError {
     syntax_err(path, &format!("IO error: {e}"))
 }
 
-pub struct DebugAssembler;
+pub struct DebugAssembler {
+    pub drif_mode: bool,
+}
 
 impl Default for DebugAssembler {
     fn default() -> Self {
-        DebugAssembler
+        DebugAssembler { drif_mode: false }
     }
 }
 
 impl DebugAssembler {
+    pub fn new() -> Self {
+        Self { drif_mode: false }
+    }
+    
+    pub fn with_drif_mode(drif_mode: bool) -> Self {
+        Self { drif_mode }
+    }
+    
     pub fn assemble_and_compare(
         &self,
         tal_file: &str,
@@ -378,15 +569,17 @@ impl DebugAssembler {
         verbose: bool,
     ) -> Result<DebugAssembleResult, AssemblerError> {
         let backends: Vec<Box<dyn AssemblerBackend>> = vec![
-            Box::new(UxntalBackend),
+            Box::new(UxntalBackend::with_drif_mode(self.drif_mode)),
             Box::new(DrifloonBackend),
             Box::new(UxnasmBackend),
             Box::new(DrifblimBackend),
+            Box::new(DrifblimSeedBackend),
         ];
         let mut uxntal = None;
         let mut uxnasm = None;
         let mut drif = None;
         let mut drifloon = None;
+        let mut drifblim_seed = None;
         let mut backend_errors = Vec::new();
 
         for b in backends {
@@ -397,7 +590,11 @@ impl DebugAssembler {
                     if !out.rom_bytes.is_empty() {
                         // Use the internal assembler for symbol generation if possible
                         if b.name() == "uxntal" {
-                            let mut assembler = Assembler::new();
+                            let mut assembler = if self.drif_mode {
+                                Assembler::with_drif_mode(true)
+                            } else {
+                                Assembler::new()
+                            };
                             if let Ok(_) =
                                 assembler.assemble(tal_source, Some(tal_file.to_string()))
                             {
@@ -411,6 +608,7 @@ impl DebugAssembler {
                         "uxnasm" => uxnasm = Some(out),
                         "drifblim" => drif = Some(out),
                         "drifloon" => drifloon = Some(out),
+                        "drifblim-seed" => drifblim_seed = Some(out),
                         _ => {}
                     }
                 }
@@ -430,6 +628,7 @@ impl DebugAssembler {
                 ("uxnasm", &uxnasm),
                 ("drifblim", &drif),
                 ("drifloon", &drifloon),
+                ("drifblim-seed", &drifblim_seed),
             ] {
                 if let Some(ref o) = out {
                     println!(
@@ -458,6 +657,10 @@ impl DebugAssembler {
                 ("uxntal", &uxntal, "drifloon", &drifloon),
                 ("uxnasm", &uxnasm, "drifloon", &drifloon),
                 ("drifblim", &drif, "drifloon", &drifloon),
+                ("drifblim", &drif, "drifblim-seed", &drifblim_seed),
+                ("uxntal", &uxntal, "drifblim-seed", &drifblim_seed),
+                ("uxnasm", &uxnasm, "drifblim-seed", &drifblim_seed),
+                ("drifloon", &drifloon, "drifblim-seed", &drifblim_seed),
             ];
             for (a_name, a, b_name, b) in pairs {
                 print!("{:<8} vs {:<9}: ", a_name, b_name);
@@ -484,10 +687,23 @@ impl DebugAssembler {
                 ("uxntal", &uxntal, "drifloon", &drifloon),
                 ("uxnasm", &uxnasm, "drifloon", &drifloon),
                 ("drifblim", &drif, "drifloon", &drifloon),
+                ("drifblim", &drif, "drifblim-seed", &drifblim_seed),
+                ("uxntal", &uxntal, "drifblim-seed", &drifblim_seed),
+                ("uxnasm", &uxnasm, "drifblim-seed", &drifblim_seed),
+                ("drifloon", &drifloon, "drifblim-seed", &drifblim_seed),
             ];
             for (a_name, a, b_name, b) in dis_pairs {
                 print!("{:<8} vs {:<9}: ", a_name, b_name);
                 if let (Some(ref a), Some(ref b)) = (a, b) {
+                    
+                    if a.disassembly.is_empty() {
+                        println!("skipped (empty disassembly from {})", a_name);
+                        continue;
+                    }
+                    if b.disassembly.is_empty() {
+                        println!("skipped (empty disassembly from {})", b_name);
+                        continue;
+                    }
                     match diff_first(&a.disassembly, &b.disassembly) {
                         Some((ln, la, lb)) => {
                             println!("line {}:\n  {}: {}\n  {}: {}", ln, a_name, la, b_name, lb);
@@ -504,6 +720,10 @@ impl DebugAssembler {
                                 if a.disassembly.lines().count() > 3 {
                                     println!("    ...");
                                 }
+                                println!(
+                                    "identical (first lines):\n    {}: {}\n    {}: {}",
+                                    a_name, a.rom_path, b_name, b.rom_path
+                                );
                             }
                         }
                     }
@@ -597,6 +817,13 @@ impl DebugAssembler {
 fn diff_first(a: &str, b: &str) -> Option<(usize, String, String)> {
     for (i, (la, lb)) in a.lines().zip(b.lines()).enumerate() {
         if la != lb {
+            // Check if the difference is only in symbol comments (parts in parentheses)
+            if let (Some(a_without_comment), Some(b_without_comment)) = (strip_symbol_comment(la), strip_symbol_comment(lb)) {
+                if a_without_comment == b_without_comment {
+                    // Only symbol comment differs, skip this difference
+                    continue;
+                }
+            }
             return Some((i + 1, la.to_string(), lb.to_string()));
         }
     }
@@ -615,12 +842,52 @@ fn diff_first(a: &str, b: &str) -> Option<(usize, String, String)> {
     }
 }
 
+/// Strip symbol comments from disassembly lines to compare only the actual bytecode
+/// Returns the line without the comment part if it has one, otherwise returns the original line
+fn strip_symbol_comment(line: &str) -> Option<&str> {
+    if let Some(comment_start) = line.find('(') {
+        if let Some(comment_end) = line.rfind(')') {
+            if comment_start < comment_end {
+                // Extract the part before the comment and trim whitespace
+                return Some(line[..comment_start].trim_end());
+            }
+        }
+    }
+    Some(line)
+}
+
 fn first_byte_diff(a: &[u8], b: &[u8]) -> Option<ByteDiff> {
     let len = std::cmp::min(a.len(), b.len());
     for i in 0..len {
         if a[i] != b[i] {
+            let rom_address = i + 0x100; // Convert file offset to ROM address
+            // Add debug for the specific problematic offset
+            if rom_address == 0x0B48 {
+                eprintln!("DEBUG: [Byte comparison] At ROM address 0x{:04X} (file offset 0x{:04X}): a[{}]=0x{:02X}, b[{}]=0x{:02X}", rom_address, i, i, a[i], i, b[i]);
+                // Show context around the problematic byte
+                let start = (i as i32 - 8).max(0) as usize;
+                let end = (i + 8).min(len);
+                eprint!("DEBUG: [Context a]: ");
+                for j in start..end {
+                    if j == i {
+                        eprint!("[{:02X}] ", a[j]);
+                    } else {
+                        eprint!("{:02X} ", a[j]);
+                    }
+                }
+                eprintln!();
+                eprint!("DEBUG: [Context b]: ");
+                for j in start..end {
+                    if j == i {
+                        eprint!("[{:02X}] ", b[j]);
+                    } else {
+                        eprint!("{:02X} ", b[j]);
+                    }
+                }
+                eprintln!();
+            }
             return Some(ByteDiff {
-                index: i,
+                index: rom_address, // Report ROM address, not file offset
                 a: a[i],
                 b: b[i],
             });
@@ -650,15 +917,14 @@ struct ByteDiff {
 
 use crate::chocolatal::{deluge_preprocess, preprocess};
 use std::io::{self, Write};
-use std::fs::File;
 use std::path::PathBuf;
 
 /// Run both preprocessors on the given file and print a diff.
-pub fn compare_preprocessors(input_path: &str) -> io::Result<()> {
+pub fn compare_preprocessors(input_path: &str, root_dir: &PathBuf) -> io::Result<()> {
     // Read input file
     let input = fs::read_to_string(input_path)?;
     // Run chocolatal (Rust)
-    let rust_out = match preprocess(&input, input_path) {
+    let rust_out = match preprocess(&input, input_path, root_dir) {
         Ok(s) => s,
         Err(e) => format!("[chocolatal error: {:?}]\n", e),
     };
