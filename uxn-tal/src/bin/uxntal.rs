@@ -6,82 +6,25 @@ use std::{
 };
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
+use uxn_tal::drif::ensure_drifblim_repo;
+use uxn_tal::dis::ensure_uxndis_repo;
 use uxn_tal::{Assembler, AssemblerError};
 use std::process::Command;
 
 fn main() {
     println!("{:?}", ensure_drifblim_repo());
+    ensure_uxndis_repo();
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
         exit(1);
     }
 }
 
-fn ensure_drifblim_repo() -> Option<PathBuf> {
-
-    let home_dir = dirs::home_dir()?;
-    let uxntal_path = home_dir.join(".uxntal");
-    let drifblim_path = uxntal_path.join(".drifblim");
-    if !drifblim_path.exists() {
-        let status = Command::new("git")
-            .arg("clone")
-            .arg("https://git.sr.ht/~rabbits/drifblim")
-            .arg(&drifblim_path)
-            .status()
-            .ok()?;
-        if !status.success() {
-            eprintln!("Failed to clone drifblim repository");
-            return None;
-        }
-    } else {
-        // If already exists, do a git pull
-        let status = Command::new("git")
-            .arg("-C")
-            .arg(&drifblim_path)
-            .arg("pull")
-            .status()
-            .ok()?;
-        if !status.success() {
-            eprintln!("Failed to pull drifblim repository");
-            return None;
-        }
-    }
-    if !drifblim_path.exists() {
-        eprintln!("drifblim repository not found after clone/pull");
-        return None;
-    }
-    let drifloon_rom = drifblim_path.join("src").join("drifloon.rom");
-    if !drifloon_rom.exists() {
-            let mut asm = Assembler::new();
-
-        let drifloon_tal = drifblim_path.join("src").join("drifloon.tal");
-        if !drifloon_tal.exists() {
-            eprintln!("drifloon.tal not found in drifblim repository");
-            return None;
-        }
-        let ret=asm.assemble(&drifloon_tal.display().to_string(), Some(drifloon_rom.display().to_string()));
-        if ret.is_err() {
-            eprintln!("Failed to assemble drifloon.tal: {:?}", ret.err());
-            return None;
-        }
-       // fs::write(&drifloon_rom, ret.unwrap()).ok()?;
-        // let status = Command::new("uxntal")
-        //     .arg(&drifloon_tal)
-        //     .arg(&drifloon_rom)
-        //     .status()
-        //     .ok()?;
-        // if !status.success() {
-        //     eprintln!("Failed to assemble drifloon.tal");
-        //     return None;
-        // }
-    }
-
-    Some(drifblim_path)
-}
-
 fn real_main() -> Result<(), AssemblerError> {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    let mut no_pre = false;
+    let root_dir = &std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    println!("root dir: {:?}", root_dir);
+    let mut pre = false;
     let mut preprocess_only = false;
     let mut no_intermediate = false;
     let mut want_version = false;
@@ -89,7 +32,9 @@ fn real_main() -> Result<(), AssemblerError> {
     let mut want_cmp = false;
     let mut want_cmp_pp = false;
     let mut want_stdin = false;
+    let mut drif_mode = false;
     let mut rust_iface: Option<String> = None; // module name (None => not requested)
+    let mut use_root: Option<PathBuf> = None; // root name (None => not requested)
 
     // Collect positional (non-flag) args after flag parsing
     let mut positional: Vec<String> = Vec::new();
@@ -119,12 +64,30 @@ fn real_main() -> Result<(), AssemblerError> {
             } else {
                 rust_iface = Some("symbols".to_string());
             }
-        } else if a == "--no-pre" {
-            no_pre = true;
+
+
+        } else if a.starts_with("--r") {
+            // Forms:
+            //   --root
+            //   --root=RootName
+            if let Some(eq) = a.find('=') {
+                let name = a[eq + 1..].trim();
+                if !name.is_empty() {
+                    use_root = Some(PathBuf::from(name));
+                } else {
+                    use_root = Some(root_dir.clone());
+                }
+            } else {
+                use_root = Some(root_dir.clone());
+            }
+        } else if a == "--pre" {
+            pre = true;
         } else if a == "--preprocess" {
             preprocess_only = true;
         } else if a == "--no-intermediate" {
             no_intermediate = true;
+        } else if a == "--drif" || a == "--drifblim" {
+            drif_mode = true;
         } else if a.starts_with('-') {
             eprintln!("unknown flag: {a}");
             print_usage();
@@ -151,7 +114,7 @@ fn real_main() -> Result<(), AssemblerError> {
             }
         };
         // Call debug::compare_preprocessors and exit
-        if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string()) {
+        if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), &root_dir) {
             eprintln!("compare_preprocessors error: {e}");
             exit(1);
         }
@@ -201,7 +164,17 @@ fn real_main() -> Result<(), AssemblerError> {
             .unwrap_or_else(|_| input_path.clone());
 
         // Change current working directory to the input file's directory (for relative includes)
-        if let Some(parent) = canon_input.parent() {
+        if use_root.is_some() {
+            if let Some(root) = &use_root {
+                if let Err(e) = std::env::set_current_dir(root) {
+                    if want_verbose {
+                        eprintln!("warning: failed to chdir to {}: {e}", root.display());
+                    }
+                } else if want_verbose {
+                    eprintln!("Changed working directory to {}", root.display());
+                }
+            }
+        } else if let Some(parent) = canon_input.parent() {
             if let Err(e) = std::env::set_current_dir(parent) {
                 if want_verbose {
                     eprintln!("warning: failed to chdir to {}: {e}", parent.display());
@@ -213,10 +186,10 @@ fn real_main() -> Result<(), AssemblerError> {
         source = fs::read_to_string(&canon_input)
             .map_err(|e| simple_err(&canon_input, &format!("failed to read: {e}")))?;
         // Write the source to a sibling file with .src.tal extension
-        let mut src_path = canon_input.clone();
-        src_path.set_extension("src.tal");
-        fs::write(&src_path, &source)
-            .map_err(|e| simple_err(&src_path, &format!("failed to write source: {e}")))?;
+        // let mut src_path = canon_input.clone();
+        // src_path.set_extension("src.tal");
+        // fs::write(&src_path, &source)
+        //     .map_err(|e| simple_err(&src_path, &format!("failed to write source: {e}")))?;
         }
 
     // Compute rom path (absolute) before changing directory
@@ -245,64 +218,72 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
-    let preprocessed = if no_pre {
-        source.clone()
-    } else {
-        match chocolatal::preprocess(&source, &canon_input.display().to_string()) {
+    let processed_src = if pre {
+        match chocolatal::preprocess(&source, &canon_input.display().to_string(), &root_dir) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Preprocessor error: {:?}", e);
                 std::process::exit(1);
             }
         }
+    } else {
+        source.clone()
     };
 
     if preprocess_only {
-        print!("{}", preprocessed);
+        print!("{}", processed_src);
         std::process::exit(0);
     }
 
-    // Write preprocessed output to .pre.tal in cwd
-    let mut pre_path = PathBuf::from(&canon_input);
-    pre_path.set_extension("pre.tal");
-    if let Err(e) = fs::write(&pre_path, &preprocessed) {
-        eprintln!(
-            "Failed to write intermediate file {}: {}",
-            pre_path.display(),
-            e
-        );
-        std::process::exit(1);
-    }
+    // // Write preprocessed output to .pre.tal in cwd
+    // let mut pre_path = PathBuf::from(&canon_input);
+    // pre_path.set_extension("pre.tal");
+    // if let Err(e) = fs::write(&pre_path, &preprocessed) {
+    //     eprintln!(
+    //         "Failed to write intermediate file {}: {}",
+    //         pre_path.display(),
+    //         e
+    //     );
+    //     std::process::exit(1);
+    // }
 
-    // Use the intermediate file for assembly
-    let pre_source = match fs::read_to_string(&pre_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!(
-                "Failed to read intermediate file {}: {}",
-                pre_path.display(),
-                e
-            );
-            std::process::exit(1);
-        }
+    // // Use the intermediate file for assembly
+    // let pre_source = match fs::read_to_string(&pre_path) {
+    //     Ok(s) => s,
+    //     Err(e) => {
+    //         eprintln!(
+    //             "Failed to read intermediate file {}: {}",
+    //             pre_path.display(),
+    //             e
+    //         );
+    //         std::process::exit(1);
+    //     }
+    // };
+
+    let mut asm = if drif_mode {
+        Assembler::with_drif_mode(true)
+    } else {
+        Assembler::new()
     };
-
-    let mut asm = Assembler::new();
 
     // --- ADD: cmp mode ---
     if want_cmp {
-        // Use DebugAssembler from the debug module
-        let dbg = debug::DebugAssembler::default();
+        // Use DebugAssembler from the debug module with drif mode if enabled
+        let dbg = if drif_mode {
+            debug::DebugAssembler::with_drif_mode(true)
+        } else {
+            debug::DebugAssembler::default()
+        };
         let rel_path = match canon_input.strip_prefix(std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))) {
             Ok(p) => p.display().to_string(),
             Err(_) => canon_input.display().to_string(),
         };
         eprintln!("Relative path to input: {}", rel_path);
-        let res = dbg.assemble_and_compare( &rel_path,&preprocessed, true);
+        let res = dbg.assemble_and_compare( &rel_path,&processed_src, true);
         return res.map(|_| ());
     }
 
-    let rom = asm.assemble(&pre_source, Some(pre_path.to_string_lossy().to_string()))?;
+    let rom = asm.assemble(&processed_src, Some(canon_input.display().to_string()))?;
     fs::write(&rom_path, &rom)
         .map_err(|e| simple_err(&rom_path, &format!("failed to write rom: {e}")))?;
 
@@ -326,9 +307,9 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     // Remove intermediate file unless --no-intermediate is set
-    if !no_intermediate {
-        let _ = fs::remove_file(&pre_path);
-    }
+    // if !no_intermediate {
+    //     let _ = fs::remove_file(&pre_path);
+    // }
 
     Ok(())
 }
@@ -352,6 +333,7 @@ Flags:
     --cmp-pp             Compare preprocessor output (Rust vs deluge)
     --no-pre              Disable preprocessing
     --preprocess          Print preprocessed output and exit
+    --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
     --help, -h            Show this help
 
 Behavior:

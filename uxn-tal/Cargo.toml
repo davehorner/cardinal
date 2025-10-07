@@ -1,11 +1,11 @@
 [package]
 name = "uxn-tal"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 authors = ["David Horner"]
 description = "A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
 license = "MIT"
-repository = "https://github.com/yourusername/uxn-tal"
+repository = "https://github.com/davehorner/cardinal/tree/main/uxn-tal"
 keywords = ["uxn", "tal", "assembler", "virtual-machine", "rom"]
 categories = ["development-tools", "parsing", "compilers"]
 

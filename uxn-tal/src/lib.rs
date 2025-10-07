@@ -32,6 +32,7 @@
 
 pub mod assembler;
 pub mod chocolatal;
+pub mod drif;
 pub mod debug;
 pub mod devicemap;
 pub mod error;
@@ -41,6 +42,8 @@ pub mod opcodes;
 pub mod parser;
 pub mod rom;
 pub mod runes;
+pub mod hexrev;
+pub mod dis;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
 
