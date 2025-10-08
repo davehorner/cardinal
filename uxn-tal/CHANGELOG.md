@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.10...uxn-tal-v0.1.11) - 2025-10-08
+
+### Added
+
+- buxn,uxn,uxn38 docker support.  --cmp now creates docker images for each assembler and outputs roms and disassembly for each assembler.
+
 ## [0.1.10](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.9...uxn-tal-v0.1.10) - 2025-10-07
 
 ### Fixed

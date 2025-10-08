@@ -32,7 +32,7 @@
 
 pub mod assembler;
 pub mod chocolatal;
-pub mod drif;
+pub mod bkend_drif;
 pub mod debug;
 pub mod devicemap;
 pub mod error;
@@ -43,7 +43,13 @@ pub mod parser;
 pub mod rom;
 pub mod runes;
 pub mod hexrev;
-pub mod dis;
+pub mod dis_uxndis;
+pub mod emu_uxncli;
+pub mod wsl;
+pub mod bkend;
+pub mod bkend_uxn;
+pub mod bkend_buxn;
+pub mod bkend_uxn38;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
 

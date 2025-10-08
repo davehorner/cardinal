@@ -36,7 +36,7 @@ pub fn uxndis_repo_get_uxndis_seed() -> PathBuf {
 }
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use crate::{hexrev::HexRev, Assembler, AssemblerError};
+use crate::{hexrev::HexRev, wsl::detect_wsl, Assembler, AssemblerError};
 
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
@@ -143,4 +143,47 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
     }
     
     Ok(Some(uxndis_path))
+}
+
+fn dis_err(path: &str, e: &str) -> AssemblerError {
+    AssemblerError::Disassembly { message: format!("dis error on {}: {}", path, e) }
+    
+}
+
+pub fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
+        // let sym = format!("{rom_path}.sym");
+        // if Path::new(&sym).exists() {
+        //     let _ = fs::remove_file(&sym);
+        // }
+    let in_wsl = detect_wsl();
+    let uxndis_path = crate::dis_uxndis::uxndis_repo_get_uxndis();
+    let uxndis_path = wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
+        .map_err(|e| dis_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?;
+    let rom_path = wslpath::windows_to_wsl(&rom_path)
+        .map_err(|e| dis_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?;
+        //     println!("Disassembly command: uxncli {} {}", uxndis_path, rom_path);
+        // // println!("Disassembly written to {}", dis);
+        // std::process::exit(0);
+    let output = if in_wsl {
+        Command::new("uxncli")
+            .arg(&uxndis_path)
+            .arg(&rom_path)
+            .output()
+    } else {
+        Command::new("wsl")
+            .arg("uxncli")
+            .arg(&uxndis_path)
+            .arg(&rom_path)
+            .output()
+    }
+    .map_err(|e| dis_err(&rom_path, &format!("uxndis failed: {e}")))?;
+    let rom_path = wslpath::wsl_to_windows(&rom_path)
+        .map_err(|e| dis_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
+    let dis = format!("{rom_path}.dis");
+        // Write disassembly output to .dis file
+        if let Err(e) = fs::write(&dis, &output.stdout) {
+            eprintln!("Failed to write disassembly to {}: {}", dis, e);
+        }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

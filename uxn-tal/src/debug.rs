@@ -1,30 +1,9 @@
-use crate::{drif, rom, Assembler, AssemblerError};
+use crate::dis_uxndis::run_dis_file;
+use crate::{bkend_drif, rom, Assembler, AssemblerError};
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
-
-pub trait AssemblerBackend {
-    fn name(&self) -> &'static str;
-    fn assemble(&self, tal_file: &str, tal_source: &str) -> Result<AssemblyOutput, AssemblerError>;
-}
-
-pub struct AssemblyOutput {
-    pub rom_path: String,
-    pub rom_bytes: Vec<u8>,
-    pub stdout: String,
-    pub disassembly: String,
-}
-
-impl Default for AssemblyOutput {
-    fn default() -> Self {
-        Self {
-            rom_path: String::new(),
-            rom_bytes: vec![],
-            stdout: String::new(),
-            disassembly: String::new(),
-        }
-    }
-}
+use crate::bkend::{AssemblerBackend, AssemblyOutput};
 
 pub struct DebugAssembleResult {
     pub uxntal_rom_path: String,
@@ -132,7 +111,7 @@ impl AssemblerBackend for UxnasmBackend {
         Ok(AssemblyOutput {
             rom_path: rom_path.clone(),
             rom_bytes: bytes.clone(),
-            stdout: run_vm_path(&rom_path)?,
+            stdout: crate::emu_uxncli::run_uxncli_get_stdout(&rom_path)?,
             disassembly: run_dis_file(&rom_path)?,
         })
     }
@@ -178,7 +157,7 @@ impl DrifblimBackend {
     fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
-    let drifblim_rom = crate::drif::drifblim_repo_get_drifblim();
+    let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim();
     let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
         let in_wsl = detect_wsl();
         let output = if in_wsl {
@@ -231,7 +210,7 @@ println!("drifblim stdout: {:?}", output);
 pub struct DrifblimSeedBackend;
 impl AssemblerBackend for DrifblimSeedBackend {
     fn name(&self) -> &'static str {
-        "drifblim-seed"
+        "drifseed"
     }
     fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
 
@@ -291,7 +270,7 @@ impl DrifblimSeedBackend {
     fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
-    let drifblim_rom = crate::drif::drifblim_repo_get_drifblim_seed();
+    let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim_seed();
     let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
         let in_wsl = detect_wsl();
         let output = if in_wsl {
@@ -472,61 +451,13 @@ fn spawn_cmd(cmd: &str, args: &[&str]) -> Command {
     }
 }
 
-fn run_vm_path(rom_path: &str) -> Result<String, AssemblerError> {
-    let in_wsl = detect_wsl();
-    let output = if in_wsl {
-        Command::new("uxncli").arg(rom_path).output()
-    } else {
-        Command::new("wsl").arg("uxncli").arg(rom_path).output()
-    }
-    .map_err(|e| syntax_err(rom_path, &format!("uxncli failed: {e}")))?;
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
 
 fn run_vm_last(bytes: &[u8]) -> Result<String, AssemblerError> {
     let tmp = ".__temp_uxntal_exec.rom";
     fs::write(tmp, bytes).map_err(|e| io_err(tmp, e))?;
-    let out = run_vm_path(tmp)?;
+    let out = crate::emu_uxncli::run_uxncli_get_stdout(tmp)?;
     let _ = fs::remove_file(tmp);
     Ok(out)
-}
-
-fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
-        // let sym = format!("{rom_path}.sym");
-        // if Path::new(&sym).exists() {
-        //     let _ = fs::remove_file(&sym);
-        // }
-    let in_wsl = detect_wsl();
-    let uxndis_path = crate::dis::uxndis_repo_get_uxndis();
-    let uxndis_path = wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
-        .map_err(|e| syntax_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?;
-    let rom_path = wslpath::windows_to_wsl(&rom_path)
-        .map_err(|e| syntax_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?;
-        //     println!("Disassembly command: uxncli {} {}", uxndis_path, rom_path);
-        // // println!("Disassembly written to {}", dis);
-        // std::process::exit(0);
-    let output = if in_wsl {
-        Command::new("uxncli")
-            .arg(&uxndis_path)
-            .arg(&rom_path)
-            .output()
-    } else {
-        Command::new("wsl")
-            .arg("uxncli")
-            .arg(&uxndis_path)
-            .arg(&rom_path)
-            .output()
-    }
-    .map_err(|e| syntax_err(&rom_path, &format!("uxndis failed: {e}")))?;
-    let rom_path = wslpath::wsl_to_windows(&rom_path)
-        .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
-    let dis = format!("{rom_path}.dis");
-        // Write disassembly output to .dis file
-        if let Err(e) = fs::write(&dis, &output.stdout) {
-            eprintln!("Failed to write disassembly to {}: {}", dis, e);
-        }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn syntax_err(path: &str, msg: &str) -> AssemblerError {
@@ -574,12 +505,17 @@ impl DebugAssembler {
             Box::new(UxnasmBackend),
             Box::new(DrifblimBackend),
             Box::new(DrifblimSeedBackend),
+            Box::new(crate::bkend_buxn::UxnBuxnBackend),
+            Box::new(crate::bkend_uxn::UxnDUxnAsmBackend),
         ];
         let mut uxntal = None;
         let mut uxnasm = None;
         let mut drif = None;
         let mut drifloon = None;
         let mut drifblim_seed = None;
+        let mut buxn = None;
+        let mut uxn38 = None;
+        let mut duxnasm = None;
         let mut backend_errors = Vec::new();
 
         for b in backends {
@@ -608,7 +544,10 @@ impl DebugAssembler {
                         "uxnasm" => uxnasm = Some(out),
                         "drifblim" => drif = Some(out),
                         "drifloon" => drifloon = Some(out),
-                        "drifblim-seed" => drifblim_seed = Some(out),
+                        "drifseed" => drifblim_seed = Some(out),
+                        "buxn" => buxn = Some(out),
+                        "uxn38" => uxn38 = Some(out),
+                        "duxnasm" => duxnasm = Some(out),
                         _ => {}
                     }
                 }
@@ -628,7 +567,10 @@ impl DebugAssembler {
                 ("uxnasm", &uxnasm),
                 ("drifblim", &drif),
                 ("drifloon", &drifloon),
-                ("drifblim-seed", &drifblim_seed),
+                ("drifseed", &drifblim_seed),
+                ("buxn", &buxn),
+                ("uxn38", &uxn38),
+                ("duxnasm", &duxnasm),
             ] {
                 if let Some(ref o) = out {
                     println!(
@@ -657,10 +599,28 @@ impl DebugAssembler {
                 ("uxntal", &uxntal, "drifloon", &drifloon),
                 ("uxnasm", &uxnasm, "drifloon", &drifloon),
                 ("drifblim", &drif, "drifloon", &drifloon),
-                ("drifblim", &drif, "drifblim-seed", &drifblim_seed),
-                ("uxntal", &uxntal, "drifblim-seed", &drifblim_seed),
-                ("uxnasm", &uxnasm, "drifblim-seed", &drifblim_seed),
-                ("drifloon", &drifloon, "drifblim-seed", &drifblim_seed),
+                ("drifblim", &drif, "drifseed", &drifblim_seed),
+                ("uxntal", &uxntal, "drifseed", &drifblim_seed),
+                ("uxnasm", &uxnasm, "drifseed", &drifblim_seed),
+                ("drifloon", &drifloon, "drifseed", &drifblim_seed),
+                ("buxn", &buxn, "uxntal", &uxntal),
+                ("buxn", &buxn, "uxnasm", &uxnasm),
+                ("buxn", &buxn, "drifblim", &drif),
+                ("buxn", &buxn, "drifloon", &drifloon),
+                ("buxn", &buxn, "drifseed", &drifblim_seed),
+                ("uxn38", &uxn38, "uxntal", &uxntal),
+                ("uxn38", &uxn38, "uxnasm", &uxnasm),
+                ("uxn38", &uxn38, "drifblim", &drif),
+                ("uxn38", &uxn38, "drifloon", &drifloon),
+                ("uxn38", &uxn38, "drifseed", &drifblim_seed),
+                ("uxn38", &uxn38, "buxn", &buxn),
+                ("duxnasm", &duxnasm, "uxntal", &uxntal),
+                ("duxnasm", &duxnasm, "uxnasm", &uxnasm),
+                ("duxnasm", &duxnasm, "drifblim", &drif),
+                ("duxnasm", &duxnasm, "drifloon", &drifloon),
+                ("duxnasm", &duxnasm, "drifseed", &drifblim_seed),
+                ("duxnasm", &duxnasm, "buxn", &buxn),
+                ("duxnasm", &duxnasm, "uxn38", &uxn38),
             ];
             for (a_name, a, b_name, b) in pairs {
                 print!("{:<8} vs {:<9}: ", a_name, b_name);
@@ -687,10 +647,28 @@ impl DebugAssembler {
                 ("uxntal", &uxntal, "drifloon", &drifloon),
                 ("uxnasm", &uxnasm, "drifloon", &drifloon),
                 ("drifblim", &drif, "drifloon", &drifloon),
-                ("drifblim", &drif, "drifblim-seed", &drifblim_seed),
-                ("uxntal", &uxntal, "drifblim-seed", &drifblim_seed),
-                ("uxnasm", &uxnasm, "drifblim-seed", &drifblim_seed),
-                ("drifloon", &drifloon, "drifblim-seed", &drifblim_seed),
+                ("drifblim", &drif, "drifseed", &drifblim_seed),
+                ("uxntal", &uxntal, "drifseed", &drifblim_seed),
+                ("uxnasm", &uxnasm, "drifseed", &drifblim_seed),
+                ("drifloon", &drifloon, "drifseed", &drifblim_seed),
+                ("buxn", &buxn, "uxntal", &uxntal),
+                ("buxn", &buxn, "uxnasm", &uxnasm),
+                ("buxn", &buxn, "drifblim", &drif),
+                ("buxn", &buxn, "drifloon", &drifloon),
+                ("buxn", &buxn, "drifseed", &drifblim_seed),
+                ("uxn38", &uxn38, "uxntal", &uxntal),
+                ("uxn38", &uxn38, "uxnasm", &uxnasm),
+                ("uxn38", &uxn38, "drifblim", &drif),
+                ("uxn38", &uxn38, "drifloon", &drifloon),
+                ("uxn38", &uxn38, "drifseed", &drifblim_seed),
+                ("uxn38", &uxn38, "buxn", &buxn),
+                ("duxnasm", &duxnasm, "uxntal", &uxntal),
+                ("duxnasm", &duxnasm, "uxnasm", &uxnasm),
+                ("duxnasm", &duxnasm, "drifblim", &drif),
+                ("duxnasm", &duxnasm, "drifloon", &drifloon),
+                ("duxnasm", &duxnasm, "drifseed", &drifblim_seed),
+                ("duxnasm", &duxnasm, "buxn", &buxn),
+                ("duxnasm", &duxnasm, "uxn38", &uxn38),
             ];
             for (a_name, a, b_name, b) in dis_pairs {
                 print!("{:<8} vs {:<9}: ", a_name, b_name);
@@ -713,17 +691,17 @@ impl DebugAssembler {
                             if lines.is_empty() {
                                 println!("identical (no disassembly output)");
                             } else {
-                                println!("identical (first lines):");
-                                for l in lines {
-                                    println!("    {}", l);
-                                }
-                                if a.disassembly.lines().count() > 3 {
-                                    println!("    ...");
-                                }
-                                println!(
-                                    "identical (first lines):\n    {}: {}\n    {}: {}",
-                                    a_name, a.rom_path, b_name, b.rom_path
-                                );
+                                println!("identical");
+                                // for l in lines {
+                                //     println!("    {}", l);
+                                // }
+                                // if a.disassembly.lines().count() > 3 {
+                                //     println!("    ...");
+                                // }
+                                // println!(
+                                //     "identical (first lines):\n    {}: {}\n    {}: {}",
+                                //     a_name, a.rom_path, b_name, b.rom_path
+                                // );
                             }
                         }
                     }

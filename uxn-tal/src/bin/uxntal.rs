@@ -4,16 +4,17 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
 };
+use uxn_tal::bkend_uxn::{ensure_docker_uxn_image, ensure_uxn_repo};
+use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
+use uxn_tal::bkend_buxn::{ensure_buxn_repo, ensure_docker_buxn_image};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
-use uxn_tal::drif::ensure_drifblim_repo;
-use uxn_tal::dis::ensure_uxndis_repo;
+use uxn_tal::bkend_drif::ensure_drifblim_repo;
+use uxn_tal::dis_uxndis::ensure_uxndis_repo;
 use uxn_tal::{Assembler, AssemblerError};
 use std::process::Command;
 
 fn main() {
-    println!("{:?}", ensure_drifblim_repo());
-    ensure_uxndis_repo();
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
         exit(1);
@@ -268,6 +269,14 @@ fn real_main() -> Result<(), AssemblerError> {
 
     // --- ADD: cmp mode ---
     if want_cmp {
+        println!("{:?}", ensure_drifblim_repo());
+        ensure_uxndis_repo();
+        ensure_buxn_repo();
+        ensure_docker_buxn_image();
+        ensure_uxn38_repo();
+        ensure_docker_uxn38_image();
+        ensure_uxn_repo();
+        ensure_docker_uxn_image();
         // Use DebugAssembler from the debug module with drif mode if enabled
         let dbg = if drif_mode {
             debug::DebugAssembler::with_drif_mode(true)
