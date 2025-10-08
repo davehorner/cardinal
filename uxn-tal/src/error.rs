@@ -40,6 +40,12 @@ pub enum AssemblerError {
 
     #[error("Internal error: {message}")]
     Internal { message: String },
+
+    #[error("Backend error: {message}")]
+    Backend { message: String },
+
+    #[error("Disassembly error: {message}")]
+    Disassembly { message: String },
 }
 
 /// Result type for assembler operations
