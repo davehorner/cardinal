@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::path;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -80,6 +81,14 @@ fn real_main() -> Result<(), AssemblerError> {
                 format!("https://{}", &path_part[8..])
             } else if path_part.starts_with("http///") {
                 format!("http://{}", &path_part[7..])
+            } else if path_part.starts_with("file///") {
+                format!("file://{}", &path_part[7..])
+            } else if path_part.starts_with("https//") {
+                format!("https://{}", &path_part[7..])
+            } else if path_part.starts_with("http//") {
+                format!("http://{}", &path_part[6..])
+            } else if path_part.starts_with("file//") {
+                format!("file://{}", &path_part[7..])
             } else {
                 // fallback: treat as a normal path or URL
                 path_part.to_string()
