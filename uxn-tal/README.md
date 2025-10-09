@@ -2,7 +2,7 @@
 
 A fast and comprehensive Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.  
 
-This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.  It was written by reading the source for uxn/uxnasm.c; building a comparison framework to compare the output of assemblers, and lots of comparison and LLM queries.  The tools are verbose by default and not yet optimized for speed or non-development purposes.  It is a goal to be able to assemble the drif assemblers and produce identical output as the drif assemblers.  If you find sometime doesn't work or match up, please submit an issue.
+This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.  It was written by reading the source for uxn/uxnasm.c; building a comparison framework to compare the output of assemblers, and lots of comparison and LLM queries.  The tools are verbose by default and not yet optimized for speed or non-development purposes.  It is a goal to be able to assemble the drif assemblers and produce identical output as the drif assemblers.  If you find something doesn't work or match up, please submit an issue.
 
 uxn-tal and uxntal are names for the technology and a poor name for a specific project.  Given the name is published, I am going to continue with the uxl-tal and uxntal names.  The spirit of the cardinal project is a personal computing stack; and uxn-tal/uxntal crate will hopefully be used to faciliate wider usage of different assemblers, emulators, pre-processors, extensions in the UXN ecosystem.
 
