@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 authors = ["David Horner"]
 description = "A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
@@ -26,6 +26,7 @@ tempfile = "3.23.0"
 dirs = "6.0.0"
 wslpath = "0.0.2"
 which = "8.0.0"
+reqwest = { version = "0.12.23", features = ["blocking"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 uxn = { package = "cardinal-uxn", version = "0.4.4", features = [

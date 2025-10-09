@@ -1,10 +1,62 @@
-# UXN-TAL Assembler
+# UXN-TAL Assembler and things
 
 A fast and comprehensive Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.  
 
-This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.
+This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.  It was written by reading the source for uxn/uxnasm.c; building a comparison framework to compare the output of assemblers, and lots of comparison and LLM queries.  The tools are verbose by default and not yet optimized for speed or non-development purposes.  It is a goal to be able to assemble the drif assemblers and produce identical output as the drif assemblers.  If you find sometime doesn't work or match up, please submit an issue.
 
-## Features
+uxn-tal and uxntal are names for the technology and a poor name for a specific project.  Given the name is published, I am going to continue with the uxl-tal and uxntal names.  The spirit of the cardinal project is a personal computing stack; and uxn-tal/uxntal crate will hopefully be used to faciliate wider usage of different assemblers, emulators, pre-processors, extensions in the UXN ecosystem.
+
+The assembler will be referred to as cuxn in the future (Cardinal UXN).  I haven't yet broken out a cuxnasm or made any moves to rename things.
+
+Today the primary binary is:
+```
+Usage:
+    uxntal [flags] <input.tal|/dev/stdin> [output.rom]
+
+Flags:
+    --version, -V         Show version and exit
+    --verbose, -v         Verbose output
+    --rust-interface[=M]  Emit Rust symbols module (default module name: symbols)
+    --cmp                 Compare disassembly for all backends
+    --stdin               Read input.tal from stdin
+    --cmp-pp              Compare preprocessor output (Rust vs deluge)
+    --pre                 Enable preprocessing
+    --preprocess          Print preprocessed output and exit
+    --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
+    --r, --root[=DIR]     Set root directory for includes (default: current dir)
+    --register            Register uxntal as a file handler (Windows only)
+    --r, --root[=DIR]     Set root directory for includes (default: current dir)
+    --register            Register uxntal as a file handler (Windows only)
+    --help, -h            Show this help
+
+Behavior:
+    If output.rom omitted, use input path with .rom extension, or 'out.rom' if reading from stdin.
+    You can also pass /dev/stdin as the input filename to read from stdin.
+    Rust interface file path: <output>.rom.symbols.rs
+```
+
+A few unique arguments to call out specifically are the `--rust-interface`, `--cmp`, and the `--register` arguments.
+
+- `--rust-interface` generates a rust file that contains all of the labels and offsets so that you can access that data via rust interface.  This means you can run a rom and access ram data via label.
+
+- `--cmp` will attempt to build your tal file against a number of different asm backends.  It will use the asm backend on the host machine if it is in the path.  Otherwise, if you are running a docker daemon, it will create docker images and generate roms via docker.
+
+- `--register` is a windows only feature today (it could be implemented on other platforms).  `--register` will setup a protocol handler for `uxntal://` on your system.  It will also install the e_window and cardinal-gui crates as a dependency.  This feature allows you to place `uxntal://` in front of any http(s) url and uxntal will download, assemble, cache, and run the tal file pointed to by url.
+```
+cargo install uxn-tal
+uxntal --register
+explorer uxntal://https://wiki.xxiivv.com/etc/catclock.tal.txt
+```
+The above will run a catclock from cmd.exe/pwsh.  You can prepend the uxntal:// to any valid tal url, or you can create a bookmarklet on your bookmark toolbar to launch the protocol on click of the bookmarklet.
+```
+javascript:(function(){
+  const u = location.href;
+  window.open('uxntal://' + u.replace(/^https:/, 'https:/').replace(/^http:/, 'http:/'));
+})();
+```
+Currently it does not scan and probe for include files; this enhancement may come in the future.
+
+## cuxn Assembler Features
 
 ### ✅ Complete UXN Support
 - **Errors report with line numbers!**
@@ -264,23 +316,6 @@ cargo test -- --nocapture
 - Proper memory layout and addressing
 - Correctly trimmed ROM files (excludes zero page padding)
 
-## Current Limitations
-
-**Important**: This assembler currently supports core TAL syntax but **cannot compile most existing TAL programs** that use advanced features. The following are not yet implemented:
-
-- **Macros** (`%MACRO { ... }`) - Preprocessor-style definitions (used in most demos)
-- **Device Access** (`.Screen/width`) - Direct device port access syntax (ubiquitous in UXN programs)  
-- **Inline Assembly** (`[ LIT2 01 -Screen/auto ]`) - Raw bytecode blocks (common optimization)
-- **Include Files** - File inclusion directives
-
-**Reality Check**: The demo TAL files in `uxn/projects/examples/demos` all failed to assemble because they extensively use these features. This assembler is currently best suited for:
-- Learning UXN assembly fundamentals
-- Simple educational programs
-- Basic ROM generation experiments
-- Projects that stick to core instruction sets
-
-For production UXN development, consider using the official `uxnasm` or `ruxnasm` assemblers until these features are implemented.
-
 ## Performance
 
 - **Fast Assembly**: Optimized two-pass assembler
@@ -288,32 +323,6 @@ For production UXN development, consider using the official `uxnasm` or `ruxnasm
 - **Batch Processing**: Efficient directory processing
 - **Error Recovery**: Detailed error reporting with line numbers
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `cargo test`
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Related Projects
-
-- [UXN](https://100r.co/site/uxn.html) - The UXN virtual machine
-- [uxnasm](https://git.sr.ht/~rabbits/uxn) - Original C implementation
-- [ruxnasm](https://github.com/bellinitte/ruxnasm) - Another Rust implementation
-
-## Acknowledgments
-
-- **Devine Lu Linvega** - Creator of UXN and TAL
-- **UXN Community** - Documentation and examples
-- **100 Rabbits** - UXN ecosystem development
-- **Binary**: `#b10101010`
-- **Character**: `'A`, `'B`
-- **Strings**: `"Hello World"`
 
 ### Labels and References
 - **Label Definition**: `@main`, `@loop`
@@ -411,42 +420,6 @@ The assembler uses a two-pass approach:
 
 ## Error Handling
 
-The library provides detailed error messages for common issues:
-
-- Syntax errors with line numbers
-- Undefined label references
-- Duplicate label definitions
-- Invalid number formats
-- Unknown opcodes
-- ROM size limits
-- Invalid addressing modes
-
-## Current Limitations
-
-**Update**: This assembler now supports core TAL syntax **and** advanced features found in most production TAL programs. The following features are now implemented:
-
-- **Macros** (`%MACRO { ... }`): Preprocessor-style definitions
-- **Device Access** (`.Screen/width`): Direct device port access syntax
-- **Inline Assembly** (`[ ... ]`): Raw bytecode blocks
-- **Include Files**: File inclusion directives
-
-You can now assemble most existing TAL programs, including those from official UXN projects and demos.
-
-## New Feature Support
-
-- **Macros**: Write and use macros for reusable code blocks
-- **Device Access**: Use device port syntax for direct hardware access
-- **Inline Assembly**: Embed raw bytecode blocks for optimization
-- **Include Files**: Modularize programs with file inclusion
-
-## Performance & Error Handling
-
-- **Fast Assembly**: Optimized two-pass assembler
-- **Memory Efficient**: Minimal memory usage during assembly
-- **Batch Processing**: Efficient directory processing
-- **Error Reporting**: Detailed error messages with line numbers, file names, and source context
-## Error Handling
-
 All errors include file name, line number, position, and source line for actionable debugging. Common error types:
 - Syntax errors (with file, line, position, and source context)
 - Undefined label references
@@ -455,6 +428,7 @@ All errors include file name, line number, position, and source line for actiona
 - Unknown opcodes
 - ROM size limits
 - Invalid addressing modes
+
 #### `Assembler`
 Main assembler instance for processing TAL source code.
 
@@ -478,7 +452,7 @@ Comprehensive error types with detailed messages:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 The repository includes ROMs and TAL files from the `uxn` reference
 implementation, which are © Devine Lu Linvega and released under the MIT
@@ -492,3 +466,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - [UXN](https://100r.co/site/uxn.html) - The UXN virtual machine
 - [TAL](https://wiki.xxiivv.com/site/tal.html) - TAL assembly language documentation
+- [uxnasm](https://git.sr.ht/~rabbits/uxn) - Original C implementation
+- [ruxnasm](https://github.com/bellinitte/ruxnasm) - Another Rust implementation
+
+## Acknowledgments
+
+- **Devine Lu Linvega** - Creator of UXN and TAL
+- **UXN Community** - Documentation and examples
+- **100 Rabbits** - UXN ecosystem development
+- **Binary**: `#b10101010`
+- **Character**: `'A`, `'B`
+- **Strings**: `"Hello World"`
