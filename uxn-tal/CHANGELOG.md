@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.12...uxn-tal-v0.1.13) - 2025-10-09
+
+### Fixed
+
+- *(acid)* [someWord and [someOtherWords are to be considered nothing/comments.  this resolves the acid.tal file in buxn that has a [test
+
 ## [0.1.12](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.11...uxn-tal-v0.1.12) - 2025-10-09
 
 ### Added
