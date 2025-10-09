@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.13...uxn-tal-v0.1.14) - 2025-10-09
+
+### Added
+
+- *(docs, protocol_handler)* update README and enhance uxntal command-line interface with URL handling and protocol registration features on windows.
+
 ## [0.1.13](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.12...uxn-tal-v0.1.13) - 2025-10-09
 
 ### Fixed
