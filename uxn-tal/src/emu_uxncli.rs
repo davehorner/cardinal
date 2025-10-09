@@ -8,12 +8,21 @@ fn emu_err(path: &str, msg: &str) -> AssemblerError {
 }
 
 pub fn run_uxncli_get_stdout(rom_path: &str) -> Result<String, AssemblerError> {
-    let in_wsl = crate::wsl::detect_wsl();
-    let output = if in_wsl {
-        Command::new("uxncli").arg(rom_path).output()
+
+    if cfg!(windows) {
+        let in_wsl = crate::wsl::detect_wsl();
+        let output = if in_wsl {
+            Command::new("uxncli").arg(rom_path).output()
+        } else {
+            Command::new("wsl").arg("uxncli").arg(rom_path).output()
+        }
+        .map_err(|e| emu_err(rom_path, &format!("uxncli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Command::new("wsl").arg("uxncli").arg(rom_path).output()
+        let output = Command::new("uxncli").arg(rom_path)
+            .output()
+            .map_err(|e| emu_err(rom_path, &format!("uxncli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
-    .map_err(|e| emu_err(rom_path, &format!("uxncli failed: {e}")))?;
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    
 }

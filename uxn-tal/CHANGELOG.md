@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.11...uxn-tal-v0.1.12) - 2025-10-09
+
+### Added
+
+- *(macos)* macos support is working.
+
 ## [0.1.11](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.10...uxn-tal-v0.1.11) - 2025-10-08
 
 ### Added
