@@ -68,8 +68,12 @@ impl AssemblerBackend for UxnasmBackend {
     fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
         // let input = tal_file.replace('\\', "/");
         // let input = input.replace("//?/C:", "/mnt/c"); // Handle Windows long path prefix
-        let input = wslpath::windows_to_wsl(&tal_file)
-            .map_err(|e| syntax_err(&tal_file, &format!("Could not convert TAL path to WSL: {e}")))?;
+        let input = if cfg!(windows) {
+            wslpath::windows_to_wsl(&tal_file)
+            .map_err(|e| syntax_err(&tal_file, &format!("Could not convert TAL path to WSL: {e}")))?
+        } else {
+            tal_file.to_string()
+        }; 
         //let input = tal_file;//.replace("\\\\?\\", ""); // Handle Windows long path prefix
             // let input = match Path::new(&input).canonicalize() {
             //     Ok(abs_path) => {
@@ -105,8 +109,12 @@ impl AssemblerBackend for UxnasmBackend {
             ));
         }
         // let rom_path = rom_path.replace("/mnt/c/", "C:/"); // Handle Windows long path prefix
-        let rom_path = wslpath::wsl_to_windows(&rom_path)
-            .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
+        let rom_path = if cfg!(windows) {
+            wslpath::wsl_to_windows(&rom_path)
+                .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+        } else {
+            rom_path
+        };
         let bytes = fs::read(&rom_path).unwrap_or_default();
         Ok(AssemblyOutput {
             rom_path: rom_path.clone(),
@@ -158,9 +166,14 @@ impl DrifblimBackend {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim();
-    let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
+    let drifblim_rom = if cfg!(windows) {
+        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?
+    } else {
+        drifblim_rom.to_string_lossy().to_string()
+    };
+    let output = if cfg!(windows) {
         let in_wsl = detect_wsl();
-        let output = if in_wsl {
+        if in_wsl {
             Command::new("uxncli")
                 .arg(drifblim_rom)
                 .arg(tal_path)
@@ -174,7 +187,15 @@ impl DrifblimBackend {
                 .arg(rom_path)
                 .output()
         }
-        .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?;
+        .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?
+    } else {
+        Command::new("uxncli")
+            .arg(drifblim_rom)
+            .arg(tal_path)
+            .arg(rom_path)
+            .output()
+            .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?
+    };
 println!("drifblim stdout: {:?}", output);
         if output.stderr.len() > 0 {
             let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -234,12 +255,16 @@ impl AssemblerBackend for DrifblimSeedBackend {
             .ok()
             .and_then(|cwd| wslpath::windows_to_wsl(&cwd.display().to_string()).ok())
             .unwrap_or_else(|| ".".to_string());
-        let input = wslpath::windows_to_wsl(&tal_file.display().to_string())
-            .map_err(|e| syntax_err(&tal_file.display().to_string(), &format!("Could not convert TAL path to WSL: {e}")))?;
-        let input = if input.starts_with(&cwd_wsl) {
-            input[cwd_wsl.len()..].trim_start_matches('/').to_string()
+        let input = if cfg!(windows) {
+            let input = wslpath::windows_to_wsl(&tal_file.display().to_string())
+                .map_err(|e| syntax_err(&tal_file.display().to_string(), &format!("Could not convert TAL path to WSL: {e}")))?;
+            if input.starts_with(&cwd_wsl) {
+                input[cwd_wsl.len()..].trim_start_matches('/').to_string()
+            } else {
+                input
+            }
         } else {
-            input
+            tal_file.display().to_string()
         };
         //let input = tal_file;//.replace("\\\\?\\", ""); // Handle Windows long path prefix
         let rom_path = format!("{}_{}.rom", input, self.name());
@@ -249,9 +274,13 @@ impl AssemblerBackend for DrifblimSeedBackend {
         println!("input: {}", input);
                         // std::process::exit(0);
         let stdout = Self::run_drif(&input, &input, &rom_path)?;
-        let rom_path = wslpath::wsl_to_windows(&rom_path)
-            .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;   
-        let bytes = fs::read(&rom_path).unwrap_or_default();
+        let rom_path = if cfg!(windows) {
+            wslpath::wsl_to_windows(&rom_path)
+            .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+        } else {
+            rom_path.to_string()
+        }; 
+       let bytes = fs::read(&rom_path).unwrap_or_default();
         println!("rom_path: {}", rom_path);
 
         if bytes.is_empty() {
@@ -271,9 +300,13 @@ impl DrifblimSeedBackend {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim_seed();
-    let drifblim_rom = wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?;
+    let drifblim_rom = if cfg!(windows) {
+        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?
+    } else {
+        drifblim_rom.to_string_lossy().to_string()
+    };
         let in_wsl = detect_wsl();
-        let output = if in_wsl {
+        let output = if in_wsl || !cfg!(windows) {
             Command::new("uxncli")
                 .arg(drifblim_rom)
                 .arg(tal_path)
@@ -366,9 +399,14 @@ impl DrifloonBackend {
     let uxntal_path = home_dir.join(".uxntal");
     let drifblim_path = uxntal_path.join(".drifblim");
     let drifloon_path = drifblim_path.join("src").join("drifloon.rom");
-    let drifloon_path = wslpath::windows_to_wsl(&drifloon_path.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifloon path to WSL")))?;
+    let drifloon_path = if cfg!(target_os = "windows") {
+        wslpath::windows_to_wsl(&drifloon_path.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifloon path to WSL")))?
+    } else {
+        drifloon_path.to_string_lossy().to_string()
+    };
+    let mut output =if cfg!(target_os = "windows") {
         let in_wsl = detect_wsl();
-        let output = if in_wsl {
+        if in_wsl {
             let mut child = Command::new("uxncli")
                 .arg(&drifloon_path)
                 .stdin(std::process::Stdio::piped())
@@ -399,15 +437,35 @@ impl DrifloonBackend {
             }
             child.wait_with_output()
         }
-        .map_err(|e| syntax_err(rom_path, &format!("drifloon failed: {e}")))?;
+        .map_err(|e| syntax_err(rom_path, &format!("drifloon failed: {e}")))?
+    } else {
+        let mut child = Command::new("uxncli")
+            .arg(&drifloon_path)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| syntax_err(rom_path, &format!("drifloon failed to spawn: {e}")))?;
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(tal_file.as_bytes())
+                    .map_err(|e| syntax_err(rom_path, &format!("drifloon failed to write to stdin: {e}")))?;
+            }
+            child.wait_with_output()
+        .map_err(|e| syntax_err(rom_path, &format!("drifloon failed: {e}")))?
+    };
     println!("drifloon path: {}", &drifloon_path);
 println!("drifloon stdout: {:?}", output);
 println!("drifloon stderr: {:?}", output.stderr);
 println!("rom_path: {}", rom_path);
 // Write output to rom_path
 if !output.stdout.is_empty() {
-    let rom_path = wslpath::wsl_to_windows(rom_path)
-        .map_err(|e| syntax_err(rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
+    let rom_path = if cfg!(windows) {
+        wslpath::wsl_to_windows(&rom_path)
+        .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+    } else {
+        rom_path.to_string()
+    }; 
     fs::write(&rom_path, &output.stdout)
         .map_err(|e| syntax_err(&rom_path, &format!("Failed to write ROM: {e}")))?;
 }
@@ -437,6 +495,11 @@ fn detect_wsl() -> bool {
 }
 
 fn spawn_cmd(cmd: &str, args: &[&str]) -> Command {
+    if cfg!(not(windows)) {
+        let mut command = Command::new(cmd);
+        command.args(args);
+        return command;
+    }
     let in_wsl = detect_wsl();
     if in_wsl {
         let mut command = Command::new(cmd);

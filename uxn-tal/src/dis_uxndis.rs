@@ -157,28 +157,47 @@ pub fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
         // }
     let in_wsl = detect_wsl();
     let uxndis_path = crate::dis_uxndis::uxndis_repo_get_uxndis();
-    let uxndis_path = wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
-        .map_err(|e| dis_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?;
-    let rom_path = wslpath::windows_to_wsl(&rom_path)
-        .map_err(|e| dis_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?;
-        //     println!("Disassembly command: uxncli {} {}", uxndis_path, rom_path);
-        // // println!("Disassembly written to {}", dis);
-        // std::process::exit(0);
-    let output = if in_wsl {
-        Command::new("uxncli")
-            .arg(&uxndis_path)
-            .arg(&rom_path)
-            .output()
+    let uxndis_path: String = if cfg!(windows) {
+        wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
+            .map_err(|e| dis_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?
     } else {
-        Command::new("wsl")
-            .arg("uxncli")
-            .arg(&uxndis_path)
-            .arg(&rom_path)
-            .output()
-    }
-    .map_err(|e| dis_err(&rom_path, &format!("uxndis failed: {e}")))?;
-    let rom_path = wslpath::wsl_to_windows(&rom_path)
-        .map_err(|e| dis_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?;
+        uxndis_path.to_string_lossy().to_string()
+    };
+    let rom_path = if cfg!(windows) {
+        wslpath::windows_to_wsl(&rom_path)
+            .map_err(|e| dis_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?
+    } else {
+        rom_path.to_string()
+    };
+    //     println!("Disassembly command: uxncli {} {}", uxndis_path, rom_path);
+    // // println!("Disassembly written to {}", dis);
+    // std::process::exit(0);
+    let output = if cfg!(windows) && !in_wsl {
+        if in_wsl {
+            Command::new("uxncli")
+                .arg(&uxndis_path)
+                .arg(&rom_path)
+                .output()
+        } else {
+            Command::new("wsl")
+                .arg("uxncli")
+                .arg(&uxndis_path)
+                .arg(&rom_path)
+                .output()
+        }
+        .map_err(|e| dis_err(&rom_path, &format!("uxndis failed: {e}")))?
+    } else {
+            Command::new("uxncli")
+                .arg(&uxndis_path)
+                .arg(&rom_path)
+                .output()?
+    };
+    let rom_path = if cfg!(windows) {
+        wslpath::wsl_to_windows(&rom_path)
+        .map_err(|e| dis_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+    } else {
+        rom_path.to_string()
+    }; 
     let dis = format!("{rom_path}.dis");
         // Write disassembly output to .dis file
         if let Err(e) = fs::write(&dis, &output.stdout) {
