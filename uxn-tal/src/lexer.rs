@@ -887,10 +887,20 @@ impl Lexer {
                     self.advance();
                     return Ok(Token::CharLiteral('"'));
                 }
+                // Check for connected word after '['
+                if !self.current_char().is_whitespace() && self.current_char() != ']' {
+                    let word = self.read_identifier()?;
+                    return Ok(Token::BracketOpen); // we eat the word for now.  Token::BracketOpenWithWord(word));
+                }
                 Ok(Token::BracketOpen)
             }
             ']' => {
                 self.advance();
+                // Check for connected word after ']'
+                if !self.current_char().is_whitespace() {
+                    let word = self.read_identifier()?;
+                    return Ok(Token::BracketClose); // we eat the word for now.  Token::BracketCloseWithWord(word));
+                }
                 Ok(Token::BracketClose)
             }
             '~' => {
