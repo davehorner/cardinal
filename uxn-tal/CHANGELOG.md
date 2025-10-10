@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.16](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.15...uxn-tal-v0.1.16) - 2025-10-10
+
+### Added
+
+- enhance uxntal URL handling with new chrome extension and README updates; use "Open in uxntal" context menu to run tal on sanboxed pages like github raw and sourcehut raw wepages.
+
 ## [0.1.15](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.14...uxn-tal-v0.1.15) - 2025-10-09
 
 ### Fixed

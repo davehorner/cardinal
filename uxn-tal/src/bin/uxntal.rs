@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
 };
+use base64::Engine;
 use uxn_tal::bkend_uxn::{ensure_docker_uxn_image, ensure_uxn_repo};
 use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
 use uxn_tal::bkend_buxn::{ensure_buxn_repo, ensure_docker_buxn_image};
@@ -74,25 +75,33 @@ fn real_main() -> Result<(), AssemblerError> {
         }
 
         if raw_url.starts_with("uxntal://") {
+            println!("Handling uxntal:// URL: {}", raw_url);
+            let rebuilt_url = if let Some(rebuilt_url) = extract_target_from_uxntal(raw_url) {
+                println!("Received URL: {:?}", rebuilt_url);
+                rebuilt_url
+            } else {
+                eprintln!("Malformed uxntal URL: {}", raw_url);
+                std::process::exit(1);
+            };
             // Rebuild the URL from the uxntal:// scheme.
             // Example: uxntal://https///wiki.xxiivv.com/etc/cccc.tal.txt -> https://wiki.xxiivv.com/etc/cccc.tal.txt
-            let path_part = &raw_url[9..];
-            let rebuilt_url = if path_part.starts_with("https///") {
-                format!("https://{}", &path_part[8..])
-            } else if path_part.starts_with("http///") {
-                format!("http://{}", &path_part[7..])
-            } else if path_part.starts_with("file///") {
-                format!("file://{}", &path_part[7..])
-            } else if path_part.starts_with("https//") {
-                format!("https://{}", &path_part[7..])
-            } else if path_part.starts_with("http//") {
-                format!("http://{}", &path_part[6..])
-            } else if path_part.starts_with("file//") {
-                format!("file://{}", &path_part[7..])
-            } else {
-                // fallback: treat as a normal path or URL
-                path_part.to_string()
-            };
+            // let path_part = &raw_url[9..];
+            // let rebuilt_url = if path_part.starts_with("https///") {
+            //     format!("https://{}", &path_part[8..])
+            // } else if path_part.starts_with("http///") {
+            //     format!("http://{}", &path_part[7..])
+            // } else if path_part.starts_with("file///") {
+            //     format!("file://{}", &path_part[7..])
+            // } else if path_part.starts_with("https//") {
+            //     format!("https://{}", &path_part[7..])
+            // } else if path_part.starts_with("http//") {
+            //     format!("http://{}", &path_part[6..])
+            // } else if path_part.starts_with("file//") {
+            //     format!("file://{}", &path_part[7..])
+            // } else {
+            //     // fallback: treat as a normal path or URL
+            //     path_part.to_string()
+            // };
         
             // log::debug!("Received URL: {}", raw_url);
             println!("Received URL: {:?}", rebuilt_url);
@@ -130,6 +139,20 @@ fn real_main() -> Result<(), AssemblerError> {
             // Download the file from the URL
             fn download_url(url: &str, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 let resp = reqwest::blocking::get(url)?;
+                if resp.status() == reqwest::StatusCode::FORBIDDEN {
+                    // Try using curl if available
+                    let status = Command::new("curl")
+                        .arg("-L")
+                        .arg("-o")
+                        .arg(dest)
+                        .arg(url)
+                        .status();
+                    match status {
+                        Ok(s) if s.success() => return Ok(()),
+                        Ok(s) => return Err(format!("curl exited with status: {}", s).into()),
+                        Err(e) => return Err(format!("Failed to run curl: {}", e).into()),
+                    }
+                }
                 if !resp.status().is_success() {
                     return Err(format!("Failed to download: HTTP {}", resp.status()).into());
                 }
@@ -723,4 +746,100 @@ fn register_protocol_per_user() -> std::io::Result<()> {
         );
     }
     Ok(())
+}
+fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
+    use std::borrow::Cow;
+
+    fn pct_decode(s: &str) -> String {
+        percent_encoding::percent_decode_str(s)
+            .decode_utf8()
+            .unwrap_or(Cow::from(s))
+            .into_owned()
+    }
+
+    fn qs_get<'a>(query: &'a str, key: &str) -> Option<String> {
+        // query w/o leading '?', split on '&', look for key=...
+        for pair in query.split('&') {
+            let mut it = pair.splitn(2, '=');
+            let k = it.next().unwrap_or("");
+            let v = it.next().unwrap_or("");
+            if k.eq_ignore_ascii_case(key) {
+                return Some(pct_decode(v));
+            }
+        }
+        None
+    }
+
+    if !raw_url.starts_with("uxntal:") {
+        return None;
+    }
+
+    // Strip scheme and any number of leading slashes (uxntal:, uxntal:/, uxntal://, etc.)
+    let mut s = raw_url.trim_start_matches("uxntal:").trim_start_matches('/');
+
+    // 1) open router: support both "open?..." and "open/?..."
+    // Normalize an optional single slash before '?'
+    // Examples we accept:
+    //   open?url=ENC
+    //   open/?url=ENC
+    if s.starts_with("open") {
+        // split off path and query
+        let (path, rest) = if let Some(qpos) = s.find('?') {
+            (&s[..qpos], &s[qpos + 1..])
+        } else {
+            (s, "")
+        };
+        // path could be "open" or "open/"
+        if path == "open" || path == "open/" {
+            if let Some(v) = qs_get(rest, "url") {
+                return Some(v);
+            }
+        }
+        // fallthrough if no url param
+    }
+
+    // 2) Base64 form: uxntal://b64,<payload>  (URL_SAFE_NO_PAD)
+    if let Some(rest) = s.strip_prefix("b64,") {
+        if let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(rest) {
+            if let Ok(strv) = String::from_utf8(bytes) {
+                return Some(strv);
+            }
+        }
+    }
+
+    // 3) Slash-mangled http(s)/file
+    // Normalize common mangles:
+    //  - https///example.com -> https://example.com
+    //  - https//example.com  -> https://example.com
+    //  - http///example.com  -> http://example.com
+    //  - http//example.com   -> http://example.com
+    //  - file///C:/path      -> file://C:/path
+    for (bad, good, cut) in [
+        ("https///", "https://", 8usize),
+        ("http///",  "http://",  7usize),
+        ("file///",  "file://",  7usize),
+        ("https//",  "https://", 7usize),
+        ("http//",   "http://",  6usize),
+        ("file//",   "file://",  7usize),
+    ] {
+        if s.starts_with(bad) {
+            return Some(format!("{}{}", good, &s[cut..]));
+        }
+    }
+
+    // 4) Percent-encoded whole URL after scheme
+    if s.contains("%2F") || s.contains("%3A") || s.contains('%') {
+        let dec = pct_decode(s);
+        if dec.starts_with("http://") || dec.starts_with("https://") || dec.starts_with("file://") {
+            return Some(dec);
+        }
+    }
+
+    // 5) Plain pass-through if it already looks like a URL
+    if s.starts_with("http://") || s.starts_with("https://") || s.starts_with("file://") {
+        return Some(s.to_string());
+    }
+
+    // 6) Fallback: as-is
+    Some(s.to_string())
 }

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Open in uxntal",
+  "version": "1.1.0",
+  "description": "Open the current page URL in the uxntal:// protocol handler.",
+  "permissions": ["contextMenus", "tabs", "storage"],
+  "host_permissions": ["*://*/*"],
+  "background": { "service_worker": "bg.js" },
+  "action": {
+    "default_title": "Open in uxntal"
+  },
+  "commands": {
+    "open-in-uxntal": {
+      "suggested_key": { "default": "Alt+U" },
+      "description": "Open current tab in uxntal"
+    }
+  },
+  "options_page": "options.html"
+}
