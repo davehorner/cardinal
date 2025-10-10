@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.16...uxn-tal-v0.1.17) - 2025-10-10
+
+### Added
+
+- *(fetch,cli,url)* repo-aware uxntal:// resolver + GitHub/Codeberg/sr.ht fetch with BFS includes
+
 ## [0.1.16](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.1.15...uxn-tal-v0.1.16) - 2025-10-10
 
 ### Added
