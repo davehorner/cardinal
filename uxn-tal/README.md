@@ -49,12 +49,24 @@ explorer uxntal://https://wiki.xxiivv.com/etc/catclock.tal.txt
 ```
 The above will run a catclock from cmd.exe/pwsh.  You can prepend the uxntal:// to any valid tal url, or you can create a bookmarklet on your bookmark toolbar to launch the protocol on click of the bookmarklet.
 ```
-javascript:(function(){
-  const u = location.href;
-  window.open('uxntal://' + u.replace(/^https:/, 'https:/').replace(/^http:/, 'http:/'));
-})();
+javascript:(function(){window.open('uxntal://' + location.href);})();
 ```
-Currently it does not scan and probe for include files; this enhancement may come in the future.
+This works for most webpages, however content from raw.githubusercontent.com/... is not a normal webpage and it’s delivered inside a sandboxed iframe by GitHub.  This means executing JavaScript from bookmarklets will not work on those pages.
+
+To provide another means of opening sandboxed webpages, you can install the [open-in-uxntal](open-in-uxntal) chrome extension via [chrome://extensions](chrome://extensions) `"Load unpacked"` button and pointing to the open-in-uxntal folder.  The extension exposes a new right click context menu on the webpage for `Open in uxntal`.
+
+You can just prefix any url with uxntal:// and it should work.  Extensions and other things constructing a custom url should use open and url encode so that urls are not invalid and munged when parsed.  The simple prefix is for the user without the extension or bookmarklet installed.  Other functionality such as selection of asm/emu/pre may be added in the future and controlled via variables in the preferred open encoded form.
+```
+uxntal://open?url=ENC or uxntal://open/?url=ENC
+multiple query params (...&url=...)
+uxntal://b64,<payload> (URL-safe base64)
+percent-encoded full URLs after the scheme
+over-slashed forms (https///, https//, etc.)
+```
+
+Using the extension and the bookmarklet, you will find a chrome dialog pop that asks if you want to run uxntal.exe to open an application.  Using the bookmarklet you sometimes have the option to allow always; the extension does not provide this option so you always have a second click to acknowledge the website opening the application.
+
+Currently it does not scan and probe for include files; this enhancement may come in the future.  It's possible uxntal.exe could register a NativeMessagingHosts endpoint so that the chrome extension isn't using the protocol handler but instead invoke chrome.runtime.sendNativeMessage to side step the additional chrome dialog.
 
 ## cuxn Assembler Features
 
