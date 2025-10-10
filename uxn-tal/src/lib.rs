@@ -52,7 +52,11 @@ pub mod bkend_buxn;
 pub mod bkend_uxn38;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
-
+pub mod fetch;
+pub mod urlutil;
+pub mod util;
+pub mod paths;
+pub use fetch::resolver::resolve_entry_from_url;
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();
     a.assemble(source, None)

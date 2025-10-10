@@ -37,7 +37,7 @@ Behavior:
 
 A few unique arguments to call out specifically are the `--rust-interface`, `--cmp`, and the `--register` arguments.
 
-- `--rust-interface` generates a rust file that contains all of the labels and offsets so that you can access that data via rust interface.  This means you can run a rom and access ram data via label.
+- `--rust-interface` generates a rust file that contains all of the labels, sizes, and offsets so that you can access that data via rust interface.  This means you can run a rom and access ram data via label.
 
 - `--cmp` will attempt to build your tal file against a number of different asm backends.  It will use the asm backend on the host machine if it is in the path.  Otherwise, if you are running a docker daemon, it will create docker images and generate roms via docker.
 
@@ -53,7 +53,7 @@ javascript:(function(){window.open('uxntal://' + location.href);})();
 ```
 This works for most webpages, however content from raw.githubusercontent.com/... is not a normal webpage and it’s delivered inside a sandboxed iframe by GitHub.  This means executing JavaScript from bookmarklets will not work on those pages.
 
-To provide another means of opening sandboxed webpages, you can install the [open-in-uxntal](open-in-uxntal) chrome extension via [chrome://extensions](chrome://extensions) `"Load unpacked"` button and pointing to the open-in-uxntal folder.  The extension exposes a new right click context menu on the webpage for `Open in uxntal`.
+To provide another means of opening sandboxed webpages, you can install the [open-in-uxntal](https://github.com/davehorner/cardinal/tree/main/uxn-tal/open-in-uxntal) chrome extension via [chrome://extensions](chrome://extensions) `"Load unpacked"` button and pointing to the open-in-uxntal folder.  The extension exposes a new right click context menu on the webpage for `Open in uxntal`.
 
 You can just prefix any url with uxntal:// and it should work.  Extensions and other things constructing a custom url should use open and url encode so that urls are not invalid and munged when parsed.  The simple prefix is for the user without the extension or bookmarklet installed.  Other functionality such as selection of asm/emu/pre may be added in the future and controlled via variables in the preferred open encoded form.
 ```
@@ -66,7 +66,9 @@ over-slashed forms (https///, https//, etc.)
 
 Using the extension and the bookmarklet, you will find a chrome dialog pop that asks if you want to run uxntal.exe to open an application.  Using the bookmarklet you sometimes have the option to allow always; the extension does not provide this option so you always have a second click to acknowledge the website opening the application.
 
-Currently it does not scan and probe for include files; this enhancement may come in the future.  It's possible uxntal.exe could register a NativeMessagingHosts endpoint so that the chrome extension isn't using the protocol handler but instead invoke chrome.runtime.sendNativeMessage to side step the additional chrome dialog.
+The protocol handler now has a provider abstraction over Github/Codeberg/Sourcehut urls; this means that the bookmarklet will work on view/log/blame pages on these websites.  Additionally, the downloader now parses and downloads all the includes.  For example `explorer uxntal://https://git.sr.ht/~rabbits/left/tree/main/item/src/left.tal`, which is a project with a few includes, runs fine.
+
+If you are often viewing code from a site like github, using the bookmarklet on a view/blame/history page instead of the raw allows you to use the protocol without the permission dialog being raised.  It's possible uxntal.exe could register a NativeMessagingHosts endpoint so that the chrome extension isn't using the protocol handler but instead invoke chrome.runtime.sendNativeMessage to side step the additional chrome dialog.
 
 ## cuxn Assembler Features
 
