@@ -417,7 +417,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.9",
  "clap",
  "env_logger",
  "log",
@@ -429,7 +429,7 @@ version = "0.3.10"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.9",
  "clap",
  "cpal",
  "display-info",
@@ -474,20 +474,6 @@ dependencies = [
 [[package]]
 name = "cardinal-varvara"
 version = "0.4.9"
-dependencies = [
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono",
- "gilrs",
- "hidapi",
- "image",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e37b4ace7e37bcbdebdb3edaef4af6df7d855c58b567d41f397a197b7946e2b1"
 dependencies = [
@@ -495,6 +481,20 @@ dependencies = [
  "chrono",
  "gilrs",
  "hidapi",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.4.10"
+dependencies = [
+ "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
+ "gilrs",
+ "hidapi",
+ "image",
  "log",
  "static_assertions",
  "zerocopy",
@@ -981,6 +981,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "dirs"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3443,6 +3464,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
 name = "orbclient"
 version = "0.3.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3840,6 +3867,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5407465600fb0548f1442edf71dd20683c6ed326200ace4b1ef0763521bb3b77"
 dependencies = [
  "bitflags 2.9.1",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
+dependencies = [
+ "getrandom 0.2.16",
+ "libredox",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -4435,9 +4473,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.21.0"
+version = "3.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15b61f8f20e3a6f7e0649d825294eaf317edce30f82cf6026e7e4cb9222a7d1e"
+checksum = "2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16"
 dependencies = [
  "fastrand",
  "getrandom 0.3.3",
@@ -4792,20 +4830,28 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.1.8"
+version = "0.1.17"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-varvara 0.4.9",
  "clap",
+ "dirs",
  "env_logger",
  "glob",
  "is-wsl",
  "log",
  "once_cell",
+ "percent-encoding",
  "regex",
+ "reqwest",
+ "tempfile",
  "thiserror 1.0.69",
+ "url",
  "walkdir",
+ "which 8.0.0",
+ "wslpath",
 ]
 
 [[package]]
@@ -5133,7 +5179,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5682,6 +5728,12 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
+
+[[package]]
+name = "wslpath"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04a2ecdf2cc4d33a6a93d71bcfbc00bb1f635cdb8029a2cc0709204a045ec7a3"
 
 [[package]]
 name = "x11-dl"
