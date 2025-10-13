@@ -227,11 +227,6 @@ args[0] = entry_local
     }
     println!("args: {:?}", args);
     if args.len() > 0 && args[0] == "--register" {
-        #[cfg(not(windows))]
-        {
-            eprintln!("Sorry, protocol handlers are only supported on Windows.");
-            return Ok(());
-        }
         register_protocol_per_user()?;
         println!("You need to `cargo install e_window cardinal-gui`. Ctrl+c to exit, or press return to run the install.");
         print!("Press Enter to continue...");
@@ -713,54 +708,190 @@ fn recursive_find(root: &Path, needle: &str, cap: usize) -> Option<PathBuf> {
 }
 
 fn register_protocol_per_user() -> std::io::Result<()> {
-    let exe = std::env::current_exe()?.display().to_string();
-    // Important: NO backslash-doubling, just quote the path.
-    let cmd = format!(r#""{}" "%1""#, exe);
+    #[cfg(windows)]
+    {
+        let exe = std::env::current_exe()?.display().to_string();
+        // Important: NO backslash-doubling, just quote the path.
+        let cmd = format!(r#""{}" "%1""#, exe);
 
-    // Base key
-    let status1 = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\uxntal",
-            "/ve",
-            "/t", "REG_SZ",
-            "/d", "URL:UXNTAL Protocol",
-            "/f",
-        ])
+        // Base key
+        let status1 = Command::new("reg")
+            .args([
+                "add",
+                r"HKCU\Software\Classes\uxntal",
+                "/ve",
+                "/t",
+                "REG_SZ",
+                "/d",
+                "URL:UXNTAL Protocol",
+                "/f",
+            ])
+            .status()?;
+        // Mark as URL protocol
+        let status2 = Command::new("reg")
+            .args([
+                "add",
+                r"HKCU\Software\Classes\uxntal",
+                "/v",
+                "URL Protocol",
+                "/t",
+                "REG_SZ",
+                "/d",
+                "",
+                "/f",
+            ])
+            .status()?;
+        // Open command
+        let status3 = Command::new("reg")
+            .args([
+                "add",
+                r"HKCU\Software\Classes\uxntal\shell\open\command",
+                "/ve",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &cmd,
+                "/f",
+            ])
+            .status()?;
+
+        if status1.success() && status2.success() && status3.success() {
+            println!("Registered uxntal:// protocol for current user on Windows.");
+        } else {
+            eprintln!(
+                "Failed: {:?} {:?} {:?}",
+                status1.code(),
+                status2.code(),
+                status3.code()
+            );
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to register protocol on Windows",
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+{
+    // Get the path to the executable
+    let exe = std::env::current_exe()?.display().to_string();
+
+    // Define the paths for .desktop and MIME files
+    let home_dir = std::env::var("HOME").map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("HOME environment variable not found: {}", e),
+        )
+    })?;
+    let desktop_file_path = format!("{}/.local/share/applications/uxntal.desktop", home_dir);
+    let mime_file_path = format!(
+        "{}/.local/share/mime/packages/x-scheme-handler-uxntal.xml",
+        home_dir
+    );
+
+    // Create the parent directory for the MIME file if it doesn't exist
+    if let Some(parent) = std::path::Path::new(&mime_file_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Create the MIME type XML file
+    let mime_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+    <mime-type type="x-scheme-handler/uxntal">
+        <comment>UXNTAL Protocol</comment>
+        <glob pattern="uxntal://*"/>
+    </mime-type>
+</mime-info>
+"#;
+    let mut mime_file = File::create(&mime_file_path)?;
+    mime_file.write_all(mime_content.as_bytes())?;
+
+    // Create the .desktop file content
+    let desktop_content = format!(
+        r#"[Desktop Entry]
+Name=UXNTAL Handler
+Exec={} %u
+Type=Application
+Terminal=false
+MimeType=x-scheme-handler/uxntal;
+NoDisplay=true
+"#,
+        exe
+    );
+
+    // Create the parent directory for the .desktop file if it doesn't exist
+    if let Some(parent) = std::path::Path::new(&desktop_file_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Write the .desktop file
+    let mut desktop_file = File::create(&desktop_file_path)?;
+    desktop_file.write_all(desktop_content.as_bytes())?;
+
+    // Register the MIME type with xdg-mime
+    let status1 = Command::new("xdg-mime")
+        .args(["install", "--mode", "user", &mime_file_path])
         .status()?;
-    // Mark as URL protocol
-    let status2 = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\uxntal",
-            "/v", "URL Protocol",
-            "/t", "REG_SZ",
-            "/d", "",
-            "/f",
-        ])
+
+    // Associate the .desktop file with the MIME type
+    let status2 = Command::new("xdg-mime")
+        .args(["default", "uxntal.desktop", "x-scheme-handler/uxntal"])
         .status()?;
-    // Open command
-    let status3 = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\uxntal\shell\open\command",
-            "/ve",
-            "/t", "REG_SZ",
-            "/d", &cmd,
-            "/f",
-        ])
+
+    // Update the desktop database
+    let status3 = Command::new("update-desktop-database")
+        .arg(format!("{}/.local/share/applications", home_dir))
         .status()?;
 
     if status1.success() && status2.success() && status3.success() {
-        println!("Registered uxntal:// protocol for current user.");
+        println!("Registered uxntal:// protocol for current user on Ubuntu.");
     } else {
         eprintln!(
-            "Failed: {:?} {:?} {:?}",
-            status1.code(), status2.code(), status3.code()
+            "Failed: xdg-mime install status: {:?}, xdg-mime default status: {:?}, update-desktop-database status: {:?}",
+            status1.code(),
+            status2.code(),
+            status3.code()
         );
+        // Clean up created files in case of failure
+        let _ = std::fs::remove_file(&desktop_file_path);
+        let _ = std::fs::remove_file(&mime_file_path);
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to register protocol on Ubuntu",
+        ));
     }
+
+    // Install dependencies (e_window and cardinal-gui)
+    println!("You need to `cargo install e_window cardinal-gui`. Ctrl+C to exit, or press Enter to run the install.");
+    print!("Press Enter to continue...");
+    std::io::stdout().flush()?;
+    let _ = std::io::stdin().read_line(&mut String::new())?;
+    let status = Command::new("cargo")
+        .args(["install", "e_window", "cardinal-gui"])
+        .status()?;
+    if status.success() {
+        println!("Successfully ran: cargo install e_window cardinal-gui");
+    } else {
+        eprintln!("cargo install exited with status: {:?}", status.code());
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to run cargo install",
+        ));
+    }
+
     Ok(())
 }
+
+    #[cfg(not(any(windows, unix)))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Protocol registration is only supported on Windows and Unix-like systems (e.g., Ubuntu)",
+        ))
+    }
+}
+
 
 // fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
 //     use std::borrow::Cow;

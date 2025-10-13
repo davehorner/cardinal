@@ -14,10 +14,6 @@ anyhow = "1.0.83"
 chrono = "0.4.38"
 clap = { version = "4.5.4", features = ["derive"] }
 cpal = "0.16.0"
-eframe = { version = "0.32", default-features = false, features = [
-    "default_fonts",
-    "glow",
-] }
 env_logger = "0.11.3"
 image = { version = "0.25.5", default-features = false, features = ["png"] }
 log = "0.4.21"
@@ -28,6 +24,7 @@ web-sys = { version = "0.3.77", features = [
     "HtmlSelectElement",
     "HtmlOptionElement",
 ] }
+
 
 #[patch.crates-io]
 #varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
