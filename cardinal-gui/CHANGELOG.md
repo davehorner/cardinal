@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.10...cardinal-gui-v0.3.11) - 2025-10-13
+
+### Added
+
+- *(wayland)* cardinal-gui works on wayland now; uxntal protocol handler works on ubuntu. run --register; then test with xdg-open uxntal://https///wiki.xxiivv.com/etc/cccc.tal.txt
+
 ## [0.3.10](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.9...cardinal-gui-v0.3.10) - 2025-08-24
 
 ### Added
