@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.1...uxn-tal-v0.2.2) - 2025-10-18
+
+### Added
+
+- *(rom)* support .rom files as direct inputs and fetch targets like uxntal://https://github.com/davehorner/cardinal/blob/main/roms/audio.rom
+
 ## [0.2.1](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.0...uxn-tal-v0.2.1) - 2025-10-18
 
 ### Fixed

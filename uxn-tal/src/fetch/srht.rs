@@ -75,28 +75,29 @@ impl Provider for SourceHut {
     fn fetch_tal_tree(&self, r: &RepoRef, out_root: &Path) -> Result<FetchResult, Box<dyn std::error::Error>> {
         // Strict: must point to a file
         let entry_rel = match &r.path {
-            Some(p) if p.to_ascii_lowercase().ends_with(".tal") => p.replace('\\', "/"),
-            _ => return Err("sr.ht: URL must point to a .tal file; not guessing entries".into()),
+            Some(p) if p.to_ascii_lowercase().ends_with(".tal") || p.to_ascii_lowercase().ends_with(".rom") => p.replace('\\', "/"),
+            _ => return Err("sr.ht: URL must point to a .tal or .rom file; not guessing entries".into()),
         };
 
         // Fetch entry and walk includes
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
-        let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
         let mut all = vec![entry_local.clone()];
-        let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local)]);
-
-        while let Some((curr_rel, curr_local)) = q.pop_front() {
-            let src = fs::read_to_string(&curr_local).unwrap_or_default();
-            for inc in parse_includes(&src) {
-                let target = resolve_include(&curr_rel, &inc);
-                if !visited.insert(target.clone()) { continue; }
-                match Self::fetch_file(r, out_root, &target) {
-                    Ok(loc) => { all.push(loc.clone()); q.push_back((target, loc)); }
-                    Err(e)  => eprintln!("[srht] warn: missing include {} ({})", target, e),
+        // Only walk includes for .tal files
+        if entry_rel.to_ascii_lowercase().ends_with(".tal") {
+            let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
+            let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
+            while let Some((curr_rel, curr_local)) = q.pop_front() {
+                let src = fs::read_to_string(&curr_local).unwrap_or_default();
+                for inc in parse_includes(&src) {
+                    let target = resolve_include(&curr_rel, &inc);
+                    if !visited.insert(target.clone()) { continue; }
+                    match Self::fetch_file(r, out_root, &target) {
+                        Ok(loc) => { all.push(loc.clone()); q.push_back((target, loc)); }
+                        Err(e)  => eprintln!("[srht] warn: missing include {} ({})", target, e),
+                    }
                 }
             }
         }
-
         Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
     
         // FAST PATH: if the URL points to a .tal, fetch it directly

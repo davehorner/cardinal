@@ -335,6 +335,7 @@ args[0] = entry_local
     let mut source = String::new();
     let canon_input_p;
     let mut input_from_stdin = false;
+    let mut input_is_rom = false;
     if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
         // Read from stdin
         use std::io::{self, Read};
@@ -360,7 +361,7 @@ args[0] = entry_local
             None => {
                 return Err(simple_err(
                     std::path::Path::new(raw_input),
-                    "input file not found (tried direct, +.tal, multi-root recursive scan)",
+                    "input file not found (tried direct, +.tal, +.rom, multi-root recursive scan)",
                 ));
             }
         };
@@ -368,6 +369,13 @@ args[0] = entry_local
         canon_input_p = input_path
             .canonicalize()
             .unwrap_or_else(|_| input_path.clone());
+
+        // Detect .rom extension
+        if let Some(ext) = canon_input_p.extension() {
+            if ext == "rom" {
+                input_is_rom = true;
+            }
+        }
 
         // Change current working directory to the input file's directory (for relative includes)
         if use_root.is_some() {
@@ -389,14 +397,16 @@ args[0] = entry_local
                 eprintln!("Changed working directory to {}", parent.display());
             }
         }
-        source = fs::read_to_string(&canon_input_p)
-            .map_err(|e| simple_err(&canon_input_p, &format!("failed to read: {e}")))?;
+        if !input_is_rom {
+            source = fs::read_to_string(&canon_input_p)
+                .map_err(|e| simple_err(&canon_input_p, &format!("failed to read: {e}")))?;
+        }
         // Write the source to a sibling file with .src.tal extension
         // let mut src_path = canon_input.clone();
         // src_path.set_extension("src.tal");
         // fs::write(&src_path, &source)
         //     .map_err(|e| simple_err(&src_path, &format!("failed to write source: {e}")))?;
-        }
+    }
 
     // Compute rom path (absolute) before changing directory
     let rom_path_p = if positional.len() > 1 {
@@ -428,21 +438,28 @@ args[0] = entry_local
         }
     }
 
-    let processed_src = if pre {
-        match chocolatal::preprocess(&source, &canon_input, &root_dir) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Preprocessor error: {:?}", e);
-                std::process::exit(1);
+    let processed_src = if !input_is_rom {
+        if pre {
+            match chocolatal::preprocess(&source, &canon_input, &root_dir) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Preprocessor error: {:?}", e);
+                    std::process::exit(1);
+                }
             }
+        } else {
+            source.clone()
         }
     } else {
-        source.clone()
+        String::new()
     };
 
-    if preprocess_only {
+    if preprocess_only && !input_is_rom {
         print!("{}", processed_src);
         std::process::exit(0);
+    } else if preprocess_only && input_is_rom {
+        eprintln!("Cannot preprocess a .rom file");
+        std::process::exit(1);
     }
 
     // // Write preprocessed output to .pre.tal in cwd
@@ -501,7 +518,20 @@ args[0] = entry_local
         return res.map(|_| ());
     }
 
-    if run_after_assembly.is_some() {
+    if input_is_rom {
+        // If input is .rom, just copy to output if needed
+        if rom_path_p.exists() {
+            println!("ROM already exists at {}", rom_path);
+        } else {
+            fs::copy(&canon_input_p, &rom_path_p)
+                .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to copy rom: {e}")))?;
+            if want_verbose {
+                eprintln!("Copied ROM ({} bytes)", fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0));
+            } else {
+                println!("{} ({} bytes)", rom_path, fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0));
+            }
+        }
+    } else if run_after_assembly.is_some() {
         if rom_path_p.exists() {
             println!("ROM already exists at {}", rom_path);
         } else {
@@ -632,10 +662,15 @@ fn resolve_input_path(arg: &str) -> Option<PathBuf> {
     if direct.exists() {
         return Some(direct);
     }
+    // Try .tal and .rom extensions if not present
     if direct.extension().is_none() {
-        let with_ext = direct.with_extension("tal");
-        if with_ext.exists() {
-            return Some(with_ext);
+        let with_tal = direct.with_extension("tal");
+        if with_tal.exists() {
+            return Some(with_tal);
+        }
+        let with_rom = direct.with_extension("rom");
+        if with_rom.exists() {
+            return Some(with_rom);
         }
     }
 
@@ -668,9 +703,13 @@ fn resolve_input_path(arg: &str) -> Option<PathBuf> {
         if let Some(found) = recursive_find(&root, arg, 12_000) {
             return Some(found);
         }
-        // Try arg.tal variation
-        let alt = format!("{arg}.tal");
-        if let Some(found) = recursive_find(&root, &alt, 12_000) {
+        // Try arg.tal and arg.rom variations
+        let alt_tal = format!("{arg}.tal");
+        if let Some(found) = recursive_find(&root, &alt_tal, 12_000) {
+            return Some(found);
+        }
+        let alt_rom = format!("{arg}.rom");
+        if let Some(found) = recursive_find(&root, &alt_rom, 12_000) {
             return Some(found);
         }
     }
