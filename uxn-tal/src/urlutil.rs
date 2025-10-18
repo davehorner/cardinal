@@ -7,7 +7,7 @@ pub fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
             .unwrap_or(Cow::from(s))
             .into_owned()
     }
-    fn qs_get<'a>(query: &'a str, key: &str) -> Option<String> {
+    fn qs_get(query: &str, key: &str) -> Option<String> {
         for pair in query.split('&') {
             let mut it = pair.splitn(2, '=');
             let k = it.next().unwrap_or("");

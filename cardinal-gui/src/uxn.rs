@@ -716,7 +716,10 @@ impl eframe::App for UxnApp<'_> {
         //         pedal_state,
         //     );
         // }
-        let mut events = Vec::new();
+    #[cfg(target_arch = "wasm32")]
+    let events = Vec::new();
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut events = Vec::new();
         #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
         {
             // Only borrow self.dev.controller mutably once in this block
@@ -746,7 +749,7 @@ impl eframe::App for UxnApp<'_> {
         }
         let pedal_data: Vec<u8> = events
             .iter()
-            .flat_map(|e| e.data.iter().map(|b| b.value))
+            .flat_map(|e: &varvara::Event| e.data.iter().map(|b| b.value))
             .collect();
         for value in pedal_data {
             self.dev

@@ -35,15 +35,15 @@ fn main() -> Result<(), AssemblerError> {
     }
     // Write the TAL source to a temporary file
     let temp_path = "working_hello.tal";
-    std::fs::write(&temp_path, tal_source)?;
+    std::fs::write(temp_path, tal_source)?;
     println!("TAL source written to {:?}", temp_path);
 
     // Run WSL uxnasm on the TAL source file
     let output_path = "working_hello_wsl.rom";
     let status = Command::new("wsl")
         .arg("uxnasm")
-        .arg(&temp_path)
-        .arg(&output_path)
+        .arg(temp_path)
+        .arg(output_path)
         .status()?;
 
     if status.success() {
@@ -54,7 +54,7 @@ fn main() -> Result<(), AssemblerError> {
 
     // Compare the two ROM files byte-by-byte
     let rust_rom = std::fs::read("working_hello.rom")?;
-    let wsl_rom = std::fs::read(&output_path)?;
+    let wsl_rom = std::fs::read(output_path)?;
 
     if rust_rom == wsl_rom {
         println!("ROM outputs are identical.");
@@ -88,13 +88,13 @@ fn main() -> Result<(), AssemblerError> {
             );
             if rust_rom.len() > wsl_rom.len() {
                 println!("Extra bytes in Rust ROM:");
-                for i in wsl_rom.len()..rust_rom.len() {
-                    println!("Byte {}: {:02x}", i, rust_rom[i]);
+                for (i, b) in rust_rom.iter().enumerate().skip(wsl_rom.len()) {
+                    println!("Byte {}: {:02x}", i, b);
                 }
             } else {
                 println!("Extra bytes in WSL ROM:");
-                for i in rust_rom.len()..wsl_rom.len() {
-                    println!("Byte {}: {:02x}", i, wsl_rom[i]);
+                for (i, b) in wsl_rom.iter().enumerate().skip(rust_rom.len()) {
+                    println!("Byte {}: {:02x}", i, b);
                 }
             }
         }
@@ -107,7 +107,7 @@ fn main() -> Result<(), AssemblerError> {
     };
 
     let rust_output = run_rom("working_hello.rom")?;
-    let wsl_output = run_rom(&output_path)?;
+    let wsl_output = run_rom(output_path)?;
 
     println!("--- Rust ROM output ---\n{}", rust_output);
     println!("--- WSL ROM output ---\n{}", wsl_output);

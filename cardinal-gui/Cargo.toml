@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -33,12 +33,12 @@ serde_json = "1.0.141"
 tempfile = "3.20.0"
 #e_window = "0.1.13"
 
-varvara = { package = "cardinal-varvara", version = "0.6.0", default-features = false }
+varvara = { package = "cardinal-varvara", version = "0.7.1", default-features = false }
 #varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
 gilrs = { version = "0.11.0", optional = true }
-e_midi = { version = "0.1", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+e_midi = { version = "0.1", optional = true }
 clap.workspace = true
 cpal.workspace = true
 getrandom = "0.3.3"
@@ -51,6 +51,10 @@ web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 #getrandom = { version = "0.3.3", features = ["wasm_js"] }
 reqwest-wasm = { version = "0.11.16", features = ["blocking"] }
+eframe = { version = "0.33", default-features = false, features = [
+    "default_fonts",
+    "glow",
+] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["winuser"] }

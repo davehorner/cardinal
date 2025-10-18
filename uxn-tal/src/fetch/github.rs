@@ -85,7 +85,7 @@ impl Provider for GitHub {
         if entry_rel.to_ascii_lowercase().ends_with(".tal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
             let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
-            let entry_dir = Path::new(&entry_rel).parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|| "".to_string());
+            let entry_dir = Path::new(&entry_rel).parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
             while let Some((curr_rel, curr_local)) = q.pop_front() {
                 let src = fs::read_to_string(&curr_local).unwrap_or_default();
                 for inc in parse_includes(&src) {
