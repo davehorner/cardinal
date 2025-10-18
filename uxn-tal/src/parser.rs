@@ -110,8 +110,8 @@ enum BraceKind {
 
 impl Parser {
     pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
-        let line = tokens.get(0).map(|t| t.line).unwrap_or(1);
-        let position_in_line = tokens.get(0).map(|t| t.start_pos).unwrap_or(1);
+    let line = tokens.first().map(|t| t.line).unwrap_or(1);
+    let position_in_line = tokens.first().map(|t| t.start_pos).unwrap_or(1);
         // Build macro table from tokens
         let mut macro_table = std::collections::HashSet::new();
         for t in &tokens {
@@ -127,7 +127,7 @@ impl Parser {
             path,
             source,
             brace_stack: Vec::new(),
-            macro_table: macro_table, // <-- initialize
+            macro_table,
         }
     }
 
@@ -235,7 +235,7 @@ impl Parser {
                     Ok(AstNode::Byte(value as u8))
                 } else {
                     // PATCH: always mask to 16 bits for >2 digits
-                    Ok(AstNode::Short(value & 0xffff))
+                    Ok(AstNode::Short(value))
                 }
             }
             Token::DecLiteral(dec) => {
@@ -303,7 +303,6 @@ impl Parser {
             }
             Token::LabelDef(rune, label) => {
                 // Avoid holding a reference to self across self.advance()
-                let rune = rune;
                 let label = label.clone();
                 self.advance();
                 // println!("DEBUG: Parsed label definition: @{}", label);
@@ -312,7 +311,6 @@ impl Parser {
             Token::LabelRef(rune, label) => {
                 // Clone the values before advancing to avoid borrow checker issues
                 let label = label.to_string();
-                let rune = rune;
                 let tok = self.current_token().clone();
                 self.advance();
                 // println!(
@@ -321,7 +319,7 @@ impl Parser {
                 // );
                 Ok(AstNode::LabelRef {
                     label,
-                    rune: Rune::from(rune),
+                    rune,
                     token: tok,
                 })
             }
@@ -444,7 +442,6 @@ impl Parser {
                 Ok(AstNode::HyphenRef(tok))
             }
             Token::Padding(addr) => {
-                let addr = addr;
                 self.advance();
                 Ok(AstNode::Padding(addr))
             }
@@ -600,7 +597,7 @@ impl Parser {
                         }
                         Ok(AstNode::MacroDef(name, body))
                     }
-                    Token::Eof => return Ok(AstNode::Ignored),
+                    Token::Eof => Ok(AstNode::Ignored),
                     _ => {
                         // println!(
                         //     "DEBUG: Unexpected token after macro name: {:?}",

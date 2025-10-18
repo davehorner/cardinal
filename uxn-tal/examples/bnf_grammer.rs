@@ -1,35 +1,35 @@
-/// UXN-TAL BNF Grammar Tool
-///
-/// This tool provides utilities for working with the BNF and EBNF grammars of the UXN-TAL assembly language.
-/// It supports parsing, random sentence generation, and parse tree explanation for UXN-TAL grammar definitions.
-///
-/// # Features
-/// - Parse UXN-TAL grammar definitions from BNF or EBNF formats.
-/// - Generate random sentences conforming to the grammar.
-/// - Parse sentences and explain their parse trees in human-readable form.
-/// - Command-line interface with selectable modes: `parse`, `generate`, and `parse-sentence`.
-///
-/// # Command-Line Arguments
-/// - `--mode` / `-m`: Selects the operation mode (`parse`, `generate`, or `parse-sentence`).
-/// - `--grammar` / `-g`: Optional path to a grammar file. If not provided, uses the built-in UXN-TAL grammar.
-/// - `--sentence` / `-s`: Sentence to parse (used only in `parse-sentence` mode).
-///
-/// # Example
-/// ```sh
-/// cargo run -- --mode generate
-/// cargo run -- --mode parse-sentence --sentence "LIT 2"
-/// ```
-///
-/// # Grammar
-/// The tool includes built-in EBNF and BNF representations of the UXN-TAL grammar for convenience.
-///
-/// # Dependencies
-/// - `bnf`: For grammar parsing and sentence generation.
-/// - `clap`: For command-line argument parsing.
-///
-/// # Main Functions
-/// - `explain_parse_tree`: Recursively explains a parse tree node in human-readable terms.
-/// - `main`: Handles argument parsing, grammar loading, and dispatches to the selected mode.
+// / UXN-TAL BNF Grammar Tool
+// /
+// / This tool provides utilities for working with the BNF and EBNF grammars of the UXN-TAL assembly language.
+// / It supports parsing, random sentence generation, and parse tree explanation for UXN-TAL grammar definitions.
+// /
+// / # Features
+// / - Parse UXN-TAL grammar definitions from BNF or EBNF formats.
+// / - Generate random sentences conforming to the grammar.
+// / - Parse sentences and explain their parse trees in human-readable form.
+// / - Command-line interface with selectable modes: `parse`, `generate`, and `parse-sentence`.
+// /
+// / # Command-Line Arguments
+// / - `--mode` / `-m`: Selects the operation mode (`parse`, `generate`, or `parse-sentence`).
+// / - `--grammar` / `-g`: Optional path to a grammar file. If not provided, uses the built-in UXN-TAL grammar.
+// / - `--sentence` / `-s`: Sentence to parse (used only in `parse-sentence` mode).
+// /
+// / # Example
+// / ```sh
+// / cargo run -- --mode generate
+// / cargo run -- --mode parse-sentence --sentence "LIT 2"
+// / ```
+// /
+// / # Grammar
+// / The tool includes built-in EBNF and BNF representations of the UXN-TAL grammar for convenience.
+// /
+// / # Dependencies
+// / - `bnf`: For grammar parsing and sentence generation.
+// / - `clap`: For command-line argument parsing.
+// /
+// / # Main Functions
+// / - `explain_parse_tree`: Recursively explains a parse tree node in human-readable terms.
+// / - `main`: Handles argument parsing, grammar loading, and dispatches to the selected mode.
 // use bnf::Grammar;
 // use clap::Parser;
 // const UXNTAL_GRAMMAR_EBNF: &str = r####"
@@ -248,6 +248,7 @@
 //     }
 // }
 
+// / - `main`: Handles argument parsing, grammar loading, and dispatches to the selected mode.
 fn main() {
     println!("This is just an unfinished code concept. Uncomment code related.");
 }

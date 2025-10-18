@@ -203,7 +203,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // NEW: failure table
     if !failures.is_empty() {
         println!("\n🔎 Failure Summary");
-        println!("{:<4} {:<60} {}", "#", "File", "Reason");
+    println!("{:<4} {:<60} Reason", "#", "File");
         println!("{}", "-".repeat(100));
         for (i, f) in failures.iter().enumerate() {
             println!(

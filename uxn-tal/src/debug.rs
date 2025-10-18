@@ -24,15 +24,12 @@ pub struct DebugAssembleResult {
     pub backend_errors: Vec<(String, String)>,
 }
 
+#[derive(Default)]
 pub struct UxntalBackend {
     pub drif_mode: bool,
 }
 
 impl UxntalBackend {
-    pub fn new() -> Self {
-        Self { drif_mode: false }
-    }
-    
     pub fn with_drif_mode(drif_mode: bool) -> Self {
         Self { drif_mode }
     }
@@ -69,8 +66,8 @@ impl AssemblerBackend for UxnasmBackend {
         // let input = tal_file.replace('\\', "/");
         // let input = input.replace("//?/C:", "/mnt/c"); // Handle Windows long path prefix
         let input = if cfg!(windows) {
-            wslpath::windows_to_wsl(&tal_file)
-            .map_err(|e| syntax_err(&tal_file, &format!("Could not convert TAL path to WSL: {e}")))?
+            wslpath::windows_to_wsl(tal_file)
+            .map_err(|e| syntax_err(tal_file, &format!("Could not convert TAL path to WSL: {e}")))?
         } else {
             tal_file.to_string()
         }; 
@@ -167,7 +164,7 @@ impl DrifblimBackend {
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim();
     let drifblim_rom = if cfg!(windows) {
-        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?
+        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).map_err(|_| syntax_err(rom_path, "Could not convert drifblim path to WSL"))?
     } else {
         drifblim_rom.to_string_lossy().to_string()
     };
@@ -197,7 +194,7 @@ impl DrifblimBackend {
             .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?
     };
 println!("drifblim stdout: {:?}", output);
-        if output.stderr.len() > 0 {
+        if !output.stderr.is_empty() {
             let stderr_str = String::from_utf8_lossy(&output.stderr);
             if stderr_str.contains("Assembled ") {
                 // Write tal_file to a temp file with a short name
@@ -226,8 +223,8 @@ println!("drifblim stdout: {:?}", output);
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
-/////
-/// 
+
+
 pub struct DrifblimSeedBackend;
 impl AssemblerBackend for DrifblimSeedBackend {
     fn name(&self) -> &'static str {
@@ -301,7 +298,7 @@ impl DrifblimSeedBackend {
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim_seed();
     let drifblim_rom = if cfg!(windows) {
-        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifblim path to WSL")))?
+        wslpath::windows_to_wsl(&drifblim_rom.to_string_lossy()).map_err(|_| syntax_err(rom_path, "Could not convert drifblim path to WSL"))?
     } else {
         drifblim_rom.to_string_lossy().to_string()
     };
@@ -322,7 +319,7 @@ impl DrifblimSeedBackend {
         }
         .map_err(|e| syntax_err(rom_path, &format!("drifblim failed: {e}")))?;
 println!("drifblim stdout: {:?}", output);
-        if output.stderr.len() > 0 {
+    if !output.stderr.is_empty() {
             let stderr_str = String::from_utf8_lossy(&output.stderr);
             if stderr_str.contains("Assembled ") {
                 // Write tal_file to a temp file with a short name
@@ -376,7 +373,7 @@ impl AssemblerBackend for DrifloonBackend {
         println!("rom_path: {}", rom_path);
         println!("tal_file: {}", tal_file);
         println!("input: {}", input);
-        let stdout = Self::run_drifloon(&input, &_src, &rom_path)?;
+    let stdout = Self::run_drifloon(&input, _src, &rom_path)?;
         let rom_path = rom_path.replace("/mnt/c/", "C:/"); // Handle Windows long path prefix
         let rom_path = rom_path.replace('/', "\\");
         let bytes = fs::read(&rom_path).unwrap_or_default();
@@ -400,7 +397,7 @@ impl DrifloonBackend {
     let drifblim_path = uxntal_path.join(".drifblim");
     let drifloon_path = drifblim_path.join("src").join("drifloon.rom");
     let drifloon_path = if cfg!(target_os = "windows") {
-        wslpath::windows_to_wsl(&drifloon_path.to_string_lossy()).or_else(|_| Err(syntax_err(rom_path, "Could not convert drifloon path to WSL")))?
+    wslpath::windows_to_wsl(&drifloon_path.to_string_lossy()).map_err(|_| syntax_err(rom_path, "Could not convert drifloon path to WSL"))?
     } else {
         drifloon_path.to_string_lossy().to_string()
     };
@@ -461,17 +458,17 @@ println!("rom_path: {}", rom_path);
 // Write output to rom_path
 if !output.stdout.is_empty() {
     let rom_path = if cfg!(windows) {
-        wslpath::wsl_to_windows(&rom_path)
-        .map_err(|e| syntax_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+        wslpath::wsl_to_windows(rom_path)
+            .map_err(|e| syntax_err(rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
     } else {
         rom_path.to_string()
-    }; 
+    };
     fs::write(&rom_path, &output.stdout)
         .map_err(|e| syntax_err(&rom_path, &format!("Failed to write ROM: {e}")))?;
 }
 
 // println!("{:?}", tal_file);
-        if output.stderr.len() > 0 && output.stdout.len() == 0 {
+    if !output.stderr.is_empty() && output.stdout.is_empty() {
             return Err(syntax_err(
                 rom_path,
                 &format!(
@@ -537,14 +534,10 @@ fn io_err(path: &str, e: std::io::Error) -> AssemblerError {
     syntax_err(path, &format!("IO error: {e}"))
 }
 
+
+#[derive(Default)]
 pub struct DebugAssembler {
     pub drif_mode: bool,
-}
-
-impl Default for DebugAssembler {
-    fn default() -> Self {
-        DebugAssembler { drif_mode: false }
-    }
 }
 
 impl DebugAssembler {
@@ -594,9 +587,7 @@ impl DebugAssembler {
                             } else {
                                 Assembler::new()
                             };
-                            if let Ok(_) =
-                                assembler.assemble(tal_source, Some(tal_file.to_string()))
-                            {
+                            if assembler.assemble(tal_source, Some(tal_file.to_string())).is_ok() {
                                 let sym_bytes = assembler.generate_symbol_file();
                                 let _ = fs::write(&sym_path, &sym_bytes);
                             }
@@ -621,10 +612,7 @@ impl DebugAssembler {
         // Print summary and diffs for all three backends, even if one fails
         if verbose {
             println!("\n== Backend Summary ==");
-            println!(
-                "  {:<9} {:<5} {:>8}  {}",
-                "backend", "stat", "bytes", "output/summary"
-            );
+            println!("  {:<9} {:<5} {:>8}  output/summary", "backend", "stat", "bytes");
             for (name, out) in [
                 ("uxntal", &uxntal),
                 ("uxnasm", &uxnasm),
@@ -909,20 +897,20 @@ fn first_byte_diff(a: &[u8], b: &[u8]) -> Option<ByteDiff> {
                 let start = (i as i32 - 8).max(0) as usize;
                 let end = (i + 8).min(len);
                 eprint!("DEBUG: [Context a]: ");
-                for j in start..end {
+                for (j, val) in a.iter().enumerate().take(end).skip(start) {
                     if j == i {
-                        eprint!("[{:02X}] ", a[j]);
+                        eprint!("[{:02X}] ", val);
                     } else {
-                        eprint!("{:02X} ", a[j]);
+                        eprint!("{:02X} ", val);
                     }
                 }
                 eprintln!();
                 eprint!("DEBUG: [Context b]: ");
-                for j in start..end {
+                for (j, val) in b.iter().enumerate().take(end).skip(start) {
                     if j == i {
-                        eprint!("[{:02X}] ", b[j]);
+                        eprint!("[{:02X}] ", val);
                     } else {
-                        eprint!("{:02X} ", b[j]);
+                        eprint!("{:02X} ", val);
                     }
                 }
                 eprintln!();

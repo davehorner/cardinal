@@ -1,34 +1,46 @@
-//! # UXN TAL Assembler
-//!
-//! A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.
-//!
-//! This library provides functionality to parse TAL source code and generate bytecode
-//! compatible with the UXN virtual machine.
-//!
-//! ## Example
-//!
-//! ```rust
-//! use uxn_tal::{Assembler, AssemblerError};
-//!
-//! fn main() -> Result<(), AssemblerError> {
-//!     let tal_source = r#"
-//!         |0100 @reset
-//!             #48 #65 #6c #6c #6f #20 #57 #6f #72 #6c #64 #21 #0a
-//!             #18 DEO
-//!         BRK
-//!     "#;
-//!     
-//!     let mut assembler = Assembler::new();
-//!     let rom = assembler.assemble(tal_source, None)?;
-//!     
-//!     // Save the ROM to a file
-//!     std::fs::write("hello.rom", rom)?;
-//!     
-//!     Ok(())
-//! }
-//! ```
 
-//! Public API for uxn-tal (minimal so examples compile).
+
+
+
+
+
+/// # UXN TAL Assembler
+///
+/// A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.
+///
+/// This library provides functionality to parse TAL source code and generate bytecode
+/// compatible with the UXN virtual machine.
+///
+/// ## Example
+///
+/// ```rust
+/// use uxn_tal::{Assembler, AssemblerError};
+///
+/// fn main() -> Result<(), AssemblerError> {
+///     let tal_source = r#"
+///         |0100 @reset
+///             #48 #65 #6c #6c #6f #20 #57 #6f #72 #6c #64 #21 #0a
+///             #18 DEO
+///         BRK
+///     "#;
+///     
+///     let mut assembler = Assembler::new();
+///     let rom = assembler.assemble(tal_source, None)?;
+///     
+///     // Save the ROM to a file
+///     std::fs::write("hello.rom", rom)?;
+///     
+///     Ok(())
+/// }
+/// ```
+type AssembleDirectoryResult = (
+    std::path::PathBuf,
+    std::path::PathBuf,
+    Option<std::path::PathBuf>,
+    usize,
+);
+
+
 
 pub mod assembler;
 pub mod chocolatal;
@@ -100,7 +112,7 @@ pub fn assemble_file_with_symbols<P: AsRef<std::path::Path>>(
     input_path: P,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf, usize), AssemblerError> {
     let input_path = input_path.as_ref();
-    let source = std::fs::read_to_string(&input_path)?;
+    let source = std::fs::read_to_string(input_path)?;
     let mut assembler = Assembler::new();
     let path_str = input_path.to_string_lossy().into_owned();
     let rom = assembler.assemble(&source, Some(path_str))?;
@@ -122,12 +134,7 @@ pub fn assemble_directory<P: AsRef<std::path::Path>>(
     dir_path: P,
     generate_symbols: bool,
 ) -> Result<
-    Vec<(
-        std::path::PathBuf,
-        std::path::PathBuf,
-        Option<std::path::PathBuf>,
-        usize,
-    )>,
+    Vec<AssembleDirectoryResult>,
     AssemblerError,
 > {
     let dir_path = dir_path.as_ref();
@@ -166,6 +173,7 @@ pub fn generate_rust_interface_module(
     module_name: &str,
 ) -> String {
     let mut out = String::new();
+    out.push_str("#![allow(clippy::module_inception)]\n");
     out.push_str(&format!("pub mod {} {{\n", module_name));
     out.push_str("    #![allow(non_upper_case_globals)]\n");
     out.push_str("    // Auto-generated: label address & size constants\n");
@@ -200,11 +208,7 @@ pub fn generate_rust_interface_module(
                 .map(|s| s.address)
                 .find(|&a| a > sym.address)
                 .unwrap_or(assembler.effective_length as u16);
-            let size = if next_addr > sym.address {
-                next_addr - sym.address
-            } else {
-                0
-            };
+            let size = next_addr.saturating_sub(sym.address);
             out.push_str(&format!(
                 "    pub const _c{}_SIZE: usize = 0x{:04X};\n",
                 id, size
@@ -236,9 +240,10 @@ pub fn generate_rust_interface_module(
                 s.to_ascii_uppercase()
             };
             out.push_str(&format!(
-                "            \"{name}\" => Some(&ram[_c{}..{}]),\n",
+                "            \"{name}\" => Some(&ram[_c{}.._c{}+_c{}_SIZE]),\n",
                 id,
-                format!("_c{}+_c{}_SIZE", id, id)
+                id,
+                id
             ));
         }
     }

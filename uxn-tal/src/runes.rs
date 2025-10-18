@@ -108,9 +108,11 @@ impl From<char> for Rune {
     }
 }
 
-impl ToString for Rune {
-    fn to_string(&self) -> String {
-        match self {
+use std::fmt;
+
+impl fmt::Display for Rune {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
             // Padding Runes
             Rune::Absolute => "|",
             Rune::Relative => "$",
@@ -144,7 +146,7 @@ impl ToString for Rune {
             Rune::MacroClose => "}", // Note: '}' is also used for AnonymousClose
 
             Rune::None => " ",
-        }
-        .to_string()
+        };
+        write!(f, "{}", s)
     }
 }

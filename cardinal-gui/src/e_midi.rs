@@ -1,20 +1,24 @@
+#[cfg(all(feature = "uses_e_midi", not(target_arch = "wasm32")))]
+use e_midi::MidiPlayer;
 #[cfg(feature = "uses_e_midi")]
 pub fn init() {
     // Initialize e_midi functionality here
 }
 
 #[cfg(feature = "uses_e_midi")]
+#[allow(unused_imports)]
 use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
 #[cfg(feature = "uses_e_midi")]
 use std::thread;
 
 #[cfg(feature = "uses_e_midi")]
+#[allow(dead_code)]
 pub struct MidiPlayerThread {
     handle: thread::JoinHandle<()>,
     shutdown_tx: mpsc::Sender<()>,
 }
 
-#[cfg(feature = "uses_e_midi")]
+#[cfg(all(feature = "uses_e_midi", not(target_arch = "wasm32")))]
 impl MidiPlayerThread {
     pub fn start() -> Self {
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -22,7 +26,6 @@ impl MidiPlayerThread {
         let running_clone = running.clone();
 
         let handle = thread::spawn(move || {
-            use e_midi::MidiPlayer;
             let mut player = match MidiPlayer::new() {
                 Ok(p) => p,
                 Err(e) => {

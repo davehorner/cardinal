@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 // Chocolatal: TAL Preprocessor for uxn-tal
 use std::ffi::OsStr;
 //

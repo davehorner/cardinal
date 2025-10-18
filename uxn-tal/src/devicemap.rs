@@ -41,18 +41,18 @@ pub fn parse_device_map_line(line: &str) -> Option<Device> {
     }
     let address = u16::from_str_radix(&addr_token[1..], 16).ok()?;
     let name_token = tokens.next()?;
-    let name = if name_token.starts_with('@') {
-        name_token[1..].to_string()
+    let name = if let Some(stripped) = name_token.strip_prefix('@') {
+        stripped.to_string()
     } else {
         return None;
     };
     let mut fields = Vec::new();
     while let Some(field_token) = tokens.next() {
-        if field_token.starts_with('&') {
-            let field_name = field_token[1..].to_string();
+        if let Some(stripped) = field_token.strip_prefix('&') {
+            let field_name = stripped.to_string();
             if let Some(size_token) = tokens.next() {
-                if size_token.starts_with('$') {
-                    if let Ok(size) = u8::from_str_radix(&size_token[1..], 16) {
+                if let Some(stripped) = size_token.strip_prefix('$') {
+                    if let Ok(size) = u8::from_str_radix(stripped, 16) {
                         fields.push(DeviceField {
                             name: field_name,
                             size,
@@ -73,7 +73,7 @@ pub fn parse_device_map_line(line: &str) -> Option<Device> {
 pub fn parse_device_maps(source: &str) -> Vec<Device> {
     source
         .lines()
-        .filter_map(|line| parse_device_map_line(line))
+        .filter_map(parse_device_map_line)
         .collect()
 }
 

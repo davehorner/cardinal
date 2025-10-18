@@ -70,8 +70,8 @@ fn main() -> Result<(), AssemblerError> {
     // 3. Summary
     println!("\n== Backend Summary ==");
     println!(
-        "  {:<9} {:<5} {:>8}  {}",
-        "backend", "stat", "bytes", "output/summary"
+        "  {:<9} {:<5} {:>8}  output/summary",
+        "backend", "stat", "bytes"
     );
     if let Some(ref rom) = internal_rom {
         println!("  {:<9} {:<5} {:>8}  {}", "uxntal", "OK", rom.len(), internal_out_path);

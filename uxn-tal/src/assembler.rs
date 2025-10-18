@@ -260,7 +260,7 @@ impl Assembler {
                         Symbol {
                             address,
                             is_sublabel: label_clone.contains('/'),
-                            parent_label: label_clone.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
+                                parent_label: label_clone.rsplit_once('/').map(|x| x.0.to_string()),
                         },
                     );
                     // For labels with '/', set current_scope and last_top_label to parent part.
@@ -339,13 +339,13 @@ impl Assembler {
                 // 3) record a reference at the first byte of the word (after opcode), rune '?'
                 let ref_addr = self.rom.position() + 1; // <-- FIX: was self.rom.position()
                 self.references.push(Reference {
-                    name: name.clone(),
-                    rune: '?',
-                    address: ref_addr as u16,
-                    line: tok.line,
-                    path: path.clone(),
-                    scope: tok.scope.clone(),
-                    token: Some(tok.clone()),
+                name: name.clone(),
+                rune: '?',
+                address: ref_addr,
+                line: tok.line,
+                path: path.clone(),
+                scope: tok.scope.clone(),
+                token: Some(tok.clone()),
                 });
                 // 4) emit JCN and 0xFFFF placeholder
                 self.rom.write_byte(0x20)?; // JCN
@@ -372,7 +372,8 @@ impl Assembler {
                 let name = format_lambda_label(id);
 
                 // Only insert the lambda label if no non-lambda label exists at this address
-                let addr = self.rom.position() as u16;
+                // Removed unused variable 'addr'
+                let addr = self.rom.position();
                 let has_named_here = self.symbol_order.iter().any(|n| {
                     if let Some(s) = self.symbols.get(n) {
                         s.address == addr && !n.starts_with('λ')
@@ -389,10 +390,8 @@ impl Assembler {
                             parent_label: None,
                         },
                     );
-                } else {
-                    if self.verbose >= 2 {
-                        eprintln!("DEBUG: Not inserting lambda label '{}' at address {:04X} because a named label already exists here", name, addr);
-                    }
+                } else if self.verbose >= 2 {
+                    eprintln!("DEBUG: Not inserting lambda label '{}' at address {:04X} because a named label already exists here", name, addr);
                 }
             }
             AstNode::Padding(pad_addr) => {
@@ -591,7 +590,7 @@ impl Assembler {
                         self.references.push(Reference {
                             name: label.clone(),
                             rune: '=',                           // mark as absolute
-                            address: self.rom.position() as u16, // where the 16-bit will live
+                            address: self.rom.position(), // where the 16-bit will live
                             line: token.line,
                             path: path.clone(),
                             scope: self.current_label.clone(),
@@ -609,7 +608,7 @@ impl Assembler {
                         self.references.push(Reference {
                             name: label.clone(),
                             rune: '_',                           // mark as relative
-                            address: self.rom.position() as u16, // where the 16-bit will live
+                            address: self.rom.position(), // where the 16-bit will live
                             line: self.line_number,
                             path: path.clone(),
                             scope: self.current_label.clone(),
@@ -626,7 +625,7 @@ impl Assembler {
                         self.references.push(Reference {
                             name: label.clone(),
                             rune: ' ',                               // mark as relative
-                            address: self.rom.position() + 1 as u16, // start of the rel16 operand
+                            address: self.rom.position() + 1, // start of the rel16 operand
                             line: self.line_number,
                             path: path.clone(),
                             scope: self.current_label.clone(),
@@ -659,7 +658,7 @@ impl Assembler {
                     Symbol {
                         address,
                         is_sublabel: label_clone.contains('/'),
-                        parent_label: label_clone.rsplitn(2, '/').nth(1).map(|s| s.to_string()),
+                        parent_label: label_clone.rsplit_once('/').map(|(parent, _)| parent.to_string()),
                     },
                 );
                 if self.verbose >= 2 {
@@ -818,7 +817,7 @@ impl Assembler {
                         let name = format_lambda_label(id);
                         // reference (rune '!')
                         self.references.push(Reference {
-                            name: name,
+                            name,
                             rune: '!',
                             address: self.rom.position() + 1,
                             line: tok.line,
@@ -848,7 +847,7 @@ impl Assembler {
                     }
                 };
                 let resolved_name = if label.starts_with('/') {
-                    let clean_label = &label[1..];
+                    let clean_label = label.strip_prefix('/').unwrap_or(&label);
                     if let Some(ref scope) = tok.scope {
                         let main_scope = if let Some(slash_pos) = scope.find('/') {
                             &scope[..slash_pos]
@@ -900,7 +899,7 @@ impl Assembler {
                     )
                 } else if raw.starts_with('&') {
                     // Always use the main scope from the *last top-level label* for padding, like uxnasm
-                    let sublabel = &raw[1..];
+                    let sublabel = raw.strip_prefix('&').unwrap_or(&raw);
                     let main_label = if let Some(ref last_top) = self.last_top_label {
                         last_top.as_str()
                     } else if let Some(ref parent) = self.current_label {
@@ -922,7 +921,7 @@ impl Assembler {
                 };
                 // --- PATCH: if label starts with "|&", strip the leading '|' (fixes '|&body/size' bug) ---
                 let label = if label.starts_with("|&") {
-                    label[2..].to_string()
+                    label.strip_prefix("|&").unwrap_or(&label).to_string()
                 } else {
                     label
                 };
@@ -933,7 +932,7 @@ impl Assembler {
                 let mut found = self.symbols.get(&label);
                 if found.is_none() {
                     // Try current scope first (if available and not already tried)
-                    if let Some(ref cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
+                    if let Some(cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
                         let cur = cur.split('/').next().unwrap_or(cur); // scope is only up to the first /
                         let scoped = format!("{}/{}", cur, label);
                         if scoped != label {
@@ -1021,7 +1020,7 @@ impl Assembler {
                     );
                 }
                 if found.is_none() {
-                    if let Some(ref cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
+                    if let Some(cur) = tok.scope.as_ref().or(self.current_label.as_ref()) {
                         // Try all possible parent scopes by splitting at each '/'
                         let mut scope = cur.as_str();
                         loop {
@@ -1043,7 +1042,8 @@ impl Assembler {
                         }
                     }
                 }
-                let cur = self.rom.position() as u16;
+                // Removed unused variable 'cur'
+                let cur = self.rom.position();
                 if let Some(sym) = found {
                     let new_addr = cur.wrapping_add(sym.address);
                     self.rom.pad_to(new_addr)?;
@@ -1166,7 +1166,7 @@ impl Assembler {
                 self.references.push(Reference {
                     name: name.clone(),
                     rune: ' ', // same rune as unknown token (JSR)
-                    address: (self.rom.position() + 1) as u16,
+                    address: self.rom.position() + 1,
                     line: tok.line,
                     path: self.rom.source_path().cloned().unwrap_or_default(),
                     scope: tok.scope.clone(),
@@ -1204,7 +1204,7 @@ impl Assembler {
                     }
                 };
 
-                let addr = self.rom.position() as u16;
+                let addr = self.rom.position();
                 let name = format_lambda_label(id);
                 if self.verbose >= 2 {
                     eprintln!("DEBUG: About to define lambda label '{}' at address {:04X}", name, addr);
@@ -1749,7 +1749,7 @@ impl Assembler {
         // );
 
         // Collect references into a temporary vector to avoid borrowing self mutably and immutably at the same time
-        let references: Vec<_> = self.references.iter().cloned().collect();
+    let references: Vec<_> = self.references.to_vec();
         if self.verbose >= 2 {
                 for reference in &self.references {
                     println!(
@@ -2081,8 +2081,7 @@ impl Assembler {
         eprintln!("DEBUG: current_label={:?}", self.current_label);
 
         // Handle sublabel references with & prefix
-        if name.starts_with('&') {
-            let sublabel_name = &name[1..];
+        if let Some(sublabel_name) = name.strip_prefix('&') {
             eprintln!("DEBUG: Looking for sublabel '{}'", sublabel_name);
 
             // First try with the reference's scope context
@@ -2203,14 +2202,14 @@ impl Assembler {
         }
 
         // For /down, try scope + "/" + name if not already present
-        if name.starts_with('/') {
+        if let Some(sublabel_name) = name.strip_prefix('/') {
             if let Some(scope) = reference_scope {
                 let main_scope = if let Some(pos) = scope.find('/') {
                     &scope[..pos]
                 } else {
                     scope
                 };
-                let candidate = format!("{}/{}", main_scope, &name[1..]);
+                let candidate = format!("{}/{}", main_scope, sublabel_name);
                 if let Some(symbol) = self.symbols.get(&candidate) {
                     return Some(symbol.clone());
                 }
@@ -2289,8 +2288,8 @@ impl Assembler {
                 let addr_part = parts.next();
                 let label_part = parts.next();
                 if let (Some(addr), Some(label)) = (addr_part, label_part) {
-                    if label.starts_with('@') {
-                        let mut device = label[1..].to_string();
+                    if let Some(sublabel_name) = label.strip_prefix('@') {
+                        let mut device = sublabel_name.to_string();
                         if let Some(slash_pos) = device.find('/') {
                             device = device[..slash_pos].to_string();
                         }
@@ -2325,11 +2324,7 @@ impl Assembler {
                             let clean_field = &field_name[1..];
                             let size_str = iter.next();
                             let size = if let Some(size_str) = size_str {
-                                if let Ok(sz) = size_str.parse::<u16>() {
-                                    sz
-                                } else {
-                                    1
-                                }
+                                size_str.parse::<u16>().unwrap_or(1)
                             } else {
                                 1
                             };
@@ -2635,20 +2630,18 @@ impl Assembler {
         // the same narrow rule, but ONLY for small ROMs to avoid breaking larger
         // programs. This is a very specific fix for the dict_test case.
         let rom_size = self.rom.data().len();
-        if !unreferenced_parents_with_sublabels.is_empty() && rom_size < 20 {
-            if self.effective_length > 0x0100 {
-                // Convert from absolute UXN address to ROM-relative index
-                let last_abs_addr = self.effective_length - 1;
-                let last_idx = last_abs_addr - 0x0100;  // ROM starts at 0x0100
-                println!("DRIF: Checking targeted trim at abs addr 0x{:04X} (rom idx 0x{:04X}), rom_size={}", last_abs_addr, last_idx, rom_size);
-                if last_idx < rom_size {
-                    let last_byte = self.rom.data()[last_idx];
-                    println!("DRIF: last_byte = 0x{:02X}", last_byte);
-                    // trim a single trailing DEO opcode to match drifblim behavior
-                    if last_byte == 0x17 {
-                        println!("DRIF: Trimming single trailing DEO (0x17) at abs 0x{:04X} due to unreferenced parent-with-sublabel heuristic", last_abs_addr);
-                        self.effective_length -= 1;
-                    }
+        if !unreferenced_parents_with_sublabels.is_empty() && rom_size < 20 && self.effective_length > 0x0100 {
+            // Convert from absolute UXN address to ROM-relative index
+            let last_abs_addr = self.effective_length - 1;
+            let last_idx = last_abs_addr - 0x0100;  // ROM starts at 0x0100
+            println!("DRIF: Checking targeted trim at abs addr 0x{:04X} (rom idx 0x{:04X}), rom_size={}", last_abs_addr, last_idx, rom_size);
+            if last_idx < rom_size {
+                let last_byte = self.rom.data()[last_idx];
+                println!("DRIF: last_byte = 0x{:02X}", last_byte);
+                // trim a single trailing DEO opcode to match drifblim behavior
+                if last_byte == 0x17 {
+                    println!("DRIF: Trimming single trailing DEO (0x17) at abs 0x{:04X} due to unreferenced parent-with-sublabel heuristic", last_abs_addr);
+                    self.effective_length -= 1;
                 }
             }
         }

@@ -120,7 +120,7 @@ impl HexRev {
     ///
     /// - `uppercase`: A–F if true, a–f if false.
     /// - `line_width_bytes`: if `Some(n)`, insert '\n' after every `n` bytes (like `xxd -p`, which
-    ///    uses 60 by default). If `None`, writes one long line with no trailing newline.
+    ///   uses 60 by default). If `None`, writes one long line with no trailing newline.
     pub fn bin_to_hex<R: Read, W: Write>(
         mut r: R,
         mut w: W,

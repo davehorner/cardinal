@@ -53,7 +53,7 @@ fn real_main() -> Result<(), AssemblerError> {
     // Collect positional (non-flag) args after flag parsing
     let mut positional: Vec<String> = Vec::new();
 
-    if args.len() > 0 {
+    if !args.is_empty() {
         let raw_url = &args[0];
         if raw_url == "uxntal:"
             || raw_url == "uxntal:/"
@@ -231,7 +231,7 @@ args[0] = entry_local
         }
     }
     println!("args: {:?}", args);
-    if args.len() > 0 && args[0] == "--register" {
+    if !args.is_empty() && args[0] == "--register" {
         register_protocol_per_user()?;
         println!("You need to `cargo install e_window cardinal-gui`. Ctrl+c to exit, or press return to run the install.");
         print!("Press Enter to continue...");
@@ -327,7 +327,7 @@ args[0] = entry_local
             }
         };
         // Call debug::compare_preprocessors and exit
-        if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), &root_dir) {
+    if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), root_dir) {
             eprintln!("compare_preprocessors error: {e}");
             exit(1);
         }
@@ -447,7 +447,7 @@ args[0] = entry_local
 
     let processed_src = if !input_is_rom {
         if pre {
-            match chocolatal::preprocess(&source, &canon_input, &root_dir) {
+            match chocolatal::preprocess(&source, canon_input, root_dir) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("Preprocessor error: {:?}", e);
@@ -550,7 +550,7 @@ args[0] = entry_local
                     return Err(e);
                 }
             };
-            fs::write(&rom_path, &rom)
+            fs::write(rom_path, &rom)
                 .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to write rom: {e}")))?;
             if want_verbose {
                 eprintln!("Wrote ROM ({} bytes)", rom.len());
@@ -567,7 +567,7 @@ args[0] = entry_local
                 return Err(e);
             }
         };
-        fs::write(&rom_path, &rom)
+        fs::write(rom_path, &rom)
             .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to write rom: {e}")))?;
 
         if want_verbose {
@@ -614,7 +614,7 @@ args[0] = entry_local
         println!("In directory: {}", dir_str);
 
         let status = Command::new(path_to_emu)
-            .arg(&rom_path)
+            .arg(rom_path)
             .current_dir(run_after_cwd.unwrap_or_else(|| PathBuf::from(".")))
             .status();
 
@@ -970,8 +970,7 @@ fn register_protocol_per_user() -> std::io::Result<()> {
                 status2.code(),
                 status3.code()
             );
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "Failed to register protocol on Windows",
             ));
         }
@@ -1062,8 +1061,7 @@ NoDisplay=true
         // Clean up created files in case of failure
         let _ = std::fs::remove_file(&desktop_file_path);
         let _ = std::fs::remove_file(&mime_file_path);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "Failed to register protocol on Ubuntu",
         ));
     }
@@ -1080,8 +1078,7 @@ NoDisplay=true
         println!("Successfully ran: cargo install e_window cardinal-gui");
     } else {
         eprintln!("cargo install exited with status: {:?}", status.code());
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "Failed to run cargo install",
         ));
     }

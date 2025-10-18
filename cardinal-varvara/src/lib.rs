@@ -22,6 +22,16 @@ pub mod controller_gilrs;
 /// USB controller device support for the Varvara system (enabled with the `uses_usb` feature).
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 pub mod controller_usb;
+
+    // #[cfg(not(all(feature = "uses_usb", not(target_arch = "wasm32"))))]
+    // /// USB controller device stub for the Varvara system (when `uses_usb` is not enabled or on wasm32).
+    // #[path = "controller_usb_stub.rs"]
+    // pub mod controller_usb;
+#[cfg(all(feature = "uses_usb", target_arch = "wasm32"))]
+/// USB controller device stub for the Varvara system (when `uses_usb` is enabled on wasm32 target).
+#[path = "controller_usb_stub.rs"]
+pub mod controller_usb;
+
 mod datetime;
 mod file;
 mod mouse;
