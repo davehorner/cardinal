@@ -1,5 +1,5 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+// use std::fs;
+use std::path::Path;
 use uxn_tal::{Assembler, AssemblerError};
 
 // Find all .tal files recursively in the workspace
@@ -229,18 +229,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    if let Ok(rd) = fs::read_dir(dir) {
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                collect(&p, out);
-            } else if p.extension().map(|x| x == "tal").unwrap_or(false) {
-                out.push(p);
-            }
-        }
-    }
-}
+// fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+//     if let Ok(rd) = fs::read_dir(dir) {
+//         for e in rd.flatten() {
+//             let p = e.path();
+//             if p.is_dir() {
+//                 collect(&p, out);
+//             } else if p.extension().map(|x| x == "tal").unwrap_or(false) {
+//                 out.push(p);
+//             }
+//         }
+//     }
+// }
 
 // NEW helpers
 fn first_line(s: &str) -> &str {

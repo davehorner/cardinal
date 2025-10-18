@@ -1,6 +1,6 @@
 use super::{
     downloader::{http_get, write_bytes},
-    includes::{parse_includes, resolve_include, repo_entry_guesses},
+    includes::{parse_includes, resolve_include},
     provider::{FetchResult, Provider, RepoRef},
 };
 use std::{
@@ -16,14 +16,14 @@ impl SourceHut {
         format!("https://git.sr.ht/{}/{}/blob/{}/{}?raw=1",
             r.owner, r.repo, r.branch, repo_rel)
     }
-    fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
-        let url = Self::raw_url(r, repo_rel);
-        if let Ok(bytes) = http_get(&url) {
-            let local = out.join(repo_rel);
-            if write_bytes(&local, &bytes).is_ok() { return Some(local); }
-        }
-        None
-    }
+    // fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
+    //     let url = Self::raw_url(r, repo_rel);
+    //     if let Ok(bytes) = http_get(&url) {
+    //         let local = out.join(repo_rel);
+    //         if write_bytes(&local, &bytes).is_ok() { return Some(local); }
+    //     }
+    //     None
+    // }
     fn fetch_file(r: &RepoRef, out_root: &Path, repo_rel: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let url = Self::raw_url(r, repo_rel);
         let bytes = http_get(&url)?;
@@ -157,52 +157,52 @@ impl Provider for SourceHut {
 }
 
 
-// BFS include walker for sr.ht
-fn bfs_includes_srht(
-    r: &RepoRef,
-    out_root: &Path,
-    entry_rel: String,
-    entry_local: PathBuf,
-) -> Result<FetchResult, Box<dyn std::error::Error>>
-{
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut all: Vec<PathBuf> = vec![entry_local.clone()];
-    visited.insert(entry_rel.clone());
+// // BFS include walker for sr.ht
+// fn bfs_includes_srht(
+//     r: &RepoRef,
+//     out_root: &Path,
+//     entry_rel: String,
+//     entry_local: PathBuf,
+// ) -> Result<FetchResult, Box<dyn std::error::Error>>
+// {
+//     let mut visited: HashSet<String> = HashSet::new();
+//     let mut all: Vec<PathBuf> = vec![entry_local.clone()];
+//     visited.insert(entry_rel.clone());
 
-    let mut q: VecDeque<(String, PathBuf)> = VecDeque::new();
-    q.push_back((entry_rel.clone(), entry_local));
+//     let mut q: VecDeque<(String, PathBuf)> = VecDeque::new();
+//     q.push_back((entry_rel.clone(), entry_local));
 
-    let mut steps = 0usize;
-    while let Some((curr_rel, curr_local)) = q.pop_front() {
-        if steps > 2000 { break; } // simple safety cap
-        steps += 1;
+//     let mut steps = 0usize;
+//     while let Some((curr_rel, curr_local)) = q.pop_front() {
+//         if steps > 2000 { break; } // simple safety cap
+//         steps += 1;
 
-        let src = fs::read_to_string(&curr_local).unwrap_or_default();
-        for inc in parse_includes(&src) {
-            // Turn "~src/drif.util.tal" into "src/drif.util.tal", "foo.tal" into "dir/foo.tal", etc.
-            let target = resolve_include(&curr_rel, &inc);
+//         let src = fs::read_to_string(&curr_local).unwrap_or_default();
+//         for inc in parse_includes(&src) {
+//             // Turn "~src/drif.util.tal" into "src/drif.util.tal", "foo.tal" into "dir/foo.tal", etc.
+//             let target = resolve_include(&curr_rel, &inc);
 
-            if !visited.insert(target.clone()) {
-                continue;
-            }
+//             if !visited.insert(target.clone()) {
+//                 continue;
+//             }
 
-            let url = SourceHut::raw_url(r, &target);
-            eprintln!("[srht] include GET {}", url);
-            match http_get(&url) {
-                Ok(bytes) => {
-                    let loc = out_root.join(&target);
-                    if let Some(parent) = loc.parent() { let _ = fs::create_dir_all(parent); }
-                    if write_bytes(&loc, &bytes).is_ok() {
-                        all.push(loc.clone());
-                        q.push_back((target, loc));
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[srht] warn: include missing {} ({})", target, e);
-                }
-            }
-        }
-    }
+//             let url = SourceHut::raw_url(r, &target);
+//             eprintln!("[srht] include GET {}", url);
+//             match http_get(&url) {
+//                 Ok(bytes) => {
+//                     let loc = out_root.join(&target);
+//                     if let Some(parent) = loc.parent() { let _ = fs::create_dir_all(parent); }
+//                     if write_bytes(&loc, &bytes).is_ok() {
+//                         all.push(loc.clone());
+//                         q.push_back((target, loc));
+//                     }
+//                 }
+//                 Err(e) => {
+//                     eprintln!("[srht] warn: include missing {} ({})", target, e);
+//                 }
+//             }
+//         }
+//     }
 
-    Ok(FetchResult { entry_local: out_root.join(&visited.iter().next().unwrap()), all_files: all })
-}
+//     Ok(FetchResult { entry_local: out_root.join(&visited.iter().next().unwrap()), all_files: all })
+// }

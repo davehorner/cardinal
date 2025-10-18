@@ -1,5 +1,4 @@
-//! ```
-//! Chocolatal: TAL Preprocessor for uxn-tal
+// Chocolatal: TAL Preprocessor for uxn-tal
 use std::ffi::OsStr;
 //
 // This module provides preprocessing for Uxn TAL assembly files, inspired by preprocess-tal.sh.
@@ -9,7 +8,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::debug;
 
 #[derive(Debug)]
 pub enum PreprocessError {
@@ -819,6 +817,7 @@ fn matches_pattern(name: &str, pattern: &str) -> bool {
 // Usage: rustc -o chocolatal_preprocessor src/chocolatal/mod.rs && ./chocolatal_preprocessor <input.tal> [output.tal]
 
 #[cfg(not(test))]
+#[allow(dead_code)]
 fn main() {
     use std::env;
     

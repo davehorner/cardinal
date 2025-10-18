@@ -1,9 +1,9 @@
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use crate::{bkend::{AssemblerBackend, AssemblyOutput}, dis_uxndis::run_dis_file, hexrev::HexRev, rom, Assembler, AssemblerError};
+use crate::{bkend::{AssemblerBackend, AssemblyOutput}, dis_uxndis::run_dis_file, AssemblerError};
 
 
-fn bkend_err(path: &std::path::Path, msg: &str) -> AssemblerError {
+fn bkend_err(_path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::Backend { message: msg.to_string() }
 }
 

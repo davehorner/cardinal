@@ -5,7 +5,7 @@ fn main() -> Result<(), AssemblerError> {
     // Based on the uxnemu.c code, console device is at 0x10-0x1f
     // Port 0x18 (0x10 + 0x08) is for console output
 
-    let proper_console = r#"
+    let _proper_console = r#"
         |0100
         
         ( Console test - exactly like working UXN programs )
@@ -17,7 +17,7 @@ fn main() -> Result<(), AssemblerError> {
 
     // Since our assembler doesn't support device name syntax yet,
     // let's use the raw device numbers from uxnemu.c
-    let device_test = r#"
+    let _device_test = r#"
         |0100
         
         ( Test console output using device 0x10 base )
