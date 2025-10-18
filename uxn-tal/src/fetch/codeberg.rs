@@ -133,28 +133,29 @@ impl Provider for Codeberg {
     ) -> Result<FetchResult, Box<dyn std::error::Error>> {
 
                 let entry_rel = match &r.path {
-            Some(p) if p.to_ascii_lowercase().ends_with(".tal") => p.replace('\\', "/"),
-            _ => return Err("codeberg: URL must point to a .tal file; not guessing entries".into()),
-        };
+                    Some(p) if p.to_ascii_lowercase().ends_with(".tal") || p.to_ascii_lowercase().ends_with(".rom") => p.replace('\\', "/"),
+                    _ => return Err("codeberg: URL must point to a .tal or .rom file; not guessing entries".into()),
+                };
 
-        let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
-        let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
-        let mut all = vec![entry_local.clone()];
-        let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local)]);
-
-        while let Some((curr_rel, curr_local)) = q.pop_front() {
-            let src = fs::read_to_string(&curr_local).unwrap_or_default();
-            for inc in parse_includes(&src) {
-                let target = resolve_include(&curr_rel, &inc);
-                if !visited.insert(target.clone()) { continue; }
-                match Self::fetch_file(r, out_root, &target) {
-                    Ok(loc) => { all.push(loc.clone()); q.push_back((target, loc)); }
-                    Err(e)  => eprintln!("[codeberg] warn: missing include {} ({})", target, e),
+                let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
+                let mut all = vec![entry_local.clone()];
+                // Only walk includes for .tal files
+                if entry_rel.to_ascii_lowercase().ends_with(".tal") {
+                    let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
+                    let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
+                    while let Some((curr_rel, curr_local)) = q.pop_front() {
+                        let src = fs::read_to_string(&curr_local).unwrap_or_default();
+                        for inc in parse_includes(&src) {
+                            let target = resolve_include(&curr_rel, &inc);
+                            if !visited.insert(target.clone()) { continue; }
+                            match Self::fetch_file(r, out_root, &target) {
+                                Ok(loc) => { all.push(loc.clone()); q.push_back((target, loc)); }
+                                Err(e)  => eprintln!("[codeberg] warn: missing include {} ({})", target, e),
+                            }
+                        }
+                    }
                 }
-            }
-        }
-
-        Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
+                Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
 
         // for b in Self::branch_candidates(&r_in.branch) {
         //     let r = RepoRef {
