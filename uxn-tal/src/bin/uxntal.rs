@@ -85,7 +85,7 @@ fn real_main() -> Result<(), AssemblerError> {
 let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
     Ok(v) => v,
     Err(e) => { eprintln!("Failed to resolve uxntal URL: {}", e); 
-                // pause_on_error();
+                pause_on_error();
                 std::process::exit(1); }
 };
 println!("Resolved entry: {}", entry_local.display());
