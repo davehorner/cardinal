@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum MonitorTraversal {
     #[allow(dead_code)]
     Sequential, // step through monitors in a fixed order

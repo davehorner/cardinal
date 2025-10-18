@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.0...cardinal-gui-v0.4.1) - 2025-10-18
+
+### Fixed
+
+- *(fetch)* make include resolution robust; re-enable pause_on_error
+
 ## [0.4.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.11...cardinal-gui-v0.4.0) - 2025-10-18
 
 ### Other
