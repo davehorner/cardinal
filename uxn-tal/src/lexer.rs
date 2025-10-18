@@ -371,28 +371,28 @@ impl Lexer {
     }
 
     /// Read binary digits for #b binary literals
-    fn read_binary(&mut self) -> Result<String> {
-        let mut result = String::new();
-        while self.position < self.input.len() {
-            let ch = self.current_char();
-            if ch == '0' || ch == '1' {
-                result.push(ch);
-                self.advance();
-            } else {
-                break;
-            }
-        }
-        if result.is_empty() {
-            return Err(AssemblerError::SyntaxError {
-                path: self.path.clone().unwrap_or_default(),
-                line: self.line,
-                position: self.position_on_line,
-                message: "Expected binary digits".to_string(),
-                source_line: self.get_current_line(),
-            });
-        }
-        Ok(result)
-    }
+    // fn read_binary(&mut self) -> Result<String> {
+    //     let mut result = String::new();
+    //     while self.position < self.input.len() {
+    //         let ch = self.current_char();
+    //         if ch == '0' || ch == '1' {
+    //             result.push(ch);
+    //             self.advance();
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    //     if result.is_empty() {
+    //         return Err(AssemblerError::SyntaxError {
+    //             path: self.path.clone().unwrap_or_default(),
+    //             line: self.line,
+    //             position: self.position_on_line,
+    //             message: "Expected binary digits".to_string(),
+    //             source_line: self.get_current_line(),
+    //         });
+    //     }
+    //     Ok(result)
+    // }
 
     /// Read a decimal number (digits only)
     #[allow(dead_code)]
@@ -889,7 +889,7 @@ impl Lexer {
                 }
                 // Check for connected word after '['
                 if !self.current_char().is_whitespace() && self.current_char() != ']' {
-                    let word = self.read_identifier()?;
+                    let _word = self.read_identifier()?;
                     return Ok(Token::BracketOpen); // we eat the word for now.  Token::BracketOpenWithWord(word));
                 }
                 Ok(Token::BracketOpen)
@@ -898,7 +898,7 @@ impl Lexer {
                 self.advance();
                 // Check for connected word after ']'
                 if !self.current_char().is_whitespace() {
-                    let word = self.read_identifier()?;
+                    let _word = self.read_identifier()?;
                     return Ok(Token::BracketClose); // we eat the word for now.  Token::BracketCloseWithWord(word));
                 }
                 Ok(Token::BracketClose)
