@@ -1,6 +1,6 @@
 
-use std::path::Path;
-use uxn_tal::hexrev::HexRev;
+// use std::path::Path;
+// use uxn_tal::hexrev::HexRev;
 
 // fn main() -> std::io::Result<()> {
 //     // hex -> bin (permissive)

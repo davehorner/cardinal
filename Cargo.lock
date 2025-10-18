@@ -425,7 +425,7 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.5",
  "cardinal-varvara 0.4.9",
  "clap",
  "env_logger",
@@ -437,7 +437,7 @@ name = "cardinal-gui"
 version = "0.3.11"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.5",
  "cardinal-varvara 0.4.9",
  "clap",
  "cpal",
@@ -465,6 +465,8 @@ dependencies = [
 [[package]]
 name = "cardinal-uxn"
 version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b77320aeecc24bacb7d554b4795956e4222df1ec7a08b087b282c772bc5ddf59"
 dependencies = [
  "anyhow",
  "zerocopy",
@@ -472,9 +474,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b77320aeecc24bacb7d554b4795956e4222df1ec7a08b087b282c772bc5ddf59"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "zerocopy",
@@ -486,7 +486,7 @@ version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e37b4ace7e37bcbdebdb3edaef4af6df7d855c58b567d41f397a197b7946e2b1"
 dependencies = [
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.5",
  "chrono",
  "gilrs",
  "hidapi",
@@ -498,8 +498,23 @@ dependencies = [
 [[package]]
 name = "cardinal-varvara"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfdb7bf0b2be7e1926616954591073a593856af4db8930904c92687170cda106"
 dependencies = [
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.4.5",
+ "chrono",
+ "gilrs",
+ "hidapi",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.6.0"
+dependencies = [
+ "cardinal-uxn 0.4.5",
  "chrono",
  "gilrs",
  "hidapi",
@@ -5093,12 +5108,12 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.1.18"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cardinal-uxn 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.4.9",
+ "cardinal-uxn 0.4.5",
+ "cardinal-varvara 0.5.0",
  "clap",
  "dirs",
  "env_logger",

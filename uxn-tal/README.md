@@ -24,9 +24,7 @@ Flags:
     --preprocess          Print preprocessed output and exit
     --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
     --r, --root[=DIR]     Set root directory for includes (default: current dir)
-    --register            Register uxntal as a file handler (Windows only)
-    --r, --root[=DIR]     Set root directory for includes (default: current dir)
-    --register            Register uxntal as a file handler (Windows only)
+    --register            Register uxntal as a file handler
     --help, -h            Show this help
 
 Behavior:
@@ -41,7 +39,7 @@ A few unique arguments to call out specifically are the `--rust-interface`, `--c
 
 - `--cmp` will attempt to build your tal file against a number of different asm backends.  It will use the asm backend on the host machine if it is in the path.  Otherwise, if you are running a docker daemon, it will create docker images and generate roms via docker.
 
-- `--register` is a windows only feature today (it could be implemented on other platforms).  `--register` will setup a protocol handler for `uxntal://` on your system.  It will also install the e_window and cardinal-gui crates as a dependency.  This feature allows you to place `uxntal://` in front of any http(s) url and uxntal will download, assemble, cache, and run the tal file pointed to by url.
+- `--register` been tested on Windows, MacOS, and Linux.  `--register` will setup a protocol handler for `uxntal://` on your system.  It will also install the e_window and cardinal-gui crates as a dependency.  This feature allows you to place `uxntal://` in front of any http(s) url and uxntal will download, assemble, cache, and run the tal file pointed to by url.
 ```
 cargo install uxn-tal
 uxntal --register
@@ -69,6 +67,16 @@ Using the extension and the bookmarklet, you will find a chrome dialog pop that 
 The protocol handler now has a provider abstraction over Github/Codeberg/Sourcehut urls; this means that the bookmarklet will work on view/log/blame pages on these websites.  Additionally, the downloader now parses and downloads all the includes.  For example `explorer uxntal://https://git.sr.ht/~rabbits/left/tree/main/item/src/left.tal`, which is a project with a few includes, runs fine.
 
 If you are often viewing code from a site like github, using the bookmarklet on a view/blame/history page instead of the raw allows you to use the protocol without the permission dialog being raised.  It's possible uxntal.exe could register a NativeMessagingHosts endpoint so that the chrome extension isn't using the protocol handler but instead invoke chrome.runtime.sendNativeMessage to side step the additional chrome dialog.
+
+On macOS, `--register` creates a minimal GUI `.app` bundle in your `~/Applications` folder that registers the `uxntal://` protocol. This bundle launches your installed `uxntal` binary with the URL as an argument.
+
+**Requirements:**
+- You must have the `uxntal` binary installed (e.g., via `cargo install uxn-tal`).
+- You must have Xcode command line tools installed (`xcode-select --install`).
+- 
+## Warning
+
+A single click protocol handler that assembles and runs arbitrary code is considered a dangerous activity. uxntal protocol handler 0.1.18 and earlier had a shell exploit that could allow someone to craft a url/website which could run arbitrary code on your machine.  This security concern has been addressed, in 0.2.0.  This disclaimer is here to educate users on the security concerns involved, to request additional eyes for security, and to remind the user to apply upgrades as they become available so that any new security concerns found can be patched.  
 
 ## cuxn Assembler Features
 
