@@ -14,6 +14,7 @@ use uxn_tal::chocolatal;
 use uxn_tal::debug;
 use uxn_tal::bkend_drif::ensure_drifblim_repo;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
+use uxn_tal::util::pause_on_error;
 use uxn_tal::{Assembler, AssemblerError};
 use std::process::Command;
 use std::io::Write;
@@ -21,9 +22,13 @@ use std::io::Write;
 // use std::hash::{Hasher, Hash};
 // use std::collections::hash_map::DefaultHasher;
 // use std::time::Duration;
+
+
+
 fn main() {
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
+        pause_on_error();
         exit(1);
     }
 }
@@ -79,7 +84,9 @@ fn real_main() -> Result<(), AssemblerError> {
 
 let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
     Ok(v) => v,
-    Err(e) => { eprintln!("Failed to resolve uxntal URL: {}", e); std::process::exit(1); }
+    Err(e) => { eprintln!("Failed to resolve uxntal URL: {}", e); 
+                // pause_on_error();
+                std::process::exit(1); }
 };
 println!("Resolved entry: {}", entry_local.display());
 
@@ -535,7 +542,14 @@ args[0] = entry_local
         if rom_path_p.exists() {
             println!("ROM already exists at {}", rom_path);
         } else {
-            let rom = asm.assemble(&processed_src, Some(canon_input.to_owned()))?;
+            let rom = match asm.assemble(&processed_src, Some(canon_input.to_owned())) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Assembly error: {e}");
+                    // pause_on_error();
+                    return Err(e);
+                }
+            };
             fs::write(&rom_path, &rom)
                 .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to write rom: {e}")))?;
             if want_verbose {
@@ -545,7 +559,14 @@ args[0] = entry_local
             }
         }
     } else {
-        let rom = asm.assemble(&processed_src, Some(canon_input.to_owned()))?;
+        let rom = match asm.assemble(&processed_src, Some(canon_input.to_owned())) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Assembly error: {e}");
+                // pause_on_error();
+                return Err(e);
+            }
+        };
         fs::write(&rom_path, &rom)
             .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to write rom: {e}")))?;
 

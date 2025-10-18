@@ -26,9 +26,21 @@ pub fn parse_includes(tal: &str) -> Vec<String> {
 }
 
 pub fn resolve_include(curr_repo_rel: &str, inc: &str) -> String {
-    if let Some(s) = inc.strip_prefix("~/") { return s.to_string(); }
-    if let Some(s) = inc.strip_prefix('~')  { return s.trim_start_matches('/').to_string(); }
-    if inc.starts_with('/')                 { return inc.trim_start_matches('/').to_string(); }
+    // For remote providers, always resolve ~ and ~/ includes relative to the current file's repo path
+    if let Some(s) = inc.strip_prefix("~/") {
+        // If curr_repo_rel has directories, use its parent as base
+        let base = Path::new(curr_repo_rel).parent().unwrap_or(Path::new(""));
+        let joined = base.join(s);
+        return joined.to_string_lossy().replace('\\', "/");
+    }
+    if let Some(s) = inc.strip_prefix('~') {
+        let base = Path::new(curr_repo_rel).parent().unwrap_or(Path::new(""));
+        let joined = base.join(s.trim_start_matches('/'));
+        return joined.to_string_lossy().replace('\\', "/");
+    }
+    if inc.starts_with('/') {
+        return inc.trim_start_matches('/').to_string();
+    }
     let base = Path::new(curr_repo_rel).parent().unwrap_or(Path::new(""));
     let joined = base.join(inc);
     joined.to_string_lossy().replace('\\', "/")

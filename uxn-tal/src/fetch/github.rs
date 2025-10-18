@@ -32,6 +32,12 @@ impl GitHub {
         let url = Self::raw_url(r, repo_rel);
         let bytes = http_get(&url)?;
         let local = out_root.join(repo_rel);
+        // Check for HTML/404 response
+        let is_html = bytes.starts_with(b"<!doctype html") || bytes.starts_with(b"<html");
+        if is_html {
+            let _ = std::fs::remove_file(&local);
+            return Err(format!("GitHub: Got HTML/404 for {}", url).into());
+        }
         if let Some(p) = local.parent() { fs::create_dir_all(p)?; }
         write_bytes(&local, &bytes)?;
         Ok(local)
@@ -75,7 +81,7 @@ impl Provider for GitHub {
 
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
         let mut all = vec![entry_local.clone()];
-        // Only walk includes for .tal files
+        // Recursively fetch includes for .tal files
         if entry_rel.to_ascii_lowercase().ends_with(".tal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
             let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
@@ -84,10 +90,71 @@ impl Provider for GitHub {
                 for inc in parse_includes(&src) {
                     let target = resolve_include(&curr_rel, &inc);
                     if !visited.insert(target.clone()) { continue; }
+                    let mut attempts: Vec<(String, Option<std::path::PathBuf>)> = vec![(target.clone(), None)];
+                    let mut success = None;
+                    let mut errors = vec![];
+                    // Try original
                     match Self::fetch_file(r, out_root, &target) {
-                        Ok(loc) => { all.push(loc.clone()); q.push_back((target, loc)); }
-                        Err(e)  => eprintln!("[github] warn: missing include {} ({})", target, e),
+                        Ok(loc) => { success = Some((target.clone(), loc)); }
+                        Err(e) => { errors.push((target.clone(), format!("{}", e))); }
                     }
+                    // Fallback 1: if path contains a duplicate segment (e.g., src/src/menu.tal), try with duplicate removed
+                    if success.is_none() {
+                        let parts: Vec<&str> = target.split('/').collect();
+                        if parts.len() >= 3 && parts[0] == parts[1] {
+                            let deduped = parts[1..].join("/");
+                            attempts.push((deduped.clone(), None));
+                            match Self::fetch_file(r, out_root, &deduped) {
+                                Ok(loc) => { success = Some((deduped.clone(), loc)); }
+                                Err(e) => { errors.push((deduped.clone(), format!("{}", e))); }
+                            }
+                        }
+                    }
+                    // Fallback 2: try immediate parent directory (remove last segment, e.g., 'src')
+                    if success.is_none() {
+                        if let Some(fname) = Path::new(&target).file_name() {
+                            let path_obj = Path::new(&target);
+                            if let Some(parent) = path_obj.parent() {
+                                let try_path = parent.join(fname);
+                                let try_str = try_path.to_string_lossy().replace('\\', "/");
+                                if try_str != target {
+                                    attempts.push((try_str.clone(), None));
+                                    match Self::fetch_file(r, out_root, &try_str) {
+                                        Ok(loc) => { success = Some((try_str.clone(), loc)); }
+                                        Err(e) => { errors.push((try_str.clone(), format!("{}", e))); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Fallback 3: try just the filename in the entry file's directory
+                    if success.is_none() {
+                        if let Some(fname) = Path::new(&target).file_name() {
+                            // Use the directory of entry_rel
+                            if let Some(entry_dir) = Path::new(&entry_rel).parent() {
+                                let entry_dir_path = entry_dir.join(fname);
+                                let entry_dir_str = entry_dir_path.to_string_lossy().replace('\\', "/");
+                                attempts.push((entry_dir_str.clone(), None));
+                                match Self::fetch_file(r, out_root, &entry_dir_str) {
+                                    Ok(loc) => { success = Some((entry_dir_str.clone(), loc)); }
+                                    Err(e) => { errors.push((entry_dir_str.clone(), format!("{}", e))); }
+                                }
+                            }
+                        }
+                    }
+                    if let Some((path, loc)) = success {
+                        all.push(loc.clone());
+                        q.push_back((path, loc));
+                        continue;
+                    }
+                    // No fallback possible, return error with all attempts
+                    let error_msg = format!(
+                        "Failed to fetch include '{}'. Attempts: {}. Errors: {}",
+                        inc,
+                        attempts.iter().map(|(p, _)| format!("'{}'", p)).collect::<Vec<_>>().join(", "),
+                        errors.iter().map(|(p, e)| format!("{}: {}", p, e)).collect::<Vec<_>>().join("; ")
+                    );
+                    return Err(error_msg.into());
                 }
             }
         }

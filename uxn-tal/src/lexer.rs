@@ -785,7 +785,7 @@ impl Lexer {
             '@' => {
                 self.advance();
                 let label = self.read_identifier()?;
-                println!("LEXER DEBUG: Parsed label definition: @{}", label);
+                // println!("LEXER DEBUG: Parsed label definition: @{}", label);
                 Ok(Token::LabelDef('@'.into(), label))
             }
             ';' => {
@@ -1007,7 +1007,7 @@ impl Lexer {
             '%' => {
                 self.advance();
                 let macro_name = self.read_identifier()?;
-                println!("Macro name: {}", macro_name);
+                // println!("Macro name: {}", macro_name);
                 Ok(Token::MacroDef(macro_name))
             }
             '&' => {
