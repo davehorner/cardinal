@@ -1,9 +1,9 @@
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use crate::{hexrev::HexRev, Assembler, AssemblerError};
+use crate::AssemblerError;
 
 
-fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
+fn simple_err(_path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::Backend { message: msg.to_string() }
 }
 
@@ -116,7 +116,7 @@ pub fn ensure_uxn_repo() -> Result<Option<PathBuf>, AssemblerError> {
 }
 
 
-fn bkend_err(path: &std::path::Path, msg: &str) -> AssemblerError {
+fn bkend_err(_path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::Backend { message: msg.to_string() }
 }
 

@@ -1,8 +1,8 @@
 use crate::dis_uxndis::run_dis_file;
-use crate::{bkend_drif, rom, Assembler, AssemblerError};
+use crate::{Assembler, AssemblerError};
 use std::fs;
 use std::path::Path;
-use std::process::{Command, ExitStatus};
+use std::process::Command;
 use crate::bkend::{AssemblerBackend, AssemblyOutput};
 
 pub struct DebugAssembleResult {
@@ -162,7 +162,7 @@ impl AssemblerBackend for DrifblimBackend {
     }
 }
 impl DrifblimBackend {
-    fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
+    fn run_drif(tal_path: &str, _tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim();
@@ -296,7 +296,7 @@ impl AssemblerBackend for DrifblimSeedBackend {
     }
 }
 impl DrifblimSeedBackend {
-    fn run_drif(tal_path: &str, tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
+    fn run_drif(tal_path: &str, _tal_file: &str, rom_path: &str) -> Result<String, AssemblerError> {
             println!("tal_path: {}", tal_path);
     println!("rom_path: {}", rom_path);
     let drifblim_rom = crate::bkend_drif::drifblim_repo_get_drifblim_seed();
@@ -404,7 +404,7 @@ impl DrifloonBackend {
     } else {
         drifloon_path.to_string_lossy().to_string()
     };
-    let mut output =if cfg!(target_os = "windows") {
+    let output =if cfg!(target_os = "windows") {
         let in_wsl = detect_wsl();
         if in_wsl {
             let mut child = Command::new("uxncli")

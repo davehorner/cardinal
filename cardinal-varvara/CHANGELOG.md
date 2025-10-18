@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.5.0...cardinal-varvara-v0.6.0) - 2025-10-18
+
+### Added
+
+- *(macos)* [**breaking**] macOS protocol handler + safer exec; docs/deps
+
 ## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.4.9...cardinal-varvara-v0.5.0) - 2025-10-13
 
 ### Added
