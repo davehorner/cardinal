@@ -1,7 +1,7 @@
 
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use crate::{bkend::{AssemblerBackend, AssemblyOutput}, hexrev::HexRev, Assembler, AssemblerError};
+use crate::{bkend::{AssemblerBackend, AssemblyOutput}, AssemblerError};
 
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
@@ -122,7 +122,7 @@ pub fn ensure_docker_uxn38_image() -> Result<(), AssemblerError> {
     Ok(())
 }
 
-fn bkend_err(path: &std::path::Path, msg: &str) -> AssemblerError {
+fn bkend_err(_path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::Backend { message: msg.to_string() }
 }
 

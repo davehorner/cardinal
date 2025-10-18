@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
-use std::path;
+// use std::path;
 use std::{
     env, fs,
     path::{Path, PathBuf},
     process::exit,
 };
-use base64::Engine;
+// use base64::Engine;
 use uxn_tal::resolve_entry_from_url;
 use uxn_tal::bkend_uxn::{ensure_docker_uxn_image, ensure_uxn_repo};
 use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
@@ -16,11 +16,11 @@ use uxn_tal::bkend_drif::ensure_drifblim_repo;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
 use uxn_tal::{Assembler, AssemblerError};
 use std::process::Command;
-use std::io::{Read, Write};
-use std::fs::File;
-use std::hash::{Hasher, Hash};
-use std::collections::hash_map::DefaultHasher;
-use std::time::Duration;
+use std::io::Write;
+// use std::fs::File;
+// use std::hash::{Hasher, Hash};
+// use std::collections::hash_map::DefaultHasher;
+// use std::time::Duration;
 fn main() {
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
@@ -34,7 +34,6 @@ fn real_main() -> Result<(), AssemblerError> {
     println!("root dir: {:?}", root_dir);
     let mut pre = false;
     let mut preprocess_only = false;
-    let mut no_intermediate = false;
     let mut want_version = false;
     let mut want_verbose = false;
     let mut want_cmp = false;
@@ -77,7 +76,6 @@ fn real_main() -> Result<(), AssemblerError> {
 
         if raw_url.starts_with("uxntal://") {
 
-            println!("Handling uxntal:// URL: {}", raw_url);
 
 let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
     Ok(v) => v,
@@ -178,7 +176,7 @@ args[0] = entry_local
             //         return Err(format!("Failed to download: HTTP {}", resp.status()).into());
             //     }
             //     let bytes = resp.bytes()?;
-            //     let mut file = File::create(dest)?;
+            //     let mut file = std::fs::File::create(dest)?;
             //     file.write_all(&bytes)?;
             //     Ok(())
             // }
@@ -294,8 +292,6 @@ args[0] = entry_local
             pre = true;
         } else if a == "--preprocess" {
             preprocess_only = true;
-        } else if a == "--no-intermediate" {
-            no_intermediate = true;
         } else if a == "--drif" || a == "--drifblim" {
             drif_mode = true;
         } else if a.starts_with('-') {
@@ -337,7 +333,7 @@ args[0] = entry_local
     }
 
     let mut source = String::new();
-    let mut canon_input_p = PathBuf::new();
+    let canon_input_p;
     let mut input_from_stdin = false;
     if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
         // Read from stdin
@@ -483,13 +479,13 @@ args[0] = entry_local
     // --- ADD: cmp mode ---
     if want_cmp {
         println!("{:?}", ensure_drifblim_repo());
-        ensure_uxndis_repo();
-        ensure_buxn_repo();
-        ensure_docker_buxn_image();
-        ensure_uxn38_repo();
-        ensure_docker_uxn38_image();
-        ensure_uxn_repo();
-        ensure_docker_uxn_image();
+        let _ = ensure_uxndis_repo();
+        let _ = ensure_buxn_repo();
+        let _ = ensure_docker_buxn_image();
+        let _ = ensure_uxn38_repo();
+        let _ = ensure_docker_uxn38_image();
+        let _ = ensure_uxn_repo();
+        let _ = ensure_docker_uxn_image();
         // Use DebugAssembler from the debug module with drif mode if enabled
         let dbg = if drif_mode {
             debug::DebugAssembler::with_drif_mode(true)
@@ -544,24 +540,18 @@ args[0] = entry_local
     }
 
     if let Some(cmd) = run_after_assembly {
-        let cmd = format!("{} {}", cmd, rom_path);
-println!("Running post-assembly command: {}", cmd);
-let dir_str = run_after_cwd
-    .as_ref()
-    .map(|p| p.display().to_string())
-    .unwrap_or_else(|| "current dir".to_string());
-println!("In directory: {}", dir_str);
-        #[cfg(unix)]
-        let status = Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
-            .status();
+        let cmd_name = cmd.clone();
+        let path_to_emu = which::which(&cmd_name).map_err(|_| simple_err(Path::new("."), &format!("{cmd_name} not found in PATH")))?;
+        println!("Running post-assembly command: {}", cmd);
+        let dir_str = run_after_cwd
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_else(|_| ".".to_string()));
+        println!("In directory: {}", dir_str);
 
-        #[cfg(windows)]
-        let status = Command::new("cmd")
+        let status = Command::new(path_to_emu)
+            .arg(&rom_path)
             .current_dir(run_after_cwd.unwrap_or_else(|| PathBuf::from(".")))
-            .arg("/C")
-            .arg(&cmd)
             .status();
 
         match status {
@@ -582,11 +572,6 @@ println!("In directory: {}", dir_str);
     // }
 
     Ok(())
-}
-
-fn needs_help(args: &[String]) -> bool {
-    args.iter()
-        .any(|a| a == "--help" || a == "-h" || a == "help")
 }
 
 fn print_usage() {
@@ -707,6 +692,155 @@ fn recursive_find(root: &Path, needle: &str, cap: usize) -> Option<PathBuf> {
     None
 }
 
+#[cfg(target_os = "macos")]
+fn register_protocol_per_user() -> std::io::Result<()> {
+    use std::fs::{self, File};
+    use std::io::{Write, stdin, stdout};
+    use std::path::PathBuf;
+    use std::process::Command;
+
+        // Check for Xcode command line tools (xcrun and swiftc)
+    if which::which("xcrun").is_err() || which::which("swiftc").is_err() {
+        eprintln!("Error: Xcode command line tools are required to register the protocol handler.");
+        eprintln!("Please install them with: xcode-select --install");
+        return Ok(());
+    }
+
+    // Find the correct uxntal binary in PATH
+    let uxntal_path = which::which("uxntal").expect("Could not find uxntal in PATH");
+    let version = env!("CARGO_PKG_VERSION");
+
+    let home = std::env::var("HOME").unwrap();
+    let temp_dir = PathBuf::from(format!("{}/.uxntal_swift_launcher", home));
+    let app_delegate_file = temp_dir.join("AppDelegate.swift");
+    let main_file = temp_dir.join("main.swift");
+    let plist_file = temp_dir.join("Info.plist");
+    let app_name = "uxntal-launcher";
+    let app_bundle = temp_dir.join(format!("{app_name}.app"));
+
+    // Clean temp dir
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir)?;
+
+    // Write AppDelegate.swift (no @main)
+    let swift_app_delegate = format!(r#"
+import Cocoa
+
+class AppDelegate: NSObject, NSApplicationDelegate {{
+    func application(_ application: NSApplication, open urls: [URL]) {{
+        for url in urls {{
+            let task = Process()
+            task.launchPath = "{bin_path}"
+            task.arguments = [url.absoluteString]
+            task.launch()
+        }}
+        NSApp.terminate(nil)
+    }}
+    func applicationDidFinishLaunching(_ notification: Notification) {{
+        NSApp.terminate(nil)
+    }}
+}}
+"#, bin_path = uxntal_path.display());
+    let mut f = std::fs::File::create(&app_delegate_file)?;
+    f.write_all(swift_app_delegate.as_bytes())?;
+
+    // Write main.swift
+    let swift_main = r#"
+import Cocoa
+
+let delegate = AppDelegate()
+NSApplication.shared.delegate = delegate
+_ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
+"#;
+    let mut f = std::fs::File::create(&main_file)?;
+    f.write_all(swift_main.as_bytes())?;
+
+    // Write Info.plist with correct version
+    let plist = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>uxntal-launcher</string>
+    <key>CFBundleIdentifier</key>
+    <string>uxntal.uxn-tal.launcher</string>
+    <key>CFBundleVersion</key>
+    <string>{version}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>{version}</string>
+    <key>CFBundleExecutable</key>
+    <string>{app_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>UXNTAL Protocol</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>uxntal</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
+"#, version=version, app_name=app_name);
+    let mut f = std::fs::File::create(&plist_file)?;
+    f.write_all(plist.as_bytes())?;
+
+    // Compile Swift app with both files
+    let status = Command::new("xcrun")
+        .args([
+            "swiftc",
+            "-o", &format!("{}/{}", temp_dir.display(), app_name),
+            main_file.to_str().unwrap(),
+            app_delegate_file.to_str().unwrap(),
+        ])
+        .status()?;
+    if !status.success() {
+        eprintln!("Failed to compile Swift launcher. Is Xcode command line tools installed?");
+        return Ok(());
+    }
+
+    // Create .app bundle structure
+    let app_contents = app_bundle.join("Contents");
+    let macos_dir = app_contents.join("MacOS");
+    fs::create_dir_all(&macos_dir)?;
+    fs::copy(
+        temp_dir.join(app_name),
+        macos_dir.join(app_name),
+    )?;
+    fs::copy(&plist_file, app_contents.join("Info.plist"))?;
+
+    // Move to ~/Applications as uxntal.app
+    let user_app = PathBuf::from(format!("{}/Applications/uxntal.app", home));
+    if user_app.exists() {
+        println!("An existing uxntal.app was found at {}.", user_app.display());
+        print!("Do you want to remove it and create a new one? [y/N]: ");
+        stdout().flush().ok();
+        let mut answer = String::new();
+        stdin().read_line(&mut answer).ok();
+        if answer.trim().eq_ignore_ascii_case("y") {
+            fs::remove_dir_all(&user_app)?;
+            println!("Removed old uxntal.app.");
+        } else {
+            println!("Aborted by user.");
+            return Ok(());
+        }
+    }
+    fs::rename(&app_bundle, &user_app)?;
+
+    println!("Created uxntal.app at {}", user_app.display());
+    println!("Double click uxntal.app in ~/Applications to register the uxntal:// protocol.");
+    let _ = Command::new("open")
+        .arg(format!("{}/Applications", home))
+        .status();
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
 fn register_protocol_per_user() -> std::io::Result<()> {
     #[cfg(windows)]
     {
@@ -804,7 +938,7 @@ fn register_protocol_per_user() -> std::io::Result<()> {
     </mime-type>
 </mime-info>
 "#;
-    let mut mime_file = File::create(&mime_file_path)?;
+    let mut mime_file = std::fs::File::create(&mime_file_path)?;
     mime_file.write_all(mime_content.as_bytes())?;
 
     // Create the .desktop file content
@@ -826,7 +960,7 @@ NoDisplay=true
     }
 
     // Write the .desktop file
-    let mut desktop_file = File::create(&desktop_file_path)?;
+    let mut desktop_file = std::fs::File::create(&desktop_file_path)?;
     desktop_file.write_all(desktop_content.as_bytes())?;
 
     // Register the MIME type with xdg-mime

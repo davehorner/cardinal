@@ -36,7 +36,7 @@ pub fn uxndis_repo_get_uxndis_seed() -> PathBuf {
 }
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use crate::{hexrev::HexRev, wsl::detect_wsl, Assembler, AssemblerError};
+use crate::{wsl::detect_wsl, Assembler, AssemblerError};
 
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {

@@ -20,7 +20,7 @@ pub fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
     }
     if !raw_url.starts_with("uxntal:") { return None; }
 
-    let mut s = raw_url.trim_start_matches("uxntal:").trim_start_matches('/');
+    let s = raw_url.trim_start_matches("uxntal:").trim_start_matches('/');
 
     if s.starts_with("open") {
         let (path, rest) = if let Some(qpos) = s.find('?') { (&s[..qpos], &s[qpos + 1..]) } else { (s, "") };
