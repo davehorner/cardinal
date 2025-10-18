@@ -160,7 +160,7 @@ impl AssemblerBackend for UxnUxn38Backend {
             .arg("uxn38-linux")
             .arg("/app/uxnasm")
             .arg(tal_file)
-            .arg(&rom_path)
+            .arg(rom_path)
             .output()
             .map_err(|e| AssemblerError::Backend { message: format!("Failed to run docker uxn38asm: {e}") })?;
 
@@ -177,12 +177,12 @@ impl AssemblerBackend for UxnUxn38Backend {
                 ),
             ));
         }
-        let bytes = fs::read(&rom_path).unwrap_or_default();
+        let bytes = fs::read(rom_path).unwrap_or_default();
         Ok(AssemblyOutput {
             rom_path: rom_path.to_string(),
             rom_bytes: bytes.clone(),
-            stdout: crate::emu_uxncli::run_uxncli_get_stdout(&rom_path)?,
-            disassembly: crate::dis_uxndis::run_dis_file(&rom_path)?,
+            stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
+            disassembly: crate::dis_uxndis::run_dis_file(rom_path)?,
         })
     }
 }

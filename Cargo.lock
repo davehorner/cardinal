@@ -434,11 +434,11 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cardinal-varvara 0.6.0",
+ "cardinal-varvara 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "cpal",
  "display-info",
@@ -497,13 +497,28 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "cardinal-uxn 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "gilrs",
  "hidapi",
  "image",
+ "log",
+ "static_assertions",
+ "zerocopy",
+]
+
+[[package]]
+name = "cardinal-varvara"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb2e6ed8b7460d94882d97fc1c7f431f1fe9b29fa49e7ac09e81bcb4be5ea8a2"
+dependencies = [
+ "cardinal-uxn 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
+ "gilrs",
+ "hidapi",
  "log",
  "static_assertions",
  "zerocopy",
@@ -5093,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

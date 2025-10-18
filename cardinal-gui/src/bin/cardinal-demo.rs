@@ -216,7 +216,14 @@ struct AppState {
     should_exit: Arc<Mutex<bool>>,
 }
 
+
+#[cfg(not(target_arch = "wasm32"))]
 fn egui_close_requested(ctx: &egui::Context) -> bool {
+    ctx.input(|i| i.viewport().close_requested())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn _egui_close_requested(ctx: &egui::Context) -> bool {
     ctx.input(|i| i.viewport().close_requested())
 }
 
@@ -872,29 +879,33 @@ fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn download_sym(sym_name: &str) -> Result<PathBuf, String> {
-    let url = format!(
-        "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{sym_name}");
+
+#[cfg(target_arch = "wasm32")]
+async fn _download_sym(sym_name: &str) -> Result<PathBuf, String> {
+    let url = format!("https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{sym_name}");
     println!("[DEBUG] Downloading .sym file from: {url}");
-    #[cfg(target_arch = "wasm32")]
-    use reqwest_wasm::Client;
-
-    #[cfg(target_arch = "wasm32")]
-    let body = reqwest_wasm::blocking::get(url)?.text()?;
-    #[cfg(target_arch = "wasm32")]
+    let client = Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let body = resp.text().await.map_err(|e| e.to_string())?;
     let bytes = body.as_bytes();
+    let mut file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+    file.write_all(bytes).map_err(|e| e.to_string())?;
+    let path = file.into_temp_path().keep().map_err(|e| e.to_string())?;
+    Ok(path)
+}
 
-    #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
+fn download_sym(sym_name: &str) -> Result<PathBuf, String> {
+    let url = format!("https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{sym_name}");
+    println!("[DEBUG] Downloading .sym file from: {url}");
     let client = reqwest::blocking::Client::builder()
         .user_agent("cardinal-demo")
         .build()
         .map_err(|e| e.to_string())?;
-    #[cfg(not(target_arch = "wasm32"))]
     let resp = client
         .get(Url::parse(&url).map_err(|e| e.to_string())?)
         .send()
         .map_err(|e| e.to_string())?;
-    #[cfg(not(target_arch = "wasm32"))]
     let bytes = resp.bytes().map_err(|e| e.to_string())?;
     let mut file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;

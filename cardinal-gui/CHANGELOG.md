@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.1...cardinal-gui-v0.4.2) - 2025-10-18
+
+### Other
+
+- *(clippy)* 4 the clippy purists
+
 ## [0.4.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.0...cardinal-gui-v0.4.1) - 2025-10-18
 
 ### Fixed

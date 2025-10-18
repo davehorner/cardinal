@@ -414,17 +414,17 @@ mod tests {
     fn test_opcode_decoding() {
         // Test LIT (0x80)
         let (base, short, ret, keep) = decode_opcode(0x80);
-        assert_eq!(base, 0x00);
-        assert_eq!(short, false);
-        assert_eq!(ret, false);
-        assert_eq!(keep, true);
+    assert_eq!(base, 0x00);
+    assert!(!short);
+    assert!(!ret);
+    assert!(keep);
 
         // Test ADD2kr (0xF8)
         let (base, short, ret, keep) = decode_opcode(0xF8);
-        assert_eq!(base, 0x18);
-        assert_eq!(short, true);
-        assert_eq!(ret, true);
-        assert_eq!(keep, true);
+    assert_eq!(base, 0x18);
+    assert!(short);
+    assert!(ret);
+    assert!(keep);
     }
 
     #[test]

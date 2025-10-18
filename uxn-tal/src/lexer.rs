@@ -205,18 +205,8 @@ impl Lexer {
 
                     // --- SCOPE TRACKING ---
                     // Update current_scope for label/sublabel definitions
-                    match &token {
-                        Token::LabelDef(_rune, label) => {
-                            self.current_scope = Some(label.clone());
-                        }
-                        // Token::SublabelDef(sublabel) => {
-                        //     if let Some(ref parent) = self.current_scope {
-                        //         self.current_scope = Some(format!("{}/{}", parent, sublabel));
-                        //     } else {
-                        //         self.current_scope = Some(sublabel.clone());
-                        //     }
-                        // }
-                        _ => {}
+                    if let Token::LabelDef(_rune, label) = &token {
+                        self.current_scope = Some(label.clone());
                     }
 
                     // For sublabel definition, set scope to parent label (not full sublabel path)
@@ -370,7 +360,7 @@ impl Lexer {
         Ok(result)
     }
 
-    /// Read binary digits for #b binary literals
+    // Read binary digits for #b binary literals
     // fn read_binary(&mut self) -> Result<String> {
     //     let mut result = String::new();
     //     while self.position < self.input.len() {
@@ -934,7 +924,7 @@ impl Lexer {
                     }
                 }
                 let rune = Rune::from(' ');
-                return Ok(Token::LabelRef(rune, full));
+                Ok(Token::LabelRef(rune, full))
                 // Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
             }
             _ if ch.is_ascii_digit() => {

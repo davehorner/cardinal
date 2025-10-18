@@ -7,7 +7,7 @@ fn enumerate_tal_files(dir: &str) -> Vec<String> {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "tal") {
+            if path.extension().is_some_and(|ext| ext == "tal") {
                 if let Some(path_str) = path.to_str() {
                     files.push(path_str.to_owned());
                 }

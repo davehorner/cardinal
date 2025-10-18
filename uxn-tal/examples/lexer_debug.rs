@@ -2,7 +2,7 @@ use uxn_tal::lexer::{Lexer, Token};
 
 fn main() {
     // Test different cases
-    let test_cases = vec![
+    let test_cases = [
         "'A", "'A 'B", "'A'", // This might be wrong format
     ];
 
