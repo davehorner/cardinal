@@ -152,7 +152,7 @@ impl Parser {
                     self.advance();
                     continue;
                 }
-                Token::Comment(comment) => {
+                Token::Comment(_comment) => {
                     // println!("Comment({:?})", comment);
                     self.advance();
                     continue;
@@ -692,7 +692,7 @@ impl Parser {
 
     fn parse_instruction(&mut self, name: String) -> Result<AstNode> {
         let opcodes = Opcodes::new();
-        let mut opcode = name.clone();
+        let mut opcode;
         let mut short_mode = false;
         let mut return_mode = false;
         let mut keep_mode = false;

@@ -268,7 +268,7 @@ mod tests {
 
         // Should contain: LIT 0x42, LIT 0x43, ADD, BRK (6 bytes total)
         // ROM trimming removes the 256-byte padding
-        assert_eq!(rom.len(), 5);
+        assert_eq!(rom.len(), 6);
         assert_eq!(rom[0], 0x80); // LIT
         assert_eq!(rom[1], 0x42); // literal byte
         assert_eq!(rom[2], 0x80); // LIT
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(rom[2], (expected_addr & 0xff) as u8); // Low byte
     }
 
-    fn test_instruction_modes() {
+    fn _test_instruction_modes() {
         let source = r#"
             |0100
             ADD     ( base instruction )
@@ -441,7 +441,7 @@ mod tests {
         // Starting at position 0 (after trimming padding)
         assert_eq!(data[0], 0x80); // LIT
         assert_eq!(data[1], 0x12); // Value
-        let rom = assembler
+        let _rom = assembler
             .assemble(source, Some("(test_hex_literals)".to_string()))
             .expect("Assembly failed");
         assert_eq!(data[3], 0x00); // Skip byte 2
@@ -530,7 +530,7 @@ mod tests {
         assert!(result.is_ok(), "Complete TAL assembly should succeed");
 
         let data = result.unwrap();
-        assert!(data.len() == 5, "Should generate some ROM data");
+        assert!(data.len() == 6, "Should generate some ROM data");
 
         // Verify it starts with our expected instructions
         assert_eq!(data[0], 0x80); // LIT

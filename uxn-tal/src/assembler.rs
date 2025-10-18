@@ -212,7 +212,7 @@ impl Assembler {
         if rom_data.len() < end {
             rom_data.resize(end, 0);
         }
-        let result = &rom_data[page_start..end];
+        let _result = &rom_data[page_start..end];
 
         let mut prog = self.rom.data().to_vec();
         // Use assembler’s absolute end to allow trailing zeros:
@@ -1005,16 +1005,17 @@ impl Assembler {
                     },
                 );
             }
-            AstNode::MacroCall(name, macro_line, macro_position) => {
-                // Debug: log macro expansion
-                static mut MACRO_EXPAND_DEPTH: usize = 0;
-                unsafe {
-                    MACRO_EXPAND_DEPTH += 1;
-                    println!(
-                        "DEBUG: Expanding macro '{}' at depth {} (line {}, pos {})",
-                        name, MACRO_EXPAND_DEPTH, macro_line, macro_position
-                    );
-                }
+            AstNode::MacroCall(name, _macro_line, _macro_position) => {
+                // // Debug: log macro expansion
+                // static mut MACRO_EXPAND_DEPTH: usize = 0;
+                // unsafe {
+                //     MACRO_EXPAND_DEPTH += 1;
+                    
+                //     println!(
+                //         "DEBUG: Expanding macro '{}' at depth {} (line {}, pos {})",
+                //         name, MACRO_EXPAND_DEPTH, macro_line, macro_position
+                //     );
+                // }
                 // Expand macro inline
                 // If referencing '_', register <current_label>/_ as a sublabel if not already present
                 if name == "_" {
@@ -1042,9 +1043,9 @@ impl Assembler {
                             self.process_node(macro_node)?;
                         }
                         self.macro_expansion_stack.pop();
-                        unsafe {
-                            MACRO_EXPAND_DEPTH -= 1;
-                        }
+                        // unsafe {
+                        //     MACRO_EXPAND_DEPTH -= 1;
+                        // }
                         return Ok(());
                     }
                 } else {
@@ -1063,9 +1064,9 @@ impl Assembler {
                     self.rom.write_short(0xffff)?; // Placeholder
                     self.update_effective_length();
                 }
-                unsafe {
-                    MACRO_EXPAND_DEPTH -= 1;
-                }
+                // unsafe {
+                //     MACRO_EXPAND_DEPTH -= 1;
+                // }
             }
             AstNode::RawString(bytes) => {
                 // Write string data byte by byte, updating effective length for each non-zero byte
@@ -2283,32 +2284,32 @@ impl Assembler {
         }
     }
 
-    fn prune_lambda_aliases(&mut self) {
-        // addresses that have at least one non-λ (i.e., real) symbol
-        let named_addrs: std::collections::HashSet<u16> = self
-            .symbols
-            .iter()
-            .filter(|(n, _)| !n.starts_with('λ'))
-            .map(|(_, s)| s.address)
-            .collect();
+    // fn prune_lambda_aliases(&mut self) {
+    //     // addresses that have at least one non-λ (i.e., real) symbol
+    //     let named_addrs: std::collections::HashSet<u16> = self
+    //         .symbols
+    //         .iter()
+    //         .filter(|(n, _)| !n.starts_with('λ'))
+    //         .map(|(_, s)| s.address)
+    //         .collect();
 
-        // collect λ-names that live at those addresses
-        let to_remove: Vec<String> = self
-            .symbols
-            .iter()
-            .filter(|(n, _)| n.starts_with('λ'))
-            .filter(|(_, s)| named_addrs.contains(&s.address))
-            .map(|(n, _)| n.clone())
-            .collect();
+    //     // collect λ-names that live at those addresses
+    //     let to_remove: Vec<String> = self
+    //         .symbols
+    //         .iter()
+    //         .filter(|(n, _)| n.starts_with('λ'))
+    //         .filter(|(_, s)| named_addrs.contains(&s.address))
+    //         .map(|(n, _)| n.clone())
+    //         .collect();
 
-        for name in to_remove {
-            self.symbols.remove(&name);
-            if let Some(i) = self.symbol_order.iter().position(|x| *x == name) {
-                self.symbol_order.remove(i);
-            }
-            eprintln!("DEBUG: pruned λ alias '{}' (address already named)", name);
-        }
-    }
+    //     for name in to_remove {
+    //         self.symbols.remove(&name);
+    //         if let Some(i) = self.symbol_order.iter().position(|x| *x == name) {
+    //             self.symbol_order.remove(i);
+    //         }
+    //         eprintln!("DEBUG: pruned λ alias '{}' (address already named)", name);
+    //     }
+    // }
 
     /// Check if an instruction is unreachable in drif mode
     /// This implements drifblim's dead code elimination logic

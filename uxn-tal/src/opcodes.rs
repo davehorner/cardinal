@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 /// UXN opcode definitions
 pub struct Opcodes {
+    #[allow(dead_code)]
     opcodes: HashMap<String, u8>,
 }
 

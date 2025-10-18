@@ -1,7 +1,7 @@
 // src/fetch/resolver.rs
 use std::path::{PathBuf};
 use crate::{paths, util::hash_url};
-use super::{fetch_repo_tree, downloader};
+use super::downloader;
 
 pub fn resolve_entry_from_url(raw: &str)
     -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>>
