@@ -15,12 +15,7 @@ pub struct Console {
     stderr_listeners: Vec<Box<dyn FnMut(u8) + Send>>,
 }
 
-#[derive(
-    zerocopy::IntoBytes,
-    zerocopy::FromBytes,
-    zerocopy::KnownLayout,
-    zerocopy::Immutable,
-)]
+#[derive(zerocopy::IntoBytes, zerocopy::FromBytes, zerocopy::KnownLayout, zerocopy::Immutable)]
 #[repr(C)]
 pub struct ConsolePorts {
     vector: U16<BigEndian>,

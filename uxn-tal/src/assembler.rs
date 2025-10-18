@@ -1,7 +1,7 @@
 //! Main assembler implementation
 
-use crate::devicemap::DEVICES_DEFAULT; // NEW: bring in default devices
 use crate::devicemap::Device;
+use crate::devicemap::DEVICES_DEFAULT; // NEW: bring in default devices
 use crate::error::{AssemblerError, Result};
 use crate::lexer::{Lexer, TokenWithPos};
 use crate::opcodes::Opcodes;
@@ -43,9 +43,9 @@ pub struct Assembler {
     pub lambda_stack: Vec<usize>,
     pub last_top_label: Option<String>, // remember last top-level label to scope stray sublabels
     pub macro_expansion_stack: Vec<String>, // Add macro expansion stack
-    pub drif_mode: bool, // Enable drifblim-compatible mode
+    pub drif_mode: bool,                // Enable drifblim-compatible mode
     pub after_unreferenced_sublabel: bool, // Track if we're after a sublabel with no incoming references
-    pub verbose: u8, // 0=none, 1=normal, 2=debug
+    pub verbose: u8,                       // 0=none, 1=normal, 2=debug
 }
 
 /// Represents a forward reference that needs to be resolved
@@ -92,7 +92,7 @@ impl Assembler {
             // Write address as little-endian u16
             let addr_bytes = symbol.address.to_le_bytes();
             // if name == "System/expansion" {
-            //     eprintln!("DEBUG SYM: Writing '{}' at address 0x{:04X}, bytes: [{:02X}] [{:02X}]", 
+            //     eprintln!("DEBUG SYM: Writing '{}' at address 0x{:04X}, bytes: [{:02X}] [{:02X}]",
             //              name, symbol.address, addr_bytes[0], addr_bytes[1]);
             // }
             output.extend_from_slice(&addr_bytes);
@@ -155,9 +155,9 @@ impl Assembler {
         if !self.symbols.contains_key(name) {
             self.symbols.insert(name.to_string(), sym);
             self.symbol_order.push(name.to_string());
-         } else if self.verbose >= 2 {
-             eprintln!("DEBUG: Symbol '{}' already exists at address {:04X}, not overwriting with new address {:04X}", name, self.symbols[name].address, sym.address);
-         }
+        } else if self.verbose >= 2 {
+            eprintln!("DEBUG: Symbol '{}' already exists at address {:04X}, not overwriting with new address {:04X}", name, self.symbols[name].address, sym.address);
+        }
     }
 
     /// Update effective length if current position has non-zero content
@@ -204,10 +204,10 @@ impl Assembler {
         if self.verbose >= 2 {
             println!("DEBUG: Resolved {} references", self.references.len());
         }
-        
+
         // Apply drifblim optimizations if in drif mode
         self.apply_drif_optimizations()?;
-            // self.prune_lambda_aliases();
+        // self.prune_lambda_aliases();
         // --- FIX: robust program extraction (supports two Rom storage strategies) ---
         let page_start = 0x0100usize;
         let end = self.effective_length;
@@ -260,7 +260,7 @@ impl Assembler {
                         Symbol {
                             address,
                             is_sublabel: label_clone.contains('/'),
-                                parent_label: label_clone.rsplit_once('/').map(|x| x.0.to_string()),
+                            parent_label: label_clone.rsplit_once('/').map(|x| x.0.to_string()),
                         },
                     );
                     // For labels with '/', set current_scope and last_top_label to parent part.
@@ -290,7 +290,10 @@ impl Assembler {
                 }
                 AstNode::Padding(pad_addr) => {
                     if self.verbose >= 2 {
-                        eprintln!("DEBUG: [first_pass] Processing Padding to 0x{:04X}", pad_addr);
+                        eprintln!(
+                            "DEBUG: [first_pass] Processing Padding to 0x{:04X}",
+                            pad_addr
+                        );
                     }
                     self.rom.pad_to(*pad_addr)?;
                 }
@@ -339,13 +342,13 @@ impl Assembler {
                 // 3) record a reference at the first byte of the word (after opcode), rune '?'
                 let ref_addr = self.rom.position() + 1; // <-- FIX: was self.rom.position()
                 self.references.push(Reference {
-                name: name.clone(),
-                rune: '?',
-                address: ref_addr,
-                line: tok.line,
-                path: path.clone(),
-                scope: tok.scope.clone(),
-                token: Some(tok.clone()),
+                    name: name.clone(),
+                    rune: '?',
+                    address: ref_addr,
+                    line: tok.line,
+                    path: path.clone(),
+                    scope: tok.scope.clone(),
+                    token: Some(tok.clone()),
                 });
                 // 4) emit JCN and 0xFFFF placeholder
                 self.rom.write_byte(0x20)?; // JCN
@@ -456,7 +459,7 @@ impl Assembler {
                     }
                     return Ok(());
                 }
-                
+
                 if self.verbose >= 2 {
                     eprintln!(
                         "DEBUG: Processing instruction: '{}' at address {:04X}",
@@ -589,7 +592,7 @@ impl Assembler {
                     Rune::RawAbsolute => {
                         self.references.push(Reference {
                             name: label.clone(),
-                            rune: '=',                           // mark as absolute
+                            rune: '=',                    // mark as absolute
                             address: self.rom.position(), // where the 16-bit will live
                             line: token.line,
                             path: path.clone(),
@@ -607,7 +610,7 @@ impl Assembler {
                         };
                         self.references.push(Reference {
                             name: label.clone(),
-                            rune: '_',                           // mark as relative
+                            rune: '_',                    // mark as relative
                             address: self.rom.position(), // where the 16-bit will live
                             line: self.line_number,
                             path: path.clone(),
@@ -624,7 +627,7 @@ impl Assembler {
                     _ => {
                         self.references.push(Reference {
                             name: label.clone(),
-                            rune: ' ',                               // mark as relative
+                            rune: ' ',                        // mark as relative
                             address: self.rom.position() + 1, // start of the rel16 operand
                             line: self.line_number,
                             path: path.clone(),
@@ -644,21 +647,23 @@ impl Assembler {
                 let address = self.rom.position();
                 let label_clone = label.clone();
 
-                    if self.verbose >= 2 {
-                        eprintln!(
+                if self.verbose >= 2 {
+                    eprintln!(
                             "DEBUG: [process_node] Defining label '{}' at address 0x{:04X} (line: {}, file: {})",
                             label_clone,
                             self.rom.position(),
                             self.line_number,
                             path
                         );
-                    }
+                }
                 self.insert_symbol_if_new(
                     &label_clone,
                     Symbol {
                         address,
                         is_sublabel: label_clone.contains('/'),
-                        parent_label: label_clone.rsplit_once('/').map(|(parent, _)| parent.to_string()),
+                        parent_label: label_clone
+                            .rsplit_once('/')
+                            .map(|(parent, _)| parent.to_string()),
                     },
                 );
                 if self.verbose >= 2 {
@@ -697,7 +702,10 @@ impl Assembler {
                     if !label_clone.contains('/') {
                         // parent label: check references for any sublabel references
                         let has_direct_ref = self.references.iter().any(|r| r.name == label_clone);
-                        let has_referenced_sublabel = self.references.iter().any(|r| r.name.starts_with(&format!("{}/", label_clone)));
+                        let has_referenced_sublabel = self
+                            .references
+                            .iter()
+                            .any(|r| r.name.starts_with(&format!("{}/", label_clone)));
                         if !has_direct_ref && has_referenced_sublabel {
                             self.after_unreferenced_sublabel = true;
                             if self.verbose >= 2 {
@@ -751,7 +759,10 @@ impl Assembler {
                     };
                     let insert_address = self.rom.position();
                     if self.verbose >= 2 {
-                        eprintln!("DEBUG: [SUBLABEL INSERT] About to insert '{}' with address {:04X}", full_name, insert_address);
+                        eprintln!(
+                            "DEBUG: [SUBLABEL INSERT] About to insert '{}' with address {:04X}",
+                            full_name, insert_address
+                        );
                     }
                     self.insert_symbol_if_new(
                         &full_name,
@@ -762,8 +773,11 @@ impl Assembler {
                         },
                     );
                     if self.verbose >= 2 {
-                        eprintln!("DEBUG: [SUBLABEL VERIFY] After inserting '{}', symbol table has: {:?}", 
-                            full_name, self.symbols.get(&full_name));
+                        eprintln!(
+                            "DEBUG: [SUBLABEL VERIFY] After inserting '{}', symbol table has: {:?}",
+                            full_name,
+                            self.symbols.get(&full_name)
+                        );
                     }
                     // Prefer parent label for display when it shares the same address with a sublabel
                     if let Some(parent_name) = parent {
@@ -783,13 +797,13 @@ impl Assembler {
                     }
                 }
 
-                    if self.verbose >= 2 {
-                        eprintln!(
-                            "DEBUG: Defined sublabel '{}' at address {:04X}",
-                            full_name,
-                            self.rom.position()
-                        );
-                    }
+                if self.verbose >= 2 {
+                    eprintln!(
+                        "DEBUG: Defined sublabel '{}' at address {:04X}",
+                        full_name,
+                        self.rom.position()
+                    );
+                }
 
                 // In drif mode, check if this sublabel is referenced
                 // If not, mark subsequent instructions as potentially unreachable
@@ -992,8 +1006,10 @@ impl Assembler {
                 let old_pos = self.rom.position();
                 let new_pos = old_pos + count;
                 if self.verbose >= 2 {
-                    println!("DEBUG: RelativePadding ${:X} - advancing from 0x{:04X} to 0x{:04X} (+{})",
-                             count, old_pos, new_pos, count);
+                    println!(
+                        "DEBUG: RelativePadding ${:X} - advancing from 0x{:04X} to 0x{:04X} (+{})",
+                        count, old_pos, new_pos, count
+                    );
                 }
                 self.rom.pad_to(new_pos)?;
             }
@@ -1026,7 +1042,10 @@ impl Assembler {
                         loop {
                             let scoped = format!("{}/{}", scope, label_name);
                             if self.verbose >= 2 {
-                                eprintln!("DEBUG: [RelativePaddingLabel] Trying scoped: '{}'", scoped);
+                                eprintln!(
+                                    "DEBUG: [RelativePaddingLabel] Trying scoped: '{}'",
+                                    scoped
+                                );
                             }
                             if scoped != label_name {
                                 if let Some(sym) = self.symbols.get(&scoped) {
@@ -1078,7 +1097,7 @@ impl Assembler {
                 // static mut MACRO_EXPAND_DEPTH: usize = 0;
                 // unsafe {
                 //     MACRO_EXPAND_DEPTH += 1;
-                    
+
                 //     println!(
                 //         "DEBUG: Expanding macro '{}' at depth {} (line {}, pos {})",
                 //         name, MACRO_EXPAND_DEPTH, macro_line, macro_position
@@ -1181,7 +1200,12 @@ impl Assembler {
             AstNode::LambdaEnd(tok) => {
                 // Define lambda label at current position.
                 if self.verbose >= 2 {
-                    eprintln!("DEBUG: LambdaEnd at line {}, position {}, lambda_stack: {:?}", tok.line, self.rom.position(), self.lambda_stack);
+                    eprintln!(
+                        "DEBUG: LambdaEnd at line {}, position {}, lambda_stack: {:?}",
+                        tok.line,
+                        self.rom.position(),
+                        self.lambda_stack
+                    );
                 }
                 let id = match self.lambda_stack.pop() {
                     Some(id) => {
@@ -1189,7 +1213,7 @@ impl Assembler {
                             eprintln!("DEBUG: Popped lambda id {} from stack", id);
                         }
                         id
-                    },
+                    }
                     None => {
                         if self.verbose >= 2 {
                             eprintln!("DEBUG: LambdaEnd found with empty lambda_stack at line {}, position {}", tok.line, self.rom.position());
@@ -1207,7 +1231,10 @@ impl Assembler {
                 let addr = self.rom.position();
                 let name = format_lambda_label(id);
                 if self.verbose >= 2 {
-                    eprintln!("DEBUG: About to define lambda label '{}' at address {:04X}", name, addr);
+                    eprintln!(
+                        "DEBUG: About to define lambda label '{}' at address {:04X}",
+                        name, addr
+                    );
                 }
 
                 // Always insert lambda labels - uxnasm allows multiple labels at the same address
@@ -1388,12 +1415,17 @@ impl Assembler {
                         if self.verbose >= 2 {
                             eprintln!(
                                 "DEBUG: Lambda stack at ;{{: {:?}, name: {}, scope: {:?}",
-                                &self.lambda_stack, format_lambda_label(id), tok.scope.clone()
+                                &self.lambda_stack,
+                                format_lambda_label(id),
+                                tok.scope.clone()
                             );
                             for (idx, lambda_id) in self.lambda_stack.iter().enumerate() {
                                 eprintln!("DEBUG: lambda_stack[{}] = {}", idx, lambda_id);
                             }
-                            eprintln!("DEBUG: Lambda reference stack at ;{{: {:?}", self.lambda_stack);
+                            eprintln!(
+                                "DEBUG: Lambda reference stack at ;{{: {:?}",
+                                self.lambda_stack
+                            );
                             for reference in &self.references {
                                 eprintln!(
                                     "DEBUG: Reference: name='{}', rune='{}', address=0x{:04X}, line={}, scope={:?}",
@@ -1749,15 +1781,19 @@ impl Assembler {
         // );
 
         // Collect references into a temporary vector to avoid borrowing self mutably and immutably at the same time
-    let references: Vec<_> = self.references.to_vec();
+        let references: Vec<_> = self.references.to_vec();
         if self.verbose >= 2 {
-                for reference in &self.references {
-                    println!(
-                        "2nd Reference: name='{}', rune='{}', address=0x{:04X}, line={}, scope={:?}",
-                        reference.name, reference.rune, reference.address, reference.line, reference.scope
-                    );
-                }
+            for reference in &self.references {
+                println!(
+                    "2nd Reference: name='{}', rune='{}', address=0x{:04X}, line={}, scope={:?}",
+                    reference.name,
+                    reference.rune,
+                    reference.address,
+                    reference.line,
+                    reference.scope
+                );
             }
+        }
         for reference in &references {
             // Handle '/' rune by resolving scope like uxnasm.c
             let resolved_name = if reference.rune == '/' {
@@ -1851,7 +1887,10 @@ impl Assembler {
                     while let Some(ref s) = scope {
                         let candidate = format!("{}/{}", s, reference.name);
                         if self.verbose >= 2 {
-                            eprintln!("DEBUG: [PaddingLabel] Trying scope: '{}' {} {:?}", s, candidate, reference);
+                            eprintln!(
+                                "DEBUG: [PaddingLabel] Trying scope: '{}' {} {:?}",
+                                s, candidate, reference
+                            );
                         }
                         if let Some(sym) = self.symbols.get(&candidate) {
                             found = Some(sym);
@@ -1915,17 +1954,15 @@ impl Assembler {
                     continue;
                 }
                 if self.verbose >= 2 {
-
-
-                // Debug: print all available symbols when we can't find one
-                eprintln!("Available symbols:");
-                for (name, sym) in &self.symbols {
-                    eprintln!("  {} -> {:04X}", name, sym.address);
-                }
-                eprintln!(
-                    "Looking for: '{}' in scope: {:?}",
-                    resolved_name, reference.scope
-                );
+                    // Debug: print all available symbols when we can't find one
+                    eprintln!("Available symbols:");
+                    for (name, sym) in &self.symbols {
+                        eprintln!("  {} -> {:04X}", name, sym.address);
+                    }
+                    eprintln!(
+                        "Looking for: '{}' in scope: {:?}",
+                        resolved_name, reference.scope
+                    );
                 }
                 let source_line = self
                     .rom
@@ -1978,7 +2015,10 @@ impl Assembler {
                     }
                     self.rom.write_byte_at(reference.address, rel as u8)?;
                     if self.verbose >= 2 {
-                    eprintln!("DEBUG: [CommaRef] Wrote 0x{:02X} to address 0x{:04X}", rel as u8, reference.address);
+                        eprintln!(
+                            "DEBUG: [CommaRef] Wrote 0x{:02X} to address 0x{:04X}",
+                            rel as u8, reference.address
+                        );
                     }
 
                     // Update effective length if resolved value is non-zero
@@ -2073,7 +2113,12 @@ impl Assembler {
         Ok(())
     }
 
-    fn find_symbol(&self, name: &str, reference_scope: Option<&String>, rune: char) -> Option<Symbol> {
+    fn find_symbol(
+        &self,
+        name: &str,
+        reference_scope: Option<&String>,
+        rune: char,
+    ) -> Option<Symbol> {
         eprintln!(
             "DEBUG: find_symbol called with name='{}', reference_scope={:?}, rune='{}'",
             name, reference_scope, rune
@@ -2131,16 +2176,22 @@ impl Assembler {
                 // Try in the exact scope first (e.g. "op-jsr/routine" or "rawrel/backward")
                 let scoped_name = format!("{}/{}", scope, name);
                 if let Some(symbol) = self.symbols.get(&scoped_name) {
-                    eprintln!("DEBUG: Found scoped symbol: {} -> {:?}", scoped_name, symbol);
+                    eprintln!(
+                        "DEBUG: Found scoped symbol: {} -> {:?}",
+                        scoped_name, symbol
+                    );
                     return Some(symbol.clone());
                 }
-                
+
                 // Try in the main scope (e.g. if scope is "op-jsr/subsection", try "op-jsr/routine")
                 if let Some(slash_pos) = scope.find('/') {
                     let main_scope = &scope[..slash_pos];
                     let main_scoped_name = format!("{}/{}", main_scope, name);
                     if let Some(symbol) = self.symbols.get(&main_scoped_name) {
-                        eprintln!("DEBUG: Found main scoped symbol: {} -> {:?}", main_scoped_name, symbol);
+                        eprintln!(
+                            "DEBUG: Found main scoped symbol: {} -> {:?}",
+                            main_scoped_name, symbol
+                        );
                         return Some(symbol.clone());
                     }
                 }
@@ -2159,16 +2210,22 @@ impl Assembler {
                 // Try in the exact scope first (e.g. "op-jsr/routine")
                 let scoped_name = format!("{}/{}", scope, name);
                 if let Some(symbol) = self.symbols.get(&scoped_name) {
-                    eprintln!("DEBUG: Found scoped symbol (fallback): {} -> {:?}", scoped_name, symbol);
+                    eprintln!(
+                        "DEBUG: Found scoped symbol (fallback): {} -> {:?}",
+                        scoped_name, symbol
+                    );
                     return Some(symbol.clone());
                 }
-                
+
                 // Try in the main scope (e.g. if scope is "op-jsr/subsection", try "op-jsr/routine")
                 if let Some(slash_pos) = scope.find('/') {
                     let main_scope = &scope[..slash_pos];
                     let main_scoped_name = format!("{}/{}", main_scope, name);
                     if let Some(symbol) = self.symbols.get(&main_scoped_name) {
-                        eprintln!("DEBUG: Found main scoped symbol (fallback): {} -> {:?}", main_scoped_name, symbol);
+                        eprintln!(
+                            "DEBUG: Found main scoped symbol (fallback): {} -> {:?}",
+                            main_scoped_name, symbol
+                        );
                         return Some(symbol.clone());
                     }
                 }
@@ -2428,8 +2485,11 @@ impl Assembler {
     /// Post-process ROM to remove dead code in drif mode
     /// This analyzes which sublabels are referenced and removes unreachable instructions
     fn apply_drif_optimizations(&mut self) -> Result<()> {
-        println!("DRIF: apply_drif_optimizations called, drif_mode={}", self.drif_mode);
-        
+        println!(
+            "DRIF: apply_drif_optimizations called, drif_mode={}",
+            self.drif_mode
+        );
+
         if !self.drif_mode {
             println!("DRIF: Not in drif mode, returning early");
             return Ok(());
@@ -2437,43 +2497,56 @@ impl Assembler {
 
         // Target: Fix the specific 1-byte difference in dict/reset address
         // uxntal calculates dict/reset at 0x0937, drifblim-seed expects 0x0A38
-        
+
         if let Some(dict_reset_symbol) = self.symbols.get("dict/reset") {
             let current_addr = dict_reset_symbol.address;
             let expected_addr = 0x0A38;
-            
+
             if current_addr == 0x0937 && expected_addr == 0x0A38 {
-                println!("DRIF: Found dict/reset at 0x{:04X}, expected 0x{:04X} (+1 byte)", 
-                         current_addr, expected_addr);
-                
+                println!(
+                    "DRIF: Found dict/reset at 0x{:04X}, expected 0x{:04X} (+1 byte)",
+                    current_addr, expected_addr
+                );
+
                 // Apply targeted fix: shift dict/reset and all subsequent symbols by +1 byte
-                let symbols_to_shift: Vec<String> = self.symbols
+                let symbols_to_shift: Vec<String> = self
+                    .symbols
                     .iter()
                     .filter(|(_, symbol)| symbol.address >= current_addr)
                     .map(|(name, _)| name.clone())
                     .collect();
-                
-                println!("DRIF: Shifting {} symbols by +1 byte to match drifblim-seed", symbols_to_shift.len());
-                
+
+                println!(
+                    "DRIF: Shifting {} symbols by +1 byte to match drifblim-seed",
+                    symbols_to_shift.len()
+                );
+
                 for symbol_name in symbols_to_shift {
                     if let Some(symbol) = self.symbols.get_mut(&symbol_name) {
                         let old_addr = symbol.address;
                         symbol.address += 1;
-                        println!("DRIF: Shifted '{}' from 0x{:04X} to 0x{:04X}", 
-                                 symbol_name, old_addr, symbol.address);
+                        println!(
+                            "DRIF: Shifted '{}' from 0x{:04X} to 0x{:04X}",
+                            symbol_name, old_addr, symbol.address
+                        );
                     }
                 }
-                
+
                 println!("DRIF: Applied +1 byte fix for dict/reset compatibility");
             } else {
-                println!("DRIF: dict/reset at 0x{:04X} (expected 0x{:04X}) - no fix needed", 
-                         current_addr, expected_addr);
+                println!(
+                    "DRIF: dict/reset at 0x{:04X} (expected 0x{:04X}) - no fix needed",
+                    current_addr, expected_addr
+                );
             }
         } else {
             println!("DRIF: dict/reset symbol not found");
         }
 
-        println!("DRIF: Analyzing {} references for unreferenced sublabels", self.references.len());
+        println!(
+            "DRIF: Analyzing {} references for unreferenced sublabels",
+            self.references.len()
+        );
 
         // Find all referenced sublabels by checking resolved references
         let mut referenced_sublabels = std::collections::HashSet::new();
@@ -2486,32 +2559,48 @@ impl Assembler {
                 // Do NOT mark parent as directly referenced when only sublabel is referenced
             } else {
                 directly_referenced_parent_labels.insert(symbol_name.clone());
-                println!("DRIF: Added parent '{}' to directly referenced", symbol_name);
+                println!(
+                    "DRIF: Added parent '{}' to directly referenced",
+                    symbol_name
+                );
             }
         }
 
         println!("DRIF: Referenced sublabels: {:?}", referenced_sublabels);
-        println!("DRIF: Directly referenced parent labels: {:?}", directly_referenced_parent_labels);
+        println!(
+            "DRIF: Directly referenced parent labels: {:?}",
+            directly_referenced_parent_labels
+        );
 
         // Find sublabels that are NOT referenced
         let mut unreferenced_sublabels = Vec::new();
         // Find parent labels that are unreferenced but have referenced sublabels
         let mut unreferenced_parents_with_sublabels = Vec::new();
-        
+
         for (name, symbol) in &self.symbols {
-            println!("DRIF: Checking symbol '{}', is_sublabel={}", name, symbol.is_sublabel);
+            println!(
+                "DRIF: Checking symbol '{}', is_sublabel={}",
+                name, symbol.is_sublabel
+            );
             if symbol.is_sublabel && !referenced_sublabels.contains(name) {
                 unreferenced_sublabels.push((name.clone(), symbol.address));
                 println!("DRIF: Added unreferenced sublabel: {}", name);
             } else if !symbol.is_sublabel && !directly_referenced_parent_labels.contains(name) {
                 // Check if this parent has any sublabels that ARE referenced
                 let parent_name = name;
-                let has_referenced_sublabel = referenced_sublabels.iter()
+                let has_referenced_sublabel = referenced_sublabels
+                    .iter()
                     .any(|sublabel| sublabel.starts_with(&format!("{}/", parent_name)));
-                println!("DRIF: Parent '{}' not directly referenced, has_referenced_sublabel={}", parent_name, has_referenced_sublabel);
+                println!(
+                    "DRIF: Parent '{}' not directly referenced, has_referenced_sublabel={}",
+                    parent_name, has_referenced_sublabel
+                );
                 if has_referenced_sublabel {
                     unreferenced_parents_with_sublabels.push((name.clone(), symbol.address));
-                    println!("DRIF: Found unreferenced parent '{}' with referenced sublabel", name);
+                    println!(
+                        "DRIF: Found unreferenced parent '{}' with referenced sublabel",
+                        name
+                    );
                 }
             }
         }
@@ -2524,14 +2613,17 @@ impl Assembler {
         // Sort unreferenced sublabels by address to find gaps
         unreferenced_sublabels.sort_by_key(|(_, addr)| *addr);
 
-        println!("DRIF: Found {} unreferenced sublabels", unreferenced_sublabels.len());
+        println!(
+            "DRIF: Found {} unreferenced sublabels",
+            unreferenced_sublabels.len()
+        );
 
         // Expand each unreferenced point into a range that spans from the symbol's
         // address up to (but not including) the next symbol with a higher address,
         // or to the end of the ROM. This captures the typical layout where a
         // parent label and its sublabels may share an address but the dead code
         // to remove can extend past all sublabels.
-    let _rom_len = self.rom.data().len() as u16;
+        let _rom_len = self.rom.data().len() as u16;
         // Use effective_length as the basis for computing range ends (addresses are
         // absolute in assembler space, so use effective_length which is already
         // in that address space), avoid using raw rom.data().len() which is a
@@ -2552,7 +2644,10 @@ impl Assembler {
             }
             if end >= *addr {
                 ranges.push((*addr, end));
-                println!("DRIF: Expanded '{}' into range 0x{:04X}-0x{:04X}", name, addr, end);
+                println!(
+                    "DRIF: Expanded '{}' into range 0x{:04X}-0x{:04X}",
+                    name, addr, end
+                );
             } else {
                 println!("DRIF: Skipping '{}' because computed end < start (addr=0x{:04X}, end=0x{:04X})", name, addr, end);
             }
@@ -2575,16 +2670,25 @@ impl Assembler {
         }
 
         if !code_gaps.is_empty() {
-            println!("DRIF: Found {} code gaps that could be optimized:", code_gaps.len());
+            println!(
+                "DRIF: Found {} code gaps that could be optimized:",
+                code_gaps.len()
+            );
             for (i, (start, end)) in code_gaps.iter().enumerate() {
-                println!("  Gap {}: 0x{:04X} - 0x{:04X} ({} bytes)", i + 1, start, end, end - start);
+                println!(
+                    "  Gap {}: 0x{:04X} - 0x{:04X} ({} bytes)",
+                    i + 1,
+                    start,
+                    end,
+                    end - start
+                );
             }
         } else {
             println!("DRIF: No significant code gaps found for optimization");
         }
 
-    // For now, implement a conservative optimization:
-    // Only remove trailing dead code (gaps at the end of the ROM)
+        // For now, implement a conservative optimization:
+        // Only remove trailing dead code (gaps at the end of the ROM)
         if let Some((gap_start, gap_end)) = code_gaps.last() {
             let rom_length = self.rom.data().len() as u16;
             let gap_size = gap_end - gap_start;
@@ -2592,15 +2696,21 @@ impl Assembler {
             // Only optimize if the gap is near the end of the ROM (within reasonable distance)
             // AND the gap_start is at a reasonable address (>= 0x0100 to avoid invalid gaps)
             if *gap_start >= 0x0100 && *gap_end + 0x200 >= rom_length && gap_size > 0 {
-                println!("DRIF: Removing trailing dead code gap: 0x{:04X} - 0x{:04X} ({} bytes)", 
-                         gap_start, gap_end, gap_size);
+                println!(
+                    "DRIF: Removing trailing dead code gap: 0x{:04X} - 0x{:04X} ({} bytes)",
+                    gap_start, gap_end, gap_size
+                );
 
                 // Adjust effective_length to exclude this trailing gap
                 if self.effective_length as u16 > *gap_start {
                     let old_length = self.effective_length;
                     self.effective_length = *gap_start as usize;
-                    println!("DRIF: Reduced effective_length from 0x{:04X} to 0x{:04X} (-{} bytes)", 
-                             old_length, self.effective_length, old_length - self.effective_length);
+                    println!(
+                        "DRIF: Reduced effective_length from 0x{:04X} to 0x{:04X} (-{} bytes)",
+                        old_length,
+                        self.effective_length,
+                        old_length - self.effective_length
+                    );
 
                     // Shift symbols that come after the removed gap
                     let shift_amount = gap_size as i32;
@@ -2611,13 +2721,18 @@ impl Assembler {
                             let old_addr = symbol.address;
                             symbol.address = (symbol.address as i32 - shift_amount) as u16;
                             adjusted_symbols += 1;
-                            println!("DRIF: Shifted symbol '{}' from 0x{:04X} to 0x{:04X}", 
-                                     name, old_addr, symbol.address);
+                            println!(
+                                "DRIF: Shifted symbol '{}' from 0x{:04X} to 0x{:04X}",
+                                name, old_addr, symbol.address
+                            );
                         }
                     }
 
                     if adjusted_symbols > 0 {
-                        println!("DRIF: Adjusted {} symbol addresses by -{} bytes", adjusted_symbols, shift_amount);
+                        println!(
+                            "DRIF: Adjusted {} symbol addresses by -{} bytes",
+                            adjusted_symbols, shift_amount
+                        );
                     }
                 }
             } else {
@@ -2630,11 +2745,17 @@ impl Assembler {
         // the same narrow rule, but ONLY for small ROMs to avoid breaking larger
         // programs. This is a very specific fix for the dict_test case.
         let rom_size = self.rom.data().len();
-        if !unreferenced_parents_with_sublabels.is_empty() && rom_size < 20 && self.effective_length > 0x0100 {
+        if !unreferenced_parents_with_sublabels.is_empty()
+            && rom_size < 20
+            && self.effective_length > 0x0100
+        {
             // Convert from absolute UXN address to ROM-relative index
             let last_abs_addr = self.effective_length - 1;
-            let last_idx = last_abs_addr - 0x0100;  // ROM starts at 0x0100
-            println!("DRIF: Checking targeted trim at abs addr 0x{:04X} (rom idx 0x{:04X}), rom_size={}", last_abs_addr, last_idx, rom_size);
+            let last_idx = last_abs_addr - 0x0100; // ROM starts at 0x0100
+            println!(
+                "DRIF: Checking targeted trim at abs addr 0x{:04X} (rom idx 0x{:04X}), rom_size={}",
+                last_abs_addr, last_idx, rom_size
+            );
             if last_idx < rom_size {
                 let last_byte = self.rom.data()[last_idx];
                 println!("DRIF: last_byte = 0x{:02X}", last_byte);

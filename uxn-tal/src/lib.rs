@@ -1,9 +1,3 @@
-
-
-
-
-
-
 /// # UXN TAL Assembler
 ///
 /// A Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.
@@ -40,34 +34,32 @@ type AssembleDirectoryResult = (
     usize,
 );
 
-
-
 pub mod assembler;
-pub mod chocolatal;
+pub mod bkend;
+pub mod bkend_buxn;
 pub mod bkend_drif;
+pub mod bkend_uxn;
+pub mod bkend_uxn38;
+pub mod chocolatal;
 pub mod debug;
 pub mod devicemap;
+pub mod dis_uxndis;
+pub mod emu_uxncli;
 pub mod error;
+pub mod hexrev;
 pub mod lexer;
 pub mod opcode_table;
 pub mod opcodes;
 pub mod parser;
 pub mod rom;
 pub mod runes;
-pub mod hexrev;
-pub mod dis_uxndis;
-pub mod emu_uxncli;
 pub mod wsl;
-pub mod bkend;
-pub mod bkend_uxn;
-pub mod bkend_buxn;
-pub mod bkend_uxn38;
 pub use assembler::Assembler;
 pub use error::AssemblerError;
 pub mod fetch;
+pub mod paths;
 pub mod urlutil;
 pub mod util;
-pub mod paths;
 pub use fetch::resolver::resolve_entry_from_url;
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();
@@ -133,10 +125,7 @@ pub fn assemble_file_with_symbols<P: AsRef<std::path::Path>>(
 pub fn assemble_directory<P: AsRef<std::path::Path>>(
     dir_path: P,
     generate_symbols: bool,
-) -> Result<
-    Vec<AssembleDirectoryResult>,
-    AssemblerError,
-> {
+) -> Result<Vec<AssembleDirectoryResult>, AssemblerError> {
     let dir_path = dir_path.as_ref();
     let mut results = Vec::new();
 
@@ -241,9 +230,7 @@ pub fn generate_rust_interface_module(
             };
             out.push_str(&format!(
                 "            \"{name}\" => Some(&ram[_c{}.._c{}+_c{}_SIZE]),\n",
-                id,
-                id,
-                id
+                id, id, id
             ));
         }
     }

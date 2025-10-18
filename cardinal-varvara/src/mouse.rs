@@ -3,12 +3,7 @@ use uxn::{Ports, Uxn};
 use zerocopy::{BigEndian, U16};
 
 #[repr(C)]
-#[derive(
-    zerocopy::Immutable,
-    zerocopy::IntoBytes,
-    zerocopy::FromBytes,
-    zerocopy::KnownLayout,
-)]
+#[derive(zerocopy::Immutable, zerocopy::IntoBytes, zerocopy::FromBytes, zerocopy::KnownLayout)]
 pub struct MousePorts {
     vector: U16<BigEndian>,
     x: U16<BigEndian>,
@@ -87,8 +82,7 @@ impl Mouse {
         // Send scrolls as one-tick updates on a per-frame basis
         if self.scroll.0.abs() > 1.0 {
             changed = true;
-            let amount = self.scroll.0.abs().min(i16::MAX as f32)
-                * self.scroll.0.signum();
+            let amount = self.scroll.0.abs().min(i16::MAX as f32) * self.scroll.0.signum();
             m.scroll_x.set((amount as i16) as u16);
             self.scroll.0 -= (amount as i16) as f32;
         } else {
@@ -97,8 +91,7 @@ impl Mouse {
 
         if self.scroll.1.abs() > 1.0 {
             changed = true;
-            let amount = self.scroll.1.abs().min(i16::MAX as f32)
-                * self.scroll.1.signum();
+            let amount = self.scroll.1.abs().min(i16::MAX as f32) * self.scroll.1.signum();
             m.scroll_y.set((amount as i16) as u16);
             self.scroll.1 -= (amount as i16) as f32;
         } else {

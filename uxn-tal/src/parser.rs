@@ -110,8 +110,8 @@ enum BraceKind {
 
 impl Parser {
     pub fn new_with_source(tokens: Vec<TokenWithPos>, path: String, source: String) -> Self {
-    let line = tokens.first().map(|t| t.line).unwrap_or(1);
-    let position_in_line = tokens.first().map(|t| t.start_pos).unwrap_or(1);
+        let line = tokens.first().map(|t| t.line).unwrap_or(1);
+        let position_in_line = tokens.first().map(|t| t.start_pos).unwrap_or(1);
         // Build macro table from tokens
         let mut macro_table = std::collections::HashSet::new();
         for t in &tokens {

@@ -6,24 +6,22 @@ use std::{
     process::exit,
 };
 // use base64::Engine;
-use uxn_tal::resolve_entry_from_url;
+use std::io::Write;
+use std::process::Command;
+use uxn_tal::bkend_buxn::{ensure_buxn_repo, ensure_docker_buxn_image};
+use uxn_tal::bkend_drif::ensure_drifblim_repo;
 use uxn_tal::bkend_uxn::{ensure_docker_uxn_image, ensure_uxn_repo};
 use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
-use uxn_tal::bkend_buxn::{ensure_buxn_repo, ensure_docker_buxn_image};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
-use uxn_tal::bkend_drif::ensure_drifblim_repo;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
+use uxn_tal::resolve_entry_from_url;
 use uxn_tal::util::pause_on_error;
 use uxn_tal::{Assembler, AssemblerError};
-use std::process::Command;
-use std::io::Write;
 // use std::fs::File;
 // use std::hash::{Hasher, Hash};
 // use std::collections::hash_map::DefaultHasher;
 // use std::time::Duration;
-
-
 
 fn main() {
     if let Err(e) = real_main() {
@@ -60,46 +58,45 @@ fn real_main() -> Result<(), AssemblerError> {
             || raw_url == "uxntal://"
             || raw_url == "uxntal:///"
         {
-                // #[cfg(feature = "uses_gui")]
-                // {
-                //     println!("Starting GUI...");
-                //     if let Err(e) = gui::start_gui().await {
-                //         eprintln!("GUI error: {}", e);
-                //         log::error!("GUI error: {}", e);
-                //         std::process::exit(1);
-                //     }
-                // }
+            // #[cfg(feature = "uses_gui")]
+            // {
+            //     println!("Starting GUI...");
+            //     if let Err(e) = gui::start_gui().await {
+            //         eprintln!("GUI error: {}", e);
+            //         log::error!("GUI error: {}", e);
+            //         std::process::exit(1);
+            //     }
+            // }
 
-                // #[cfg(not(feature = "uses_gui"))]
-                // {
-                //     eprintln!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
-                //     log::error!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
-                //     std::process::exit(1);
-                // }
+            // #[cfg(not(feature = "uses_gui"))]
+            // {
+            //     eprintln!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
+            //     log::error!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
+            //     std::process::exit(1);
+            // }
             std::process::exit(0);
         }
 
         if raw_url.starts_with("uxntal://") {
+            let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Failed to resolve uxntal URL: {}", e);
+                    pause_on_error();
+                    std::process::exit(1);
+                }
+            };
+            println!("Resolved entry: {}", entry_local.display());
 
+            run_after_assembly = Some("cardinal-gui".to_owned());
+            run_after_cwd = Some(rom_dir.clone());
 
-let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
-    Ok(v) => v,
-    Err(e) => { eprintln!("Failed to resolve uxntal URL: {}", e); 
-                pause_on_error();
-                std::process::exit(1); }
-};
-println!("Resolved entry: {}", entry_local.display());
-
-run_after_assembly = Some("cardinal-gui".to_owned());
-run_after_cwd = Some(rom_dir.clone());
-
-// Replace args[0] so the rest compiles the correct file
-args[0] = entry_local
-    .strip_prefix(r"\\?\")
-    .unwrap_or(&entry_local)
-    .display()
-    .to_string();
-
+            // Replace args[0] so the rest compiles the correct file
+            args[0] = entry_local
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&entry_local)
+                .display()
+                .to_string();
 
             // println!("Handling uxntal:// URL: {}", raw_url);
             // let rebuilt_url = if let Some(rebuilt_url) = extract_target_from_uxntal(raw_url) {
@@ -128,7 +125,7 @@ args[0] = entry_local
             // //     // fallback: treat as a normal path or URL
             // //     path_part.to_string()
             // // };
-        
+
             // // log::debug!("Received URL: {}", raw_url);
             // println!("Received URL: {:?}", rebuilt_url);
             // // let status = Command::new("e_window")
@@ -152,7 +149,7 @@ args[0] = entry_local
             //     url.hash(&mut hasher);
             //     hasher.finish()
             // }
-        
+
             // // Extract filename from URL, fallback to "downloaded.tal"
             // fn filename_from_url(url: &str) -> String {
             //     url.split('/')
@@ -161,7 +158,7 @@ args[0] = entry_local
             //         .unwrap_or("downloaded.tal")
             //         .to_string()
             // }
-        
+
             // // Download the file from the URL
             // fn download_url(url: &str, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
             //     let resp = reqwest::blocking::get(url)?;
@@ -187,7 +184,6 @@ args[0] = entry_local
             //     file.write_all(&bytes)?;
             //     Ok(())
             // }
-        
 
             // let url = &rebuilt_url;
             // let hash = hash_url(url);
@@ -200,7 +196,7 @@ args[0] = entry_local
             // //     .status();
             // fs::create_dir_all(&rom_dir).map_err(|e| simple_err(&rom_dir, &format!("failed to create dir: {e}")))?;
             // let file_path = rom_dir.join(&fname);
-        
+
             // if !file_path.exists() {
             //     println!("Downloading {} to {}", url, file_path.display());
             //     if let Err(e) = download_url(url, &file_path) {
@@ -279,8 +275,6 @@ args[0] = entry_local
             } else {
                 rust_iface = Some("symbols".to_string());
             }
-
-
         } else if a.starts_with("--r") {
             // Forms:
             //   --root
@@ -327,7 +321,7 @@ args[0] = entry_local
             }
         };
         // Call debug::compare_preprocessors and exit
-    if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), root_dir) {
+        if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), root_dir) {
             eprintln!("compare_preprocessors error: {e}");
             exit(1);
         }
@@ -436,7 +430,9 @@ args[0] = entry_local
     let rom_path_str = rom_path_p.display().to_string();
     let rom_path = rom_path_str.strip_prefix(r"\\?\").unwrap_or(&rom_path_str);
     let canon_input_str = canon_input_p.display().to_string();
-    let canon_input = canon_input_str.strip_prefix(r"\\?\").unwrap_or(&canon_input_str);
+    let canon_input = canon_input_str
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&canon_input_str);
     if want_verbose {
         eprintln!("Resolved input : {}", canon_input);
         eprintln!("Output ROM     : {}", rom_path);
@@ -516,12 +512,14 @@ args[0] = entry_local
         } else {
             debug::DebugAssembler::default()
         };
-        let rel_path = match canon_input_p.strip_prefix(std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))) {
+        let rel_path = match canon_input_p
+            .strip_prefix(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        {
             Ok(p) => p.display().to_string(),
             Err(_) => canon_input_p.display().to_string(),
         };
         eprintln!("Relative path to input: {}", rel_path);
-        let res = dbg.assemble_and_compare( &rel_path,&processed_src, true);
+        let res = dbg.assemble_and_compare(&rel_path, &processed_src, true);
         return res.map(|_| ());
     }
 
@@ -530,12 +528,20 @@ args[0] = entry_local
         if rom_path_p.exists() {
             println!("ROM already exists at {}", rom_path);
         } else {
-            fs::copy(&canon_input_p, &rom_path_p)
-                .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to copy rom: {e}")))?;
+            fs::copy(&canon_input_p, &rom_path_p).map_err(|e| {
+                simple_err(Path::new(rom_path), &format!("failed to copy rom: {e}"))
+            })?;
             if want_verbose {
-                eprintln!("Copied ROM ({} bytes)", fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0));
+                eprintln!(
+                    "Copied ROM ({} bytes)",
+                    fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0)
+                );
             } else {
-                println!("{} ({} bytes)", rom_path, fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0));
+                println!(
+                    "{} ({} bytes)",
+                    rom_path,
+                    fs::metadata(&rom_path_p).map(|m| m.len()).unwrap_or(0)
+                );
             }
         }
     } else if run_after_assembly.is_some() {
@@ -550,8 +556,9 @@ args[0] = entry_local
                     return Err(e);
                 }
             };
-            fs::write(rom_path, &rom)
-                .map_err(|e| simple_err(Path::new(rom_path), &format!("failed to write rom: {e}")))?;
+            fs::write(rom_path, &rom).map_err(|e| {
+                simple_err(Path::new(rom_path), &format!("failed to write rom: {e}"))
+            })?;
             if want_verbose {
                 eprintln!("Wrote ROM ({} bytes)", rom.len());
             } else {
@@ -576,7 +583,7 @@ args[0] = entry_local
             println!("{} ({} bytes)", rom_path, rom.len());
         }
     }
-        
+
     if let Some(module_name) = rust_iface {
         let mod_src = uxn_tal::generate_rust_interface_module(&asm, &module_name);
         let iface_path = rom_path_p.with_extension("rom.symbols.rs");
@@ -605,12 +612,21 @@ args[0] = entry_local
                     Err(())
                 }
             })
-            .map_err(|_| simple_err(Path::new("."), &format!("{cmd_name} not found in PATH or ~/.cargo/bin")))?;
+            .map_err(|_| {
+                simple_err(
+                    Path::new("."),
+                    &format!("{cmd_name} not found in PATH or ~/.cargo/bin"),
+                )
+            })?;
         println!("Running post-assembly command: {}", cmd);
         let dir_str = run_after_cwd
             .as_ref()
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_else(|_| ".".to_string()));
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| ".".to_string())
+            });
         println!("In directory: {}", dir_str);
 
         let status = Command::new(path_to_emu)
@@ -678,7 +694,6 @@ fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
 
 // UPDATED: multi-root recursive search
 fn resolve_input_path(arg: &str) -> Option<PathBuf> {
-    
     let direct = PathBuf::from(arg);
     if direct.exists() {
         return Some(direct);
@@ -767,11 +782,11 @@ fn recursive_find(root: &Path, needle: &str, cap: usize) -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn register_protocol_per_user() -> std::io::Result<()> {
-    use std::io::{Write, stdin, stdout};
+    use std::io::{stdin, stdout, Write};
     use std::path::PathBuf;
     use std::process::Command;
 
-        // Check for Xcode command line tools (xcrun and swiftc)
+    // Check for Xcode command line tools (xcrun and swiftc)
     if which::which("xcrun").is_err() || which::which("swiftc").is_err() {
         eprintln!("Error: Xcode command line tools are required to register the protocol handler.");
         eprintln!("Please install them with: xcode-select --install");
@@ -795,7 +810,8 @@ fn register_protocol_per_user() -> std::io::Result<()> {
     fs::create_dir_all(&temp_dir)?;
 
     // Write AppDelegate.swift (no @main)
-    let swift_app_delegate = format!(r#"
+    let swift_app_delegate = format!(
+        r#"
 import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {{
@@ -812,7 +828,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {{
         NSApp.terminate(nil)
     }}
 }}
-"#, bin_path = uxntal_path.display());
+"#,
+        bin_path = uxntal_path.display()
+    );
     let mut f = std::fs::File::create(&app_delegate_file)?;
     f.write_all(swift_app_delegate.as_bytes())?;
 
@@ -828,7 +846,8 @@ _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     f.write_all(swift_main.as_bytes())?;
 
     // Write Info.plist with correct version
-    let plist = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -857,7 +876,10 @@ _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     </array>
 </dict>
 </plist>
-"#, version=version, app_name=app_name);
+"#,
+        version = version,
+        app_name = app_name
+    );
     let mut f = std::fs::File::create(&plist_file)?;
     f.write_all(plist.as_bytes())?;
 
@@ -865,7 +887,8 @@ _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     let status = Command::new("xcrun")
         .args([
             "swiftc",
-            "-o", &format!("{}/{}", temp_dir.display(), app_name),
+            "-o",
+            &format!("{}/{}", temp_dir.display(), app_name),
             main_file.to_str().unwrap(),
             app_delegate_file.to_str().unwrap(),
         ])
@@ -879,16 +902,16 @@ _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     let app_contents = app_bundle.join("Contents");
     let macos_dir = app_contents.join("MacOS");
     fs::create_dir_all(&macos_dir)?;
-    fs::copy(
-        temp_dir.join(app_name),
-        macos_dir.join(app_name),
-    )?;
+    fs::copy(temp_dir.join(app_name), macos_dir.join(app_name))?;
     fs::copy(&plist_file, app_contents.join("Info.plist"))?;
 
     // Move to ~/Applications as uxntal.app
     let user_app = PathBuf::from(format!("{}/Applications/uxntal.app", home));
     if user_app.exists() {
-        println!("An existing uxntal.app was found at {}.", user_app.display());
+        println!(
+            "An existing uxntal.app was found at {}.",
+            user_app.display()
+        );
         print!("Do you want to remove it and create a new one? [y/N]: ");
         stdout().flush().ok();
         let mut answer = String::new();
@@ -978,30 +1001,30 @@ fn register_protocol_per_user() -> std::io::Result<()> {
     }
 
     #[cfg(unix)]
-{
-    // Get the path to the executable
-    let exe = std::env::current_exe()?.display().to_string();
+    {
+        // Get the path to the executable
+        let exe = std::env::current_exe()?.display().to_string();
 
-    // Define the paths for .desktop and MIME files
-    let home_dir = std::env::var("HOME").map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("HOME environment variable not found: {}", e),
-        )
-    })?;
-    let desktop_file_path = format!("{}/.local/share/applications/uxntal.desktop", home_dir);
-    let mime_file_path = format!(
-        "{}/.local/share/mime/packages/x-scheme-handler-uxntal.xml",
-        home_dir
-    );
+        // Define the paths for .desktop and MIME files
+        let home_dir = std::env::var("HOME").map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("HOME environment variable not found: {}", e),
+            )
+        })?;
+        let desktop_file_path = format!("{}/.local/share/applications/uxntal.desktop", home_dir);
+        let mime_file_path = format!(
+            "{}/.local/share/mime/packages/x-scheme-handler-uxntal.xml",
+            home_dir
+        );
 
-    // Create the parent directory for the MIME file if it doesn't exist
-    if let Some(parent) = std::path::Path::new(&mime_file_path).parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+        // Create the parent directory for the MIME file if it doesn't exist
+        if let Some(parent) = std::path::Path::new(&mime_file_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
-    // Create the MIME type XML file
-    let mime_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+        // Create the MIME type XML file
+        let mime_content = r#"<?xml version="1.0" encoding="UTF-8"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
     <mime-type type="x-scheme-handler/uxntal">
         <comment>UXNTAL Protocol</comment>
@@ -1009,12 +1032,12 @@ fn register_protocol_per_user() -> std::io::Result<()> {
     </mime-type>
 </mime-info>
 "#;
-    let mut mime_file = std::fs::File::create(&mime_file_path)?;
-    mime_file.write_all(mime_content.as_bytes())?;
+        let mut mime_file = std::fs::File::create(&mime_file_path)?;
+        mime_file.write_all(mime_content.as_bytes())?;
 
-    // Create the .desktop file content
-    let desktop_content = format!(
-        r#"[Desktop Entry]
+        // Create the .desktop file content
+        let desktop_content = format!(
+            r#"[Desktop Entry]
 Name=UXNTAL Handler
 Exec={} %u
 Type=Application
@@ -1022,69 +1045,67 @@ Terminal=false
 MimeType=x-scheme-handler/uxntal;
 NoDisplay=true
 "#,
-        exe
-    );
+            exe
+        );
 
-    // Create the parent directory for the .desktop file if it doesn't exist
-    if let Some(parent) = std::path::Path::new(&desktop_file_path).parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+        // Create the parent directory for the .desktop file if it doesn't exist
+        if let Some(parent) = std::path::Path::new(&desktop_file_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
-    // Write the .desktop file
-    let mut desktop_file = std::fs::File::create(&desktop_file_path)?;
-    desktop_file.write_all(desktop_content.as_bytes())?;
+        // Write the .desktop file
+        let mut desktop_file = std::fs::File::create(&desktop_file_path)?;
+        desktop_file.write_all(desktop_content.as_bytes())?;
 
-    // Register the MIME type with xdg-mime
-    let status1 = Command::new("xdg-mime")
-        .args(["install", "--mode", "user", &mime_file_path])
-        .status()?;
+        // Register the MIME type with xdg-mime
+        let status1 = Command::new("xdg-mime")
+            .args(["install", "--mode", "user", &mime_file_path])
+            .status()?;
 
-    // Associate the .desktop file with the MIME type
-    let status2 = Command::new("xdg-mime")
-        .args(["default", "uxntal.desktop", "x-scheme-handler/uxntal"])
-        .status()?;
+        // Associate the .desktop file with the MIME type
+        let status2 = Command::new("xdg-mime")
+            .args(["default", "uxntal.desktop", "x-scheme-handler/uxntal"])
+            .status()?;
 
-    // Update the desktop database
-    let status3 = Command::new("update-desktop-database")
-        .arg(format!("{}/.local/share/applications", home_dir))
-        .status()?;
+        // Update the desktop database
+        let status3 = Command::new("update-desktop-database")
+            .arg(format!("{}/.local/share/applications", home_dir))
+            .status()?;
 
-    if status1.success() && status2.success() && status3.success() {
-        println!("Registered uxntal:// protocol for current user on Ubuntu.");
-    } else {
-        eprintln!(
+        if status1.success() && status2.success() && status3.success() {
+            println!("Registered uxntal:// protocol for current user on Ubuntu.");
+        } else {
+            eprintln!(
             "Failed: xdg-mime install status: {:?}, xdg-mime default status: {:?}, update-desktop-database status: {:?}",
             status1.code(),
             status2.code(),
             status3.code()
         );
-        // Clean up created files in case of failure
-        let _ = std::fs::remove_file(&desktop_file_path);
-        let _ = std::fs::remove_file(&mime_file_path);
-        return Err(std::io::Error::other(
-            "Failed to register protocol on Ubuntu",
-        ));
-    }
+            // Clean up created files in case of failure
+            let _ = std::fs::remove_file(&desktop_file_path);
+            let _ = std::fs::remove_file(&mime_file_path);
+            return Err(std::io::Error::other(
+                "Failed to register protocol on Ubuntu",
+            ));
+        }
 
-    // Install dependencies (e_window and cardinal-gui)
-    println!("You need to `cargo install e_window cardinal-gui`. Ctrl+C to exit, or press Enter to run the install.");
-    print!("Press Enter to continue...");
-    std::io::stdout().flush()?;
-    let _ = std::io::stdin().read_line(&mut String::new())?;
-    let status = Command::new("cargo")
-        .args(["install", "e_window", "cardinal-gui"])
-        .status()?;
-    if status.success() {
-        println!("Successfully ran: cargo install e_window cardinal-gui");
-    } else {
-        eprintln!("cargo install exited with status: {:?}", status.code());
-        return Err(std::io::Error::other(
-            "Failed to run cargo install",
-        ));
-    }
+        // Install dependencies (e_window and cardinal-gui)
+        println!("You need to `cargo install e_window cardinal-gui`. Ctrl+C to exit, or press Enter to run the install.");
+        print!("Press Enter to continue...");
+        std::io::stdout().flush()?;
+        let _ = std::io::stdin().read_line(&mut String::new())?;
+        let status = Command::new("cargo")
+            .args(["install", "e_window", "cardinal-gui"])
+            .status()?;
+        if status.success() {
+            println!("Successfully ran: cargo install e_window cardinal-gui");
+        } else {
+            eprintln!("cargo install exited with status: {:?}", status.code());
+            return Err(std::io::Error::other("Failed to run cargo install"));
+        }
 
-    Ok(())
-}
+        Ok(())
+    }
 
     #[cfg(not(any(windows, unix)))]
     {
@@ -1094,7 +1115,6 @@ NoDisplay=true
         ))
     }
 }
-
 
 // fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
 //     use std::borrow::Cow;

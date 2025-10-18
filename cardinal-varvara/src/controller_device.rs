@@ -7,18 +7,9 @@ pub trait ControllerDevice: Send {
     /// Handles a character input event.
     fn char(&mut self, vm: &mut Uxn, c: u8) -> Event;
     /// Handles a key press event.
-    fn pressed(
-        &mut self,
-        vm: &mut Uxn,
-        k: super::controller::Key,
-        repeat: bool,
-    ) -> Option<Event>;
+    fn pressed(&mut self, vm: &mut Uxn, k: super::controller::Key, repeat: bool) -> Option<Event>;
     /// Handles a key release event.
-    fn released(
-        &mut self,
-        vm: &mut Uxn,
-        k: super::controller::Key,
-    ) -> Option<Event>;
+    fn released(&mut self, vm: &mut Uxn, k: super::controller::Key) -> Option<Event>;
 }
 
 impl ControllerDevice for super::controller::Controller {
@@ -28,19 +19,10 @@ impl ControllerDevice for super::controller::Controller {
     fn char(&mut self, vm: &mut Uxn, c: u8) -> Event {
         self.char(vm, c)
     }
-    fn pressed(
-        &mut self,
-        vm: &mut Uxn,
-        k: super::controller::Key,
-        repeat: bool,
-    ) -> Option<Event> {
+    fn pressed(&mut self, vm: &mut Uxn, k: super::controller::Key, repeat: bool) -> Option<Event> {
         self.pressed(vm, k, repeat)
     }
-    fn released(
-        &mut self,
-        vm: &mut Uxn,
-        k: super::controller::Key,
-    ) -> Option<Event> {
+    fn released(&mut self, vm: &mut Uxn, k: super::controller::Key) -> Option<Event> {
         self.released(vm, k)
     }
 }

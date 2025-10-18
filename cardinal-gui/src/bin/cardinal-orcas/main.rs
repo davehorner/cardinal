@@ -209,15 +209,15 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
         }
 
         if let Some(parent_rect) = ctx.input(|i| i.viewport().outer_rect) {
-            let monitor_rects =
-                monitor_info::MONITOR_RECTS.lock().unwrap().clone();
+            let monitor_rects = monitor_info::MONITOR_RECTS.lock().unwrap().clone();
             let _all_monitors_rect = monitor_rects.iter().skip(1).fold(
-                monitor_rects.first().cloned().unwrap_or(
-                    egui::Rect::from_min_size(
+                monitor_rects
+                    .first()
+                    .cloned()
+                    .unwrap_or(egui::Rect::from_min_size(
                         egui::Pos2::ZERO,
                         egui::Vec2::new(1920.0, 1080.0),
-                    ),
-                ),
+                    )),
                 |acc, r| acc.union(*r),
             );
             // Debug: print monitor rects
@@ -251,8 +251,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                 let wrap_rect = match self.wrap_mode {
                     WrapMode::ParentRect => parent_rect,
                     WrapMode::MonitorOfSpawn => viewport.monitor_rect,
-                    WrapMode::AllMonitorsSequential
-                    | WrapMode::AllMonitorsGeometric => {
+                    WrapMode::AllMonitorsSequential | WrapMode::AllMonitorsGeometric => {
                         let mut current_monitor_idx = monitor_rects
                             .iter()
                             .position(|r| r.contains(viewport.position));
@@ -262,10 +261,8 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                 .iter()
                                 .enumerate()
                                 .min_by(|(_, a), (_, b)| {
-                                    let da =
-                                        a.center().distance(viewport.position);
-                                    let db =
-                                        b.center().distance(viewport.position);
+                                    let da = a.center().distance(viewport.position);
+                                    let db = b.center().distance(viewport.position);
                                     da.partial_cmp(&db).unwrap()
                                 })
                                 .map(|(idx, _)| idx);
@@ -277,15 +274,13 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         match self.wrap_mode {
                             WrapMode::AllMonitorsSequential => {
                                 if let Some(idx) = current_monitor_idx {
-                                    if let Some((pos, idx2)) =
-                                        monitor_info::wrap_sequential(
-                                            viewport.position,
-                                            idx,
-                                            dx,
-                                            dy,
-                                            &monitor_rects,
-                                        )
-                                    {
+                                    if let Some((pos, idx2)) = monitor_info::wrap_sequential(
+                                        viewport.position,
+                                        idx,
+                                        dx,
+                                        dy,
+                                        &monitor_rects,
+                                    ) {
                                         new_pos = pos;
                                         new_idx = idx2;
                                         did_wrap = true;
@@ -293,14 +288,12 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                 }
                             }
                             WrapMode::AllMonitorsGeometric => {
-                                if let Some((pos, idx2)) =
-                                    monitor_info::wrap_geometric(
-                                        viewport.position,
-                                        dx,
-                                        dy,
-                                        &monitor_rects,
-                                    )
-                                {
+                                if let Some((pos, idx2)) = monitor_info::wrap_geometric(
+                                    viewport.position,
+                                    dx,
+                                    dy,
+                                    &monitor_rects,
+                                ) {
                                     new_pos = pos;
                                     new_idx = idx2;
                                     did_wrap = true;
@@ -335,8 +328,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                 // Collision with parent window
                 if self.collision_enabled {
                     let parent_center = parent_rect.center();
-                    let dist = ((viewport.position.x - parent_center.x)
-                        .powi(2)
+                    let dist = ((viewport.position.x - parent_center.x).powi(2)
                         + (viewport.position.y - parent_center.y).powi(2))
                     .sqrt();
                     // Draw collision circle in the parent window (main viewport)
@@ -356,9 +348,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         // Beep and close
                         #[cfg(target_os = "windows")]
                         {
-                            unsafe {
-                                winapi::um::winuser::MessageBeep(0xFFFFFFFF)
-                            };
+                            unsafe { winapi::um::winuser::MessageBeep(0xFFFFFFFF) };
                         }
                         #[cfg(target_os = "linux")]
                         println!("\x07");
@@ -368,8 +358,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                     }
                 }
 
-                let viewport_id =
-                    ViewportId::from_hash_of(format!("cardinal_{i}"));
+                let viewport_id = ViewportId::from_hash_of(format!("cardinal_{i}"));
                 ctx.show_viewport_immediate(
                     viewport_id,
                     ViewportBuilder::default()
@@ -420,8 +409,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         .controller
                         .as_any()
                         .downcast_mut::<varvara::controller_usb::ControllerUsb>(
-                        )
-                    {
+                    ) {
                         // use varvara::controller::inject_pedal_keys;
                         // inject_pedal_keys(
                         //     &mut varvara_controller.controller,
@@ -447,16 +435,10 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                 self.focused_panel = new_focus;
                                 // Also request egui focus for the newly focused panel
                                 if let Some(idx) = new_focus {
-                                    if let Some(uxn_panels) =
-                                        self.uxn_panels.as_mut()
-                                    {
-                                        if let Some(panel) = uxn_panels.get(idx)
-                                        {
-                                            let response_id =
-                                                panel.last_response_id();
-                                            ctx.memory_mut(|mem| {
-                                                mem.request_focus(response_id)
-                                            });
+                                    if let Some(uxn_panels) = self.uxn_panels.as_mut() {
+                                        if let Some(panel) = uxn_panels.get(idx) {
+                                            let response_id = panel.last_response_id();
+                                            ctx.memory_mut(|mem| mem.request_focus(response_id));
                                         }
                                     }
                                 }
@@ -519,8 +501,8 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
         // Clamp scale
         panel_scale = panel_scale.clamp(0.5, 3.0);
         // Calculate window size
-        let window_width = self.grid_cols as f32
-            * (panel_size.0 as f32 * panel_scale + panel_padding);
+        let window_width =
+            self.grid_cols as f32 * (panel_size.0 as f32 * panel_scale + panel_padding);
         let window_height = self.grid_rows as f32
             * (panel_size.1 as f32 * panel_scale + panel_padding)
             + TOP_PANEL_HEIGHT;
@@ -536,12 +518,7 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
             let sym_data = CARDINAL_ORCAS_SYM;
             for i in 0..(self.grid_cols * self.grid_rows) {
                 let texture_name = format!("uxn_panel_texture_{i}");
-                let mut panel = uxn_panel::UxnPanel::new(
-                    ctx,
-                    None,
-                    panel_size,
-                    texture_name,
-                );
+                let mut panel = uxn_panel::UxnPanel::new(ctx, None, panel_size, texture_name);
                 // Provide embedded ROM and sym data to the panel
                 panel.set_rom_bytes(rom_data);
                 panel.set_sym_bytes(sym_data);
@@ -558,113 +535,137 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                 }
             }
             egui::CentralPanel::default().show(ctx, |ui| {
-                egui::Grid::new("uxn_grid").num_columns(self.grid_cols).show(ui, |ui| {
-                    let input = ctx.input(|i| i.clone());
-                    for (i, panel) in uxn_panels.iter_mut().enumerate() {
-                        let response = panel.show(ui);
-                        let is_focused = self.focused_panel == Some(i);
-                        let rect = response.rect;
-                        if is_focused {
-                            let painter = ui.painter();
-                            painter.rect_stroke(
-                                rect,
-                                egui::CornerRadius::same(4),
-                                egui::Stroke::new(3.0, egui::Color32::from_rgb(0, 120, 255)),
-                                StrokeKind::Middle,
-                            );
-                            // Always request egui focus for the focused panel
-                            response.request_focus();
-                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
-                        }
-                        if response.clicked() {
-                        println!("[DEBUG] Panel {i} clicked, requesting focus");
-                            self.focused_panel = Some(i);
-                            // Request egui focus for this panel
-                            response.request_focus();
-                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
-                        }
-                        // Filter input events: only the focused panel gets keyboard events unless all_panels_receive_input is true
-                        let filtered_input = if self.all_panels_receive_input || is_focused{
-                            input.clone()
-                        } else {
-                            let mut no_events = input.clone();
-                            no_events.events.clear();
-                            no_events
-                        };
-                        // If all_panels_receive_mouse is set, inject mouse state directly into the VM device for all panels
-                        let filtered_input = if self.all_panels_receive_mouse {
-                            // This panel is already getting all events, so use filtered_input as normal
-                            if self.all_panels_receive_input || is_focused {
-                                filtered_input
+                egui::Grid::new("uxn_grid")
+                    .num_columns(self.grid_cols)
+                    .show(ui, |ui| {
+                        let input = ctx.input(|i| i.clone());
+                        for (i, panel) in uxn_panels.iter_mut().enumerate() {
+                            let response = panel.show(ui);
+                            let is_focused = self.focused_panel == Some(i);
+                            let rect = response.rect;
+                            if is_focused {
+                                let painter = ui.painter();
+                                painter.rect_stroke(
+                                    rect,
+                                    egui::CornerRadius::same(4),
+                                    egui::Stroke::new(3.0, egui::Color32::from_rgb(0, 120, 255)),
+                                    StrokeKind::Middle,
+                                );
+                                // Always request egui focus for the focused panel
+                                response.request_focus();
+                                ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                            }
+                            if response.clicked() {
+                                println!("[DEBUG] Panel {i} clicked, requesting focus");
+                                self.focused_panel = Some(i);
+                                // Request egui focus for this panel
+                                response.request_focus();
+                                ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                            }
+                            // Filter input events: only the focused panel gets keyboard events unless all_panels_receive_input is true
+                            let filtered_input = if self.all_panels_receive_input || is_focused {
+                                input.clone()
                             } else {
-                                // Instead of injecting synthetic egui events, inject mouse state directly into the VM device below
-                                let pointer_pos = ctx.input(|i| i.pointer.latest_pos());
-                                if let Some(global_pos) = pointer_pos {
-                                    // Map global pointer position into this panel's rect
-                                    let local_x = (global_pos.x - rect.min.x).max(0.0).min(rect.width()) + rect.min.x;
-                                    let local_y = (global_pos.y - rect.min.y).max(0.0).min(rect.height()) + rect.min.y;
-                                    let local_pos = egui::Pos2::new(local_x, local_y);
-                                    // Get button state
-                                    let pointer = ctx.input(|i| i.pointer.clone());
-                                    let left = pointer.button_down(egui::PointerButton::Primary);
-                                    let right = pointer.button_down(egui::PointerButton::Secondary);
-                                    let middle = pointer.button_down(egui::PointerButton::Middle);
-                                    // Inject directly into the VM device (Varvara mouse)
-                                    let mut buttons = 0u8;
-                                    if left { buttons |= 1; }
-                                    if middle { buttons |= 2; }
-                                    if right { buttons |= 4; }
-                                    let mouse_state = varvara::MouseState {
-                                        pos: (local_pos.x, local_pos.y),
-                                        scroll: (0.0, 0.0),
-                                        buttons,
-                                    };
-                                    // Directly update the mouse state using panel.stage.vm and panel.stage.dev.mouse
-                                    panel.stage.dev.mouse.set_active();
-                                    panel.stage.dev.mouse.update(
-                                        &mut panel.stage.vm,
-                                        mouse_state
-                                    );
+                                let mut no_events = input.clone();
+                                no_events.events.clear();
+                                no_events
+                            };
+                            // If all_panels_receive_mouse is set, inject mouse state directly into the VM device for all panels
+                            let filtered_input = if self.all_panels_receive_mouse {
+                                // This panel is already getting all events, so use filtered_input as normal
+                                if self.all_panels_receive_input || is_focused {
+                                    filtered_input
+                                } else {
+                                    // Instead of injecting synthetic egui events, inject mouse state directly into the VM device below
+                                    let pointer_pos = ctx.input(|i| i.pointer.latest_pos());
+                                    if let Some(global_pos) = pointer_pos {
+                                        // Map global pointer position into this panel's rect
+                                        let local_x =
+                                            (global_pos.x - rect.min.x).max(0.0).min(rect.width())
+                                                + rect.min.x;
+                                        let local_y =
+                                            (global_pos.y - rect.min.y).max(0.0).min(rect.height())
+                                                + rect.min.y;
+                                        let local_pos = egui::Pos2::new(local_x, local_y);
+                                        // Get button state
+                                        let pointer = ctx.input(|i| i.pointer.clone());
+                                        let left =
+                                            pointer.button_down(egui::PointerButton::Primary);
+                                        let right =
+                                            pointer.button_down(egui::PointerButton::Secondary);
+                                        let middle =
+                                            pointer.button_down(egui::PointerButton::Middle);
+                                        // Inject directly into the VM device (Varvara mouse)
+                                        let mut buttons = 0u8;
+                                        if left {
+                                            buttons |= 1;
+                                        }
+                                        if middle {
+                                            buttons |= 2;
+                                        }
+                                        if right {
+                                            buttons |= 4;
+                                        }
+                                        let mouse_state = varvara::MouseState {
+                                            pos: (local_pos.x, local_pos.y),
+                                            scroll: (0.0, 0.0),
+                                            buttons,
+                                        };
+                                        // Directly update the mouse state using panel.stage.vm and panel.stage.dev.mouse
+                                        panel.stage.dev.mouse.set_active();
+                                        panel
+                                            .stage
+                                            .dev
+                                            .mouse
+                                            .update(&mut panel.stage.vm, mouse_state);
+                                    }
+                                    // Return filtered_input with no pointer events (so egui doesn't double-handle)
+                                    let mut no_mouse = filtered_input.clone();
+                                    no_mouse.events.retain(|e| {
+                                        !matches!(
+                                            e,
+                                            egui::Event::PointerButton { .. }
+                                                | egui::Event::PointerMoved(_)
+                                                | egui::Event::PointerGone
+                                        )
+                                    });
+                                    no_mouse
                                 }
-                                // Return filtered_input with no pointer events (so egui doesn't double-handle)
-                                let mut no_mouse = filtered_input.clone();
-                                no_mouse.events.retain(|e| !matches!(e, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_) | egui::Event::PointerGone));
-                                no_mouse
+                            } else {
+                                filtered_input
+                            };
+                            if self.all_panels_receive_input
+                                || is_focused
+                                || self.all_panels_receive_mouse
+                            {
+                                // Print egui focus state for this panel (public info only)
+                                // let has_focus = response.has_focus();
+                                // Print all egui input events for this panel
+                                for event in &filtered_input.events {
+                                    // Silence MouseMoved events in debug output
+                                    if matches!(event, egui::Event::MouseMoved(_)) {
+                                        continue;
+                                    }
+                                    // println!("[DEBUG] Panel {i} egui event: {event:?}");
+                                    if let egui::Event::Text(s) = event {
+                                        println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
+                                    }
+                                }
+                                panel.stage.handle_input(&filtered_input, &response, rect);
+                                // Step the VM and update the texture so UI reflects input
+                                // panel.stage.vm.run(&mut panel.stage.dev, 0x100);
+                                panel.stage.dev.redraw(&mut panel.stage.vm);
+                                panel.stage.update_texture();
                             }
-                        } else {
-                            filtered_input
-                        };
-                        if self.all_panels_receive_input || is_focused || self.all_panels_receive_mouse {
-                            // Print egui focus state for this panel (public info only)
-                            // let has_focus = response.has_focus();
-                            // Print all egui input events for this panel
-                            for event in &filtered_input.events {
-                                // Silence MouseMoved events in debug output
-                                if matches!(event, egui::Event::MouseMoved(_)) {
-                                    continue;
-                                }
-                                // println!("[DEBUG] Panel {i} egui event: {event:?}");
-                                if let egui::Event::Text(s) = event {
-                                    println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
-                                }
+                            if (i + 1) % self.grid_cols == 0 {
+                                ui.end_row();
                             }
-                            panel.stage.handle_input(&filtered_input, &response, rect);
-                            // Step the VM and update the texture so UI reflects input
-                            // panel.stage.vm.run(&mut panel.stage.dev, 0x100);
-                            panel.stage.dev.redraw(&mut panel.stage.vm);
-                            panel.stage.update_texture();
                         }
-                        if (i + 1) % self.grid_cols == 0 {
-                            ui.end_row();
-                        }
-                    }
-                });
+                    });
             });
             // After all panels are shown, if a focus is pending, request it now
             if let Some(idx) = self.pending_focus_panel.take() {
-                if let Some(panel) =
-                    self.uxn_panels.as_ref().and_then(|v| v.get(idx))
-                {
+                if let Some(panel) = self.uxn_panels.as_ref().and_then(|v| v.get(idx)) {
                     let response_id = panel.last_response_id();
                     ctx.memory_mut(|mem| mem.request_focus(response_id));
                 }
@@ -688,11 +689,9 @@ fn main() {
     let panel_padding = 16.0; // padding around each panel for blue rectangle
                               // top_panel_height is now defined as TOP_PANEL_HEIGHT constant above
                               // Total width: (panel width + padding) * columns + extra padding
-    let window_width = grid_cols as f32 * (panel_size.0 as f32 + panel_padding)
-        + panel_padding;
+    let window_width = grid_cols as f32 * (panel_size.0 as f32 + panel_padding) + panel_padding;
     // Total height: (panel height + padding) * rows + top panel height + extra padding
-    let window_height =
-        grid_rows as f32 * (panel_size.1 as f32) + panel_padding;
+    let window_height = grid_rows as f32 * (panel_size.1 as f32) + panel_padding;
     let window_size = egui::Vec2::new(window_width, window_height);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size(window_size),

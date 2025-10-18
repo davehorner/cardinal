@@ -1,12 +1,10 @@
 /// Returns a reference to the build_orca_inject_queue function for use in event injection
-pub fn build_orca_inject_queue_ref(
-) -> Option<fn(&str) -> std::collections::VecDeque<InjectEvent>> {
+pub fn build_orca_inject_queue_ref() -> Option<fn(&str) -> std::collections::VecDeque<InjectEvent>>
+{
     Some(build_orca_inject_queue)
 }
 /// Build an InjectEvent queue for orca file injection with rectangle and efficient movement
-pub fn build_orca_inject_queue(
-    file_path: &str,
-) -> std::collections::VecDeque<InjectEvent> {
+pub fn build_orca_inject_queue(file_path: &str) -> std::collections::VecDeque<InjectEvent> {
     use std::collections::VecDeque;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -134,8 +132,7 @@ pub mod uxn {
             // varvara.screen.buffer.resize(1024 * 768 * 4, 0);
             // varvara.screen.changed = true;
             if let Some(path) = rom_path {
-                let rom = std::fs::read(path)
-                    .map_err(|e| format!("Failed to read ROM: {e}"))?;
+                let rom = std::fs::read(path).map_err(|e| format!("Failed to read ROM: {e}"))?;
                 let _ = uxn.reset(&rom);
                 varvara.reset(&rom);
 
@@ -156,8 +153,7 @@ pub mod uxn {
 
         /// Load a new ROM into the Uxn VM (resets VM)
         pub fn load_rom(&mut self, rom_path: &Path) -> Result<(), String> {
-            let rom = std::fs::read(rom_path)
-                .map_err(|e| format!("Failed to read ROM: {e}"))?;
+            let rom = std::fs::read(rom_path).map_err(|e| format!("Failed to read ROM: {e}"))?;
             let mut uxn = self.uxn.lock().unwrap();
             let _ = uxn.reset(&rom);
             if let Some(varvara) = self.varvara.as_mut() {
@@ -193,8 +189,7 @@ impl UxnModule {
         let mut uxn = Uxn::new(ram, Backend::Interpreter);
         let mut varvara = Varvara::default();
         if let Some(path) = rom_path {
-            let rom = std::fs::read(path)
-                .map_err(|e| format!("Failed to read ROM: {e}"))?;
+            let rom = std::fs::read(path).map_err(|e| format!("Failed to read ROM: {e}"))?;
             let _ = uxn.reset(&rom);
             varvara.load_sym_with_rom_path(path);
         }
@@ -216,8 +211,7 @@ impl UxnModule {
 
     /// Load a new ROM into the Uxn VM (resets VM)
     pub fn load_rom(&mut self, rom_path: &Path) -> Result<(), String> {
-        let rom = std::fs::read(rom_path)
-            .map_err(|e| format!("Failed to read ROM: {e}"))?;
+        let rom = std::fs::read(rom_path).map_err(|e| format!("Failed to read ROM: {e}"))?;
         if let Some(varvara) = self.varvara.as_mut() {
             varvara.load_sym_with_rom_path(rom_path);
         }
@@ -285,8 +279,7 @@ pub struct UxnApp<'a> {
     last_rom_path: Option<std::path::PathBuf>,
     // --- Hot-reload support ---
     pub reload_rx: std::sync::mpsc::Receiver<()>,
-    pub rom_path_arc:
-        std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>,
+    pub rom_path_arc: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>,
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub usb_controller: Option<UsbControllerHandle>,
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
@@ -295,17 +288,12 @@ pub struct UxnApp<'a> {
 
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 pub struct UsbControllerHandle {
-    pub rx: std::sync::mpsc::Receiver<
-        varvara::controller_usb::UsbControllerMessage,
-    >,
+    pub rx: std::sync::mpsc::Receiver<varvara::controller_usb::UsbControllerMessage>,
 }
 
 impl<'a> UxnApp<'a> {
     /// Set a callback to be called on the first update/frame (for deferred actions)
-    pub fn set_on_first_update(
-        &mut self,
-        f: Box<dyn FnOnce(&mut UxnApp<'a>) + Send + 'a>,
-    ) {
+    pub fn set_on_first_update(&mut self, f: Box<dyn FnOnce(&mut UxnApp<'a>) + Send + 'a>) {
         self.on_first_update = Some(f);
         self.first_update_done = false;
     }
@@ -326,9 +314,7 @@ impl<'a> UxnApp<'a> {
         auto_rom_labels: Vec<String>,
         auto_rom_select: bool,
         reload_rx: std::sync::mpsc::Receiver<()>,
-        rom_path_arc: std::sync::Arc<
-            std::sync::Mutex<Option<std::path::PathBuf>>,
-        >,
+        rom_path_arc: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>,
     ) -> Self {
         if let Some(path) = rom_path_arc.lock().unwrap().as_ref() {
             if path.exists() {
@@ -344,10 +330,8 @@ impl<'a> UxnApp<'a> {
         let h = 2048_usize;
         size.0 = w as u16;
         size.1 = h as u16;
-        let image =
-            egui::ColorImage::new([w, h], vec![egui::Color32::BLACK; w * h]);
-        let texture =
-            ctx.load_texture("frame", image, egui::TextureOptions::NEAREST);
+        let image = egui::ColorImage::new([w, h], vec![egui::Color32::BLACK; w * h]);
+        let texture = ctx.load_texture("frame", image, egui::TextureOptions::NEAREST);
         let aspect_ratio = w as f32 / h as f32;
         let mut auto_index = 0;
         let mut auto_timer = 0.0;
@@ -413,10 +397,7 @@ impl<'a> UxnApp<'a> {
         self.on_rom_change = Some(Box::new(f));
     }
 
-    pub fn load_symbols(
-        &mut self,
-        path: &std::path::Path,
-    ) -> Result<(), String> {
+    pub fn load_symbols(&mut self, path: &std::path::Path) -> Result<(), String> {
         println!("[UxnApp] Loading symbols from: {}", path.display());
         let _ = self.dev.load_symbols_into_self(path.to_str().unwrap());
         Ok(())
@@ -425,8 +406,7 @@ impl<'a> UxnApp<'a> {
     /// Reload the ROM from the given path (for hot-reload)
     pub fn reload_rom(&mut self, path: &std::path::Path) -> Result<(), String> {
         println!("[UxnApp] Reloading ROM from: {}", path.display());
-        let rom = std::fs::read(path)
-            .map_err(|e| format!("Failed to read ROM: {e}"))?;
+        let rom = std::fs::read(path).map_err(|e| format!("Failed to read ROM: {e}"))?;
         let _ = self.vm.reset(&rom);
         self.dev.reset(&rom);
         self.vm.run(&mut self.dev, 0x100);
@@ -449,10 +429,7 @@ impl<'a> UxnApp<'a> {
     }
 
     /// Load a ROM from a file path, tracking the file path for symbol support
-    pub fn load_rom_with_path<P: AsRef<std::path::Path>>(
-        &mut self,
-        path: P,
-    ) -> anyhow::Result<()> {
+    pub fn load_rom_with_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> anyhow::Result<()> {
         let path = path.as_ref();
         let data = std::fs::read(path)?;
         self.last_rom_path = Some(path.to_path_buf());
@@ -490,10 +467,7 @@ impl<'a> UxnApp<'a> {
     // }
 
     /// Queue a sequence of input events to be sent per frame
-    pub fn queue_input<I: IntoIterator<Item = InjectEvent>>(
-        &mut self,
-        input: I,
-    ) {
+    pub fn queue_input<I: IntoIterator<Item = InjectEvent>>(&mut self, input: I) {
         self.input_queue.extend(input);
     }
 }
@@ -530,9 +504,7 @@ impl eframe::App for UxnApp<'_> {
                     .filter_map(|entry| {
                         entry.ok().and_then(|e| {
                             let path = e.path();
-                            if path.extension().and_then(|ext| ext.to_str())
-                                == Some("orca")
-                            {
+                            if path.extension().and_then(|ext| ext.to_str()) == Some("orca") {
                                 Some(path)
                             } else {
                                 None
@@ -546,16 +518,10 @@ impl eframe::App for UxnApp<'_> {
         let mut exit_requested = false;
         for event in ctx.input(|i| i.events.clone()) {
             if let egui::Event::Key { key, pressed, .. } = event {
-                if key == egui::Key::C
-                    && ctx.input(|i| i.modifiers.ctrl)
-                    && pressed
-                {
+                if key == egui::Key::C && ctx.input(|i| i.modifiers.ctrl) && pressed {
                     exit_requested = true;
                 }
-                if key == egui::Key::R
-                    && ctx.input(|i| i.modifiers.ctrl)
-                    && pressed
-                {
+                if key == egui::Key::R && ctx.input(|i| i.modifiers.ctrl) && pressed {
                     let now = std::time::Instant::now();
                     let last = unsafe { LAST_CTRL_R };
                     let allow = match last {
@@ -577,22 +543,19 @@ impl eframe::App for UxnApp<'_> {
                                     i
                                 };
                                 let random_file = &files[idx];
-                                let queue = build_orca_inject_queue(
-                                    random_file.to_str().unwrap(),
-                                );
+                                let queue = build_orca_inject_queue(random_file.to_str().unwrap());
                                 self.queue_input(queue);
                             }
                             #[cfg(not(target_arch = "wasm32"))]
                             {
                                 // On native, pick a random file
-                                if let Ok(idx) = get_random_u128()
-                                    .map(|v| (v as usize) % files.len())
+                                if let Ok(idx) =
+                                    get_random_u128().map(|v| (v as usize) % files.len())
                                 {
                                     let idx: usize = idx;
                                     let random_file = &files[idx];
-                                    let queue = build_orca_inject_queue(
-                                        random_file.to_str().unwrap(),
-                                    );
+                                    let queue =
+                                        build_orca_inject_queue(random_file.to_str().unwrap());
                                     self.queue_input(queue);
                                 }
                             }
@@ -623,12 +586,8 @@ impl eframe::App for UxnApp<'_> {
         if let Some(event) = self.input_queue.pop_front() {
             match event {
                 InjectEvent::Char(c) => self.dev.char(&mut self.vm, c),
-                InjectEvent::KeyPress(k) => {
-                    self.dev.pressed(&mut self.vm, k, false)
-                }
-                InjectEvent::KeyRelease(k) => {
-                    self.dev.released(&mut self.vm, k)
-                }
+                InjectEvent::KeyPress(k) => self.dev.pressed(&mut self.vm, k, false),
+                InjectEvent::KeyRelease(k) => self.dev.released(&mut self.vm, k),
                 InjectEvent::Sleep(ms) => {
                     std::thread::sleep(std::time::Duration::from_millis(ms));
                 }
@@ -716,21 +675,24 @@ impl eframe::App for UxnApp<'_> {
         //         pedal_state,
         //     );
         // }
-    #[cfg(target_arch = "wasm32")]
-    let events = Vec::new();
-    #[cfg(not(target_arch = "wasm32"))]
-    let mut events = Vec::new();
+        #[cfg(target_arch = "wasm32")]
+        let events = Vec::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut events = Vec::new();
         #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
         {
             // Only borrow self.dev.controller mutably once in this block
             let mut last_pedal = None;
-            if let Some(controller_usb) =
-                self.dev
-                    .controller
-                    .as_any()
-                    .downcast_mut::<varvara::controller_usb::ControllerUsb>()
+            if let Some(controller_usb) = self
+                .dev
+                .controller
+                .as_any()
+                .downcast_mut::<varvara::controller_usb::ControllerUsb>()
             {
-                events = varvara::controller_usb::ControllerPollEvents::poll_usb_events(controller_usb, &mut self.vm);
+                events = varvara::controller_usb::ControllerPollEvents::poll_usb_events(
+                    controller_usb,
+                    &mut self.vm,
+                );
                 last_pedal = controller_usb.last_pedal;
             }
             // Now, after the mutable borrow is done, update last_usb_event, etc.
@@ -855,17 +817,13 @@ impl eframe::App for UxnApp<'_> {
                     .inner_rect
                     .map_or(egui::Vec2::ZERO, |rect| rect.size())
             });
-            let new_size =
-                egui::Vec2::new(out.size.0 as f32, out.size.1 as f32)
-                    * self.scale;
+            let new_size = egui::Vec2::new(out.size.0 as f32, out.size.1 as f32) * self.scale;
             // let should_resize = new_size.x > current_window_size.x || new_size.y > current_window_size.y
             //     || new_size.x < current_window_size.x || new_size.y < current_window_size.y;
             // // Only resize if the new frame is larger, or if it's smaller than the window
             // if should_resize {
             // Only resize if the new frame is larger than the current window
-            if new_size.x > current_window_size.x
-                || new_size.y > current_window_size.y
-            {
+            if new_size.x > current_window_size.x || new_size.y > current_window_size.y {
                 info!("resizing window to {:?}", out.size);
                 self.size = out.size;
                 let mut size = new_size;
@@ -889,8 +847,7 @@ impl eframe::App for UxnApp<'_> {
         }
         let w = out.size.0 as usize;
         let h = out.size.1 as usize;
-        let mut image =
-            egui::ColorImage::new([w, h], vec![egui::Color32::BLACK; w * h]);
+        let mut image = egui::ColorImage::new([w, h], vec![egui::Color32::BLACK; w * h]);
         for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
             *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);
         }
@@ -923,13 +880,17 @@ impl eframe::App for UxnApp<'_> {
                 ui.painter().add(egui::Shape::mesh(mesh));
                 // --- USB Debug Panel ---
                 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
-                egui::CollapsingHeader::new("USB Pedal Debug").default_open(true).show(ui, |ui| {
-                    if let Some((pedal_state, ref data)) = self.last_usb_event {
-                        ui.label(format!("[USB] Last pedal event: state=0x{pedal_state:02X}, data={data:?}"));
-                    } else {
-                        ui.label("[USB] No pedal events received yet.");
-                    }
-                });
+                egui::CollapsingHeader::new("USB Pedal Debug")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        if let Some((pedal_state, ref data)) = self.last_usb_event {
+                            ui.label(format!(
+                                "[USB] Last pedal event: state=0x{pedal_state:02X}, data={data:?}"
+                            ));
+                        } else {
+                            ui.label("[USB] No pedal events received yet.");
+                        }
+                    });
                 // Show auto ROM cycling info
                 if self.auto_rom_select && !self.auto_roms.is_empty() {
                     ui.label(format!(
@@ -1151,8 +1112,8 @@ pub fn inject_key_events(
         match e {
             egui::Event::Text(s) => {
                 const RAW_CHARS: [u8; 16] = [
-                    b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&',
-                    b'^', b'%', b'$', b'#', b'@', b'!', b'~',
+                    b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&', b'^', b'%', b'$', b'#',
+                    b'@', b'!', b'~',
                 ];
                 for c in s.bytes() {
                     if RAW_CHARS.contains(&c) {

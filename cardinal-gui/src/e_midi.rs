@@ -7,7 +7,10 @@ pub fn init() {
 
 #[cfg(feature = "uses_e_midi")]
 #[allow(unused_imports)]
-use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc,
+};
 #[cfg(feature = "uses_e_midi")]
 use std::thread;
 
@@ -66,7 +69,10 @@ impl MidiPlayerThread {
             }
         });
 
-        MidiPlayerThread { handle, shutdown_tx }
+        MidiPlayerThread {
+            handle,
+            shutdown_tx,
+        }
     }
 
     pub fn shutdown(self) {

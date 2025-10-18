@@ -49,8 +49,7 @@ fn get_snapshot(rom: &[u8]) -> Result<Snapshot, std::io::Error> {
 }
 
 fn run_and_check(name: &str) {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR not set");
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let rom_path = Path::new(&manifest_dir)
         .parent()
         .expect("missing parent directory")
@@ -69,8 +68,8 @@ fn run_and_check(name: &str) {
     )
     .expect("Failed to create image buffer");
 
-    let output_path = Path::new(&manifest_dir)
-        .join(format!("tests/{}.png", name.replace(".", "_")));
+    let output_path =
+        Path::new(&manifest_dir).join(format!("tests/{}.png", name.replace(".", "_")));
 
     if output_path.exists() {
         let DynamicImage::ImageRgba8(image) = ImageReader::open(&output_path)
@@ -86,21 +85,19 @@ fn run_and_check(name: &str) {
         let width = snapshot.size.0 as u32;
         let height = snapshot.size.1 as u32;
         let stride = width * 3 + PADDING * 4;
-        let mut out =
-            ImageBuffer::<Rgba<u8>, _>::new(stride, height + PADDING * 2);
+        let mut out = ImageBuffer::<Rgba<u8>, _>::new(stride, height + PADDING * 2);
         let mut failed = false;
         for y in 0..height {
             for x in 0..width {
                 out[(x + PADDING, y + PADDING)] = image[(x, y)];
-                out[(x + 2 * width + 3 * PADDING, y + PADDING)] =
-                    our_image[(x, y)];
-                out[(x + 2 * PADDING + width, y + PADDING)] =
-                    if our_image[(x, y)] != image[(x, y)] {
-                        failed = true;
-                        Rgba([0xFF, 0, 0, 0xFF])
-                    } else {
-                        Rgba([0xFF; 4])
-                    };
+                out[(x + 2 * width + 3 * PADDING, y + PADDING)] = our_image[(x, y)];
+                out[(x + 2 * PADDING + width, y + PADDING)] = if our_image[(x, y)] != image[(x, y)]
+                {
+                    failed = true;
+                    Rgba([0xFF, 0, 0, 0xFF])
+                } else {
+                    Rgba([0xFF; 4])
+                };
             }
         }
         if failed {

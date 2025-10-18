@@ -18,14 +18,24 @@ pub fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
         }
         None
     }
-    if !raw_url.starts_with("uxntal:") { return None; }
+    if !raw_url.starts_with("uxntal:") {
+        return None;
+    }
 
-    let s = raw_url.trim_start_matches("uxntal:").trim_start_matches('/');
+    let s = raw_url
+        .trim_start_matches("uxntal:")
+        .trim_start_matches('/');
 
     if s.starts_with("open") {
-        let (path, rest) = if let Some(qpos) = s.find('?') { (&s[..qpos], &s[qpos + 1..]) } else { (s, "") };
+        let (path, rest) = if let Some(qpos) = s.find('?') {
+            (&s[..qpos], &s[qpos + 1..])
+        } else {
+            (s, "")
+        };
         if path == "open" || path == "open/" {
-            if let Some(v) = qs_get(rest, "url") { return Some(v); }
+            if let Some(v) = qs_get(rest, "url") {
+                return Some(v);
+            }
         }
     }
     // 2) Base64 form: uxntal://b64,<payload>  (URL_SAFE_NO_PAD)
@@ -39,13 +49,15 @@ pub fn extract_target_from_uxntal(raw_url: &str) -> Option<String> {
     }
     for (bad, good, cut) in [
         ("https///", "https://", 8usize),
-        ("http///",  "http://",  7usize),
-        ("file///",  "file://",  7usize),
-        ("https//",  "https://", 7usize),
-        ("http//",   "http://",  6usize),
-        ("file//",   "file://",  7usize),
+        ("http///", "http://", 7usize),
+        ("file///", "file://", 7usize),
+        ("https//", "https://", 7usize),
+        ("http//", "http://", 6usize),
+        ("file//", "file://", 7usize),
     ] {
-        if s.starts_with(bad) { return Some(format!("{}{}", good, &s[cut..])); }
+        if s.starts_with(bad) {
+            return Some(format!("{}{}", good, &s[cut..]));
+        }
     }
     if s.contains('%') {
         let dec = pct_decode(s);

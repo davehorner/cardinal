@@ -1,18 +1,19 @@
-pub mod provider;
-pub mod downloader;
-pub mod includes;
-pub mod srht;
-pub mod github;
 pub mod codeberg;
+pub mod downloader;
+pub mod github;
+pub mod includes;
+pub mod provider;
 pub mod resolver;
+pub mod srht;
 
-use provider::{Provider, RepoRef, FetchResult};
-use srht::SourceHut;
-use github::GitHub;
 use codeberg::Codeberg;
+use github::GitHub;
+use provider::{FetchResult, Provider, RepoRef};
+use srht::SourceHut;
 
 pub fn parse_repo(url: &str) -> Option<(Box<dyn Provider>, RepoRef)> {
-    let provs: Vec<Box<dyn Provider>> = vec![Box::new(SourceHut), Box::new(GitHub), Box::new(Codeberg)];
+    let provs: Vec<Box<dyn Provider>> =
+        vec![Box::new(SourceHut), Box::new(GitHub), Box::new(Codeberg)];
     for p in provs.into_iter() {
         if let Some(r) = p.parse_url(url) {
             return Some((p, r));

@@ -1,4 +1,4 @@
-use crate::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice; 
+use crate::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice;
 
 impl<'a> Stage<'a> {
     /// Load symbols from a byte slice (for embedded .sym files)
@@ -32,13 +32,10 @@ impl<'a> Stage<'a> {
                 }
                 #[cfg(not(windows))]
                 let sys_path_str = sys_path.to_string_lossy().to_string();
-                println!(
-                    "[DEBUG][Stage] Attempting to load symbols from {sys_path_str}");
+                println!("[DEBUG][Stage] Attempting to load symbols from {sys_path_str}");
                 if sys_path.exists() {
                     let _ = self.dev.load_symbols_into_self(&sys_path_str);
-                    println!(
-                        "[DEBUG][Stage] Loaded symbols from {sys_path_str}"
-                    );
+                    println!("[DEBUG][Stage] Loaded symbols from {sys_path_str}");
                 }
             }
         }
@@ -53,10 +50,8 @@ impl<'a> Stage<'a> {
     ) {
         if let Some(mouse_pos) = input.pointer.hover_pos() {
             if rect.contains(mouse_pos) {
-                let rel_x =
-                    (mouse_pos.x - rect.min.x).max(0.0).min(rect.width());
-                let rel_y =
-                    (mouse_pos.y - rect.min.y).max(0.0).min(rect.height());
+                let rel_x = (mouse_pos.x - rect.min.x).max(0.0).min(rect.width());
+                let rel_y = (mouse_pos.y - rect.min.y).max(0.0).min(rect.height());
                 let mut buttons = 0u8;
                 if input.pointer.button_down(egui::PointerButton::Primary) {
                     buttons |= 1;
@@ -86,8 +81,7 @@ impl<'a> Stage<'a> {
             {
                 if rect.contains(*pos) {
                     let rel_x = (pos.x - rect.min.x).max(0.0).min(rect.width());
-                    let rel_y =
-                        (pos.y - rect.min.y).max(0.0).min(rect.height());
+                    let rel_y = (pos.y - rect.min.y).max(0.0).min(rect.height());
                     let mut buttons = 0u8;
                     if *button == egui::PointerButton::Primary && *pressed {
                         buttons |= 1;
@@ -129,9 +123,7 @@ impl<'a> Stage<'a> {
 
     /// Draw mesh at a specific rect (used by UxnPanel)
     pub fn draw_at(&self, ui: &mut egui::Ui, rect: egui::Rect) {
-        let panel_size =
-            egui::Vec2::new(self.size.0 as f32, self.size.1 as f32)
-                * self.scale;
+        let panel_size = egui::Vec2::new(self.size.0 as f32, self.size.1 as f32) * self.scale;
         let mut mesh = egui::Mesh::with_texture(self.texture.id());
         mesh.add_rect_with_uv(
             egui::Rect {
@@ -162,14 +154,14 @@ impl<'a> Stage<'a> {
                     if c.is_ascii_graphic() || c == ' ' {
                         let byte = c as u8;
                         println!("[DEBUG][Stage] Forwarding char event: '{c}' (0x{byte:02x}) to VM (from egui::Event::Text)");
-                        self.dev.pressed(
-                            &mut self.vm,
-                            varvara::Key::Char(byte),
-                            false,
-                        );
+                        self.dev
+                            .pressed(&mut self.vm, varvara::Key::Char(byte), false);
                         self.dev.char(&mut self.vm, byte);
                     } else {
-                        println!("[DEBUG][Stage] Ignored char event: '{}' (0x{:02x}) (not printable)", c, c as u8);
+                        println!(
+                            "[DEBUG][Stage] Ignored char event: '{}' (0x{:02x}) (not printable)",
+                            c, c as u8
+                        );
                     }
                 }
             }
@@ -234,8 +226,7 @@ impl<'a> Stage<'a> {
                         | Key::Questionmark
                 );
                 if !is_printable {
-                    if let Some(varvara_key) = map_egui_key_to_varvara_key(*key)
-                    {
+                    if let Some(varvara_key) = map_egui_key_to_varvara_key(*key) {
                         println!("[DEBUG][Stage] Forwarding non-printable key: {key:?} pressed={pressed} to VM as {varvara_key:?}");
                         if *pressed {
                             self.dev.pressed(&mut self.vm, varvara_key, false);
@@ -251,10 +242,8 @@ impl<'a> Stage<'a> {
         // Forward mouse position and button state
         if let Some(mouse_pos) = input.pointer.hover_pos() {
             if rect.contains(mouse_pos) {
-                let rel_x =
-                    (mouse_pos.x - rect.min.x).max(0.0).min(rect.width());
-                let rel_y =
-                    (mouse_pos.y - rect.min.y).max(0.0).min(rect.height());
+                let rel_x = (mouse_pos.x - rect.min.x).max(0.0).min(rect.width());
+                let rel_y = (mouse_pos.y - rect.min.y).max(0.0).min(rect.height());
                 let mut buttons = 0u8;
                 if input.pointer.button_down(egui::PointerButton::Primary) {
                     buttons |= 1;
@@ -284,8 +273,7 @@ impl<'a> Stage<'a> {
             {
                 if rect.contains(*pos) {
                     let rel_x = (pos.x - rect.min.x).max(0.0).min(rect.width());
-                    let rel_y =
-                        (pos.y - rect.min.y).max(0.0).min(rect.height());
+                    let rel_y = (pos.y - rect.min.y).max(0.0).min(rect.height());
                     let mut buttons = 0u8;
                     if *button == egui::PointerButton::Primary && *pressed {
                         buttons |= 1;
@@ -402,11 +390,7 @@ impl<'a> Stage<'a> {
             [usize::from(size.0), usize::from(size.1)],
             vec![egui::Color32::BLACK; (size.0 as usize) * (size.1 as usize)],
         );
-        let texture = ctx.load_texture(
-            &texture_name,
-            image,
-            egui::TextureOptions::NEAREST,
-        );
+        let texture = ctx.load_texture(&texture_name, image, egui::TextureOptions::NEAREST);
         Stage {
             vm,
             dev,
@@ -422,7 +406,7 @@ impl<'a> Stage<'a> {
     }
 
     pub fn get_bang(&self) {
-       get_slice(self.vm.ram,"*");
+        get_slice(self.vm.ram, "*");
     }
 
     pub fn set_resize_callback(&mut self, f: Box<dyn FnMut(u16, u16)>) {
@@ -443,10 +427,7 @@ impl<'a> Stage<'a> {
         let out = self.dev.output(&self.vm);
         let mut image = egui::ColorImage::new(
             [out.size.0 as usize, out.size.1 as usize],
-            vec![
-                egui::Color32::BLACK;
-                (out.size.0 as usize) * (out.size.1 as usize)
-            ],
+            vec![egui::Color32::BLACK; (out.size.0 as usize) * (out.size.1 as usize)],
         );
         for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
             *o = egui::Color32::from_rgba_unmultiplied(i[0], i[1], i[2], i[3]);
@@ -454,9 +435,7 @@ impl<'a> Stage<'a> {
         self.texture.set(image, egui::TextureOptions::NEAREST);
     }
     pub fn draw(&self, ui: &mut egui::Ui) {
-        let panel_size =
-            egui::Vec2::new(self.size.0 as f32, self.size.1 as f32)
-                * self.scale;
+        let panel_size = egui::Vec2::new(self.size.0 as f32, self.size.1 as f32) * self.scale;
         let (_rect_id, rect) = ui.allocate_space(panel_size);
         let mut mesh = egui::Mesh::with_texture(self.texture.id());
         mesh.add_rect_with_uv(
@@ -475,11 +454,10 @@ impl<'a> Stage<'a> {
 
     pub fn handle_usb_input(&mut self) {
         if let Some(controller_usb) = self.dev.controller_usb_mut() {
-            let events =
-                varvara::controller_usb::ControllerPollEvents::poll_usb_events(
-                    controller_usb,
-                    &mut self.vm,
-                );
+            let events = varvara::controller_usb::ControllerPollEvents::poll_usb_events(
+                controller_usb,
+                &mut self.vm,
+            );
             for event in events {
                 self.dev.process_event(&mut self.vm, event);
             }

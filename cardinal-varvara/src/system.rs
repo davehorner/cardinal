@@ -109,9 +109,7 @@ impl System {
                     expansion::FILL => {
                         let mut f = Fill::new_zeroed();
                         for (i, b) in f.as_mut_bytes().iter_mut().enumerate() {
-                            *b = vm.ram_read_byte(
-                                addr.wrapping_add(1).wrapping_add(i as u16),
-                            );
+                            *b = vm.ram_read_byte(addr.wrapping_add(1).wrapping_add(i as u16));
                         }
                         let bank = f.bank.get();
                         let addr = f.addr.get();
@@ -119,18 +117,14 @@ impl System {
                             let j = addr.wrapping_add(i);
                             match usize::from(bank).checked_sub(1) {
                                 None => vm.ram_write_byte(j, f.value),
-                                Some(b) => {
-                                    self.banks[b][usize::from(j)] = f.value
-                                }
+                                Some(b) => self.banks[b][usize::from(j)] = f.value,
                             }
                         }
                     }
                     expansion::CPYL | expansion::CPYR => {
                         let mut c = Cpy::new_zeroed();
                         for (i, b) in c.as_mut_bytes().iter_mut().enumerate() {
-                            *b = vm.ram_read_byte(
-                                addr.wrapping_add(1).wrapping_add(i as u16),
-                            );
+                            *b = vm.ram_read_byte(addr.wrapping_add(1).wrapping_add(i as u16));
                         }
                         let offset = |i, addr: zerocopy::U16<zerocopy::BE>| {
                             if op == expansion::CPYL {
@@ -145,9 +139,7 @@ impl System {
 
                         for i in 0..c.length.get() {
                             let src_addr = offset(i, c.src_addr);
-                            let v = match usize::from(c.src_bank.get())
-                                .checked_sub(1)
-                            {
+                            let v = match usize::from(c.src_bank.get()).checked_sub(1) {
                                 None => vm.ram_read_byte(src_addr),
                                 Some(b) => self.banks[b][usize::from(src_addr)],
                             };
@@ -155,9 +147,7 @@ impl System {
                             let dst_addr = offset(i, c.dst_addr);
                             match usize::from(c.dst_bank.get()).checked_sub(1) {
                                 None => vm.ram_write_byte(dst_addr, v),
-                                Some(b) => {
-                                    self.banks[b][usize::from(dst_addr)] = v
-                                }
+                                Some(b) => self.banks[b][usize::from(dst_addr)] = v,
                             }
                         }
                     }

@@ -463,9 +463,7 @@ mod test {
 
     #[test]
     fn rot2() {
-        run_and_compare_r(&[
-            LIT2, 0x1, 0x34, LIT2, 0x45, 0x67, LIT2, 0xf4, 0xe0, ROT2,
-        ]);
+        run_and_compare_r(&[LIT2, 0x1, 0x34, LIT2, 0x45, 0x67, LIT2, 0xf4, 0xe0, ROT2]);
     }
 
     #[test]

@@ -1,5 +1,7 @@
 #[cfg(not(feature = "uses_gilrs"))]
-compile_error!("controller_gilrs.rs should not be compiled unless the 'uses_gilrs' feature is enabled");
+compile_error!(
+    "controller_gilrs.rs should not be compiled unless the 'uses_gilrs' feature is enabled"
+);
 
 use super::controller::Controller;
 use super::controller::{ControllerDevice, Key};
@@ -57,58 +59,22 @@ impl ControllerGilrs {
                 match event.event {
                     EventType::ButtonPressed(button, _) => {
                         let maybe_event = match button {
-                            Button::South => self.controller.pressed(
-                                vm,
-                                Key::Char(b'A'),
-                                false,
-                            ),
-                            Button::East => self.controller.pressed(
-                                vm,
-                                Key::Char(b'B'),
-                                false,
-                            ),
-                            Button::North => self.controller.pressed(
-                                vm,
-                                Key::Char(b'X'),
-                                false,
-                            ),
-                            Button::West => self.controller.pressed(
-                                vm,
-                                Key::Char(b'Y'),
-                                false,
-                            ),
-                            Button::DPadUp => {
-                                self.controller.pressed(vm, Key::Up, true)
+                            Button::South => self.controller.pressed(vm, Key::Char(b'A'), false),
+                            Button::East => self.controller.pressed(vm, Key::Char(b'B'), false),
+                            Button::North => self.controller.pressed(vm, Key::Char(b'X'), false),
+                            Button::West => self.controller.pressed(vm, Key::Char(b'Y'), false),
+                            Button::DPadUp => self.controller.pressed(vm, Key::Up, true),
+                            Button::DPadDown => self.controller.pressed(vm, Key::Down, true),
+                            Button::DPadLeft => self.controller.pressed(vm, Key::Left, true),
+                            Button::DPadRight => self.controller.pressed(vm, Key::Right, true),
+                            Button::LeftTrigger => {
+                                self.controller.pressed(vm, Key::Char(b'L'), false)
                             }
-                            Button::DPadDown => {
-                                self.controller.pressed(vm, Key::Down, true)
+                            Button::RightTrigger => {
+                                self.controller.pressed(vm, Key::Char(b'R'), false)
                             }
-                            Button::DPadLeft => {
-                                self.controller.pressed(vm, Key::Left, true)
-                            }
-                            Button::DPadRight => {
-                                self.controller.pressed(vm, Key::Right, true)
-                            }
-                            Button::LeftTrigger => self.controller.pressed(
-                                vm,
-                                Key::Char(b'L'),
-                                false,
-                            ),
-                            Button::RightTrigger => self.controller.pressed(
-                                vm,
-                                Key::Char(b'R'),
-                                false,
-                            ),
-                            Button::Start => self.controller.pressed(
-                                vm,
-                                Key::Char(b'S'),
-                                false,
-                            ),
-                            Button::Select => self.controller.pressed(
-                                vm,
-                                Key::Char(b'E'),
-                                false,
-                            ),
+                            Button::Start => self.controller.pressed(vm, Key::Char(b'S'), false),
+                            Button::Select => self.controller.pressed(vm, Key::Char(b'E'), false),
                             _ => None,
                         };
                         if let Some(ev) = maybe_event {
@@ -117,42 +83,18 @@ impl ControllerGilrs {
                     }
                     EventType::ButtonReleased(button, _) => {
                         let maybe_event = match button {
-                            Button::South => {
-                                self.controller.released(vm, Key::Char(b'A'))
-                            }
-                            Button::East => {
-                                self.controller.released(vm, Key::Char(b'B'))
-                            }
-                            Button::North => {
-                                self.controller.released(vm, Key::Char(b'X'))
-                            }
-                            Button::West => {
-                                self.controller.released(vm, Key::Char(b'Y'))
-                            }
-                            Button::DPadUp => {
-                                self.controller.released(vm, Key::Up)
-                            }
-                            Button::DPadDown => {
-                                self.controller.released(vm, Key::Down)
-                            }
-                            Button::DPadLeft => {
-                                self.controller.released(vm, Key::Left)
-                            }
-                            Button::DPadRight => {
-                                self.controller.released(vm, Key::Right)
-                            }
-                            Button::LeftTrigger => {
-                                self.controller.released(vm, Key::Char(b'L'))
-                            }
-                            Button::RightTrigger => {
-                                self.controller.released(vm, Key::Char(b'R'))
-                            }
-                            Button::Start => {
-                                self.controller.released(vm, Key::Char(b'S'))
-                            }
-                            Button::Select => {
-                                self.controller.released(vm, Key::Char(b'E'))
-                            }
+                            Button::South => self.controller.released(vm, Key::Char(b'A')),
+                            Button::East => self.controller.released(vm, Key::Char(b'B')),
+                            Button::North => self.controller.released(vm, Key::Char(b'X')),
+                            Button::West => self.controller.released(vm, Key::Char(b'Y')),
+                            Button::DPadUp => self.controller.released(vm, Key::Up),
+                            Button::DPadDown => self.controller.released(vm, Key::Down),
+                            Button::DPadLeft => self.controller.released(vm, Key::Left),
+                            Button::DPadRight => self.controller.released(vm, Key::Right),
+                            Button::LeftTrigger => self.controller.released(vm, Key::Char(b'L')),
+                            Button::RightTrigger => self.controller.released(vm, Key::Char(b'R')),
+                            Button::Start => self.controller.released(vm, Key::Char(b'S')),
+                            Button::Select => self.controller.released(vm, Key::Char(b'E')),
                             _ => None,
                         };
                         if let Some(ev) = maybe_event {
@@ -164,60 +106,39 @@ impl ControllerGilrs {
                         match axis {
                             Axis::DPadX => {
                                 if value > threshold {
-                                    if let Some(ev) = self.controller.pressed(
-                                        vm,
-                                        Key::Right,
-                                        false,
-                                    ) {
+                                    if let Some(ev) = self.controller.pressed(vm, Key::Right, false)
+                                    {
                                         events.push(ev);
                                     }
-                                    if let Some(ev) =
-                                        self.controller.released(vm, Key::Left)
-                                    {
+                                    if let Some(ev) = self.controller.released(vm, Key::Left) {
                                         events.push(ev);
                                     }
                                 } else if value < -threshold {
-                                    if let Some(ev) = self.controller.pressed(
-                                        vm,
-                                        Key::Left,
-                                        false,
-                                    ) {
+                                    if let Some(ev) = self.controller.pressed(vm, Key::Left, false)
+                                    {
                                         events.push(ev);
                                     }
-                                    if let Some(ev) =
-                                        self.controller.released(vm, Key::Right)
-                                    {
+                                    if let Some(ev) = self.controller.released(vm, Key::Right) {
                                         events.push(ev);
                                     }
                                 } else {
-                                    if let Some(ev) =
-                                        self.controller.released(vm, Key::Left)
-                                    {
+                                    if let Some(ev) = self.controller.released(vm, Key::Left) {
                                         events.push(ev);
                                     }
-                                    if let Some(ev) =
-                                        self.controller.released(vm, Key::Right)
-                                    {
+                                    if let Some(ev) = self.controller.released(vm, Key::Right) {
                                         events.push(ev);
                                     }
                                 }
                             }
                             Axis::DPadY => {
                                 if value > threshold {
-                                    if let Some(ev) = self.controller.pressed(
-                                        vm,
-                                        Key::Down,
-                                        false,
-                                    ) {
+                                    if let Some(ev) = self.controller.pressed(vm, Key::Down, false)
+                                    {
                                         events.push(ev);
                                     }
                                     // Optionally handle release of Up
                                 } else if value < -threshold {
-                                    if let Some(ev) = self.controller.pressed(
-                                        vm,
-                                        Key::Up,
-                                        false,
-                                    ) {
+                                    if let Some(ev) = self.controller.pressed(vm, Key::Up, false) {
                                         events.push(ev);
                                     }
                                     // Optionally handle release of Down
@@ -254,8 +175,7 @@ impl ControllerGilrs {
 /// the thread that spawns the Gilrs controller listener
 /// This function is only available when the `uses_gilrs` feature is enabled
 #[cfg(feature = "uses_gilrs")]
-pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage>
-{
+pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         println!("[GILRS] Starting Gilrs thread...");

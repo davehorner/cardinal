@@ -1,6 +1,6 @@
 // src/util.rs
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Non-cryptographic, stable hash for cache bucketing.
 pub fn hash_url(url: &str) -> u64 {

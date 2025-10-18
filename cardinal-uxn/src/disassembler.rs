@@ -30,10 +30,9 @@ const KEEP_MODE_MASK: u8 = 0x80;
 const OPCODE_MASK: u8 = 0x1F;
 
 const OPCODE_NAMES: [&str; 32] = [
-    "LIT", "INC", "POP", "NIP", "SWP", "ROT", "DUP", "OVR", "EQU", "NEQ",
-    "GTH", "LTH", "JMP", "JCN", "JSR", "STH", "LDZ", "STZ", "LDR", "STR",
-    "LDA", "STA", "DEI", "DEO", "ADD", "SUB", "MUL", "DIV", "AND", "ORA",
-    "EOR", "SFT",
+    "LIT", "INC", "POP", "NIP", "SWP", "ROT", "DUP", "OVR", "EQU", "NEQ", "GTH", "LTH", "JMP",
+    "JCN", "JSR", "STH", "LDZ", "STZ", "LDR", "STR", "LDA", "STA", "DEI", "DEO", "ADD", "SUB",
+    "MUL", "DIV", "AND", "ORA", "EOR", "SFT",
 ];
 
 /// A disassembled Uxn instruction
@@ -154,12 +153,7 @@ where
 }
 
 #[allow(dead_code)]
-fn write_literal_prefix(
-    buf: &mut [u8],
-    short: bool,
-    _keep: bool,
-    ret: bool,
-) -> usize {
+fn write_literal_prefix(buf: &mut [u8], short: bool, _keep: bool, ret: bool) -> usize {
     let mut idx = 0;
     if !ret {
         buf[idx] = b'#';

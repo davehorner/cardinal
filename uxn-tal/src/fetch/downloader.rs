@@ -7,7 +7,12 @@ pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
             if out.status.success() {
                 return Ok(out.stdout);
             } else {
-                return Err(format!("curl failed with exit code {} for {}", out.status.code().unwrap_or(-1), url).into());
+                return Err(format!(
+                    "curl failed with exit code {} for {}",
+                    out.status.code().unwrap_or(-1),
+                    url
+                )
+                .into());
             }
         }
     }
@@ -21,7 +26,9 @@ pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 }
 
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(p) = path.parent() { fs::create_dir_all(p)?; }
+    if let Some(p) = path.parent() {
+        fs::create_dir_all(p)?;
+    }
     let mut f = fs::File::create(path)?;
     f.write_all(bytes)?;
     Ok(())

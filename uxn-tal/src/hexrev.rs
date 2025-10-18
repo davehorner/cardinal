@@ -29,7 +29,9 @@ impl HexRev {
 
         loop {
             let n = r.read(&mut buf)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             for &b in &buf[..n] {
                 if let Some(v) = Self::hex_val(b) {
                     if !have_high {
@@ -62,7 +64,9 @@ impl HexRev {
 
         loop {
             let n = r.read(&mut buf)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             for &b in &buf[..n] {
                 let v = match Self::hex_val(b) {
                     Some(v) => v,
@@ -136,7 +140,9 @@ impl HexRev {
 
         loop {
             let n = r.read(&mut buf)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             for &byte in &buf[..n] {
                 let hi = (byte >> 4) as usize;
                 let lo = (byte & 0x0F) as usize;
@@ -218,7 +224,9 @@ pub fn main() -> io::Result<()> {
             }
             let input = next.unwrap_or_else(|| usage());
             let output = args.next().unwrap_or_else(|| usage());
-            if args.next().is_some() { usage() }
+            if args.next().is_some() {
+                usage()
+            }
 
             // stdin/stdout support
             let reader: Box<dyn Read> = if input == "-" {
@@ -248,7 +256,7 @@ pub fn main() -> io::Result<()> {
         "to-hex" => {
             let mut uppercase = false;
             let mut width: Option<usize> = Some(60); // match xxd -p default-ish
-            // Parse flags: --upper, --width N
+                                                     // Parse flags: --upper, --width N
             while let Some(a) = args.next() {
                 if a == "--upper" {
                     uppercase = true;
@@ -266,7 +274,9 @@ pub fn main() -> io::Result<()> {
                     // We've reached positional args
                     let input = a;
                     let output = args.next().unwrap_or_else(|| usage());
-                    if args.next().is_some() { usage() }
+                    if args.next().is_some() {
+                        usage()
+                    }
 
                     let reader: Box<dyn Read> = if input == "-" {
                         Box::new(io::stdin())

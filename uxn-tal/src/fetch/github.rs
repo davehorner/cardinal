@@ -5,7 +5,8 @@ use super::{
 };
 use std::{
     collections::{HashSet, VecDeque},
-    fs, path::{Path, PathBuf},
+    fs,
+    path::{Path, PathBuf},
 };
 use url::Url;
 
@@ -13,8 +14,10 @@ pub struct GitHub;
 
 impl GitHub {
     fn raw_url(r: &RepoRef, repo_rel: &str) -> String {
-        format!("https://raw.githubusercontent.com/{}/{}/{}/{}",
-            r.owner, r.repo, r.branch, repo_rel)
+        format!(
+            "https://raw.githubusercontent.com/{}/{}/{}/{}",
+            r.owner, r.repo, r.branch, repo_rel
+        )
     }
     // fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
     //     let url = Self::raw_url(r, repo_rel);
@@ -28,7 +31,11 @@ impl GitHub {
     //     if branch != "HEAD" { return vec![branch.to_string()]; }
     //     vec!["main".into(), "master".into(), "trunk".into()]
     // }
-    fn fetch_file(r: &RepoRef, out_root: &Path, repo_rel: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn fetch_file(
+        r: &RepoRef,
+        out_root: &Path,
+        repo_rel: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let url = Self::raw_url(r, repo_rel);
         let bytes = http_get(&url)?;
         let local = out_root.join(repo_rel);
@@ -38,7 +45,9 @@ impl GitHub {
             let _ = std::fs::remove_file(&local);
             return Err(format!("GitHub: Got HTML/404 for {}", url).into());
         }
-        if let Some(p) = local.parent() { fs::create_dir_all(p)?; }
+        if let Some(p) = local.parent() {
+            fs::create_dir_all(p)?;
+        }
         write_bytes(&local, &bytes)?;
         Ok(local)
     }
@@ -47,15 +56,25 @@ impl GitHub {
 impl Provider for GitHub {
     fn parse_url(&self, url: &str) -> Option<RepoRef> {
         let u = Url::parse(url).ok()?;
-        if u.domain()? != "github.com" { return None; }
+        if u.domain()? != "github.com" {
+            return None;
+        }
         let segs = u.path_segments()?.collect::<Vec<_>>();
-        if segs.len() < 2 { return None; }
+        if segs.len() < 2 {
+            return None;
+        }
 
         let owner = segs[0].to_string();
-        let repo  = segs[1].trim_end_matches(".git").to_string();
+        let repo = segs[1].trim_end_matches(".git").to_string();
 
         if segs.len() == 2 {
-            return Some(RepoRef { host: "github.com".into(), owner, repo, branch: "HEAD".into(), path: None });
+            return Some(RepoRef {
+                host: "github.com".into(),
+                owner,
+                repo,
+                branch: "HEAD".into(),
+                path: None,
+            });
         }
 
         // Accept GitHub views: blob/tree/raw/blame
@@ -63,20 +82,53 @@ impl Provider for GitHub {
             "blob" | "tree" | "raw" | "blame" if segs.len() >= 4 => {
                 // <view>/<ref>/<path...>   where <ref> can be a branch name or a commit SHA
                 let branch = segs[3].to_string();
-                let path = if segs.len() > 4 { Some(segs[4..].join("/")) } else { None };
-                Some(RepoRef { host: "github.com".into(), owner, repo, branch, path })
+                let path = if segs.len() > 4 {
+                    Some(segs[4..].join("/"))
+                } else {
+                    None
+                };
+                Some(RepoRef {
+                    host: "github.com".into(),
+                    owner,
+                    repo,
+                    branch,
+                    path,
+                })
             }
             _ => {
                 // Fallback: treat remainder as repo path with unknown ref
-                let path = if segs.len() > 2 { Some(segs[2..].join("/")) } else { None };
-                Some(RepoRef { host: "github.com".into(), owner, repo, branch: "HEAD".into(), path })
+                let path = if segs.len() > 2 {
+                    Some(segs[2..].join("/"))
+                } else {
+                    None
+                };
+                Some(RepoRef {
+                    host: "github.com".into(),
+                    owner,
+                    repo,
+                    branch: "HEAD".into(),
+                    path,
+                })
             }
         }
     }
-    fn fetch_tal_tree(&self, r: &RepoRef, out_root: &Path) -> Result<FetchResult, Box<dyn std::error::Error>> {
+    fn fetch_tal_tree(
+        &self,
+        r: &RepoRef,
+        out_root: &Path,
+    ) -> Result<FetchResult, Box<dyn std::error::Error>> {
         let entry_rel = match &r.path {
-            Some(p) if p.to_ascii_lowercase().ends_with(".tal") || p.to_ascii_lowercase().ends_with(".rom") => p.replace('\\', "/"),
-            _ => return Err("github: URL must point to a .tal or .rom file; not guessing entries".into()),
+            Some(p)
+                if p.to_ascii_lowercase().ends_with(".tal")
+                    || p.to_ascii_lowercase().ends_with(".rom") =>
+            {
+                p.replace('\\', "/")
+            }
+            _ => {
+                return Err(
+                    "github: URL must point to a .tal or .rom file; not guessing entries".into(),
+                )
+            }
         };
 
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
@@ -84,26 +136,37 @@ impl Provider for GitHub {
         // Recursively fetch includes for .tal files
         if entry_rel.to_ascii_lowercase().ends_with(".tal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
-            let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
-            let entry_dir = Path::new(&entry_rel).parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            let mut q: VecDeque<(String, PathBuf)> =
+                VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
+            let entry_dir = Path::new(&entry_rel)
+                .parent()
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
             while let Some((curr_rel, curr_local)) = q.pop_front() {
                 let src = fs::read_to_string(&curr_local).unwrap_or_default();
                 for inc in parse_includes(&src) {
                     let target = resolve_include(&curr_rel, &inc);
-                    if !visited.insert(target.clone()) { continue; }
+                    if !visited.insert(target.clone()) {
+                        continue;
+                    }
                     let mut attempts: Vec<(String, Option<std::path::PathBuf>)> = Vec::new();
                     let mut success = None;
                     let mut errors = vec![];
                     // First attempt: entry_dir + target, unless target already starts with entry_dir
-                    let first_attempt = if !entry_dir.is_empty() && !target.starts_with(&entry_dir) {
+                    let first_attempt = if !entry_dir.is_empty() && !target.starts_with(&entry_dir)
+                    {
                         format!("{}/{}", entry_dir, target)
                     } else {
                         target.clone()
                     };
                     attempts.push((first_attempt.clone(), None));
                     match Self::fetch_file(r, out_root, &first_attempt) {
-                        Ok(loc) => { success = Some((first_attempt.clone(), loc)); }
-                        Err(e) => { errors.push((first_attempt.clone(), format!("{}", e))); }
+                        Ok(loc) => {
+                            success = Some((first_attempt.clone(), loc));
+                        }
+                        Err(e) => {
+                            errors.push((first_attempt.clone(), format!("{}", e)));
+                        }
                     }
                     // Fallback 1: deduped path
                     if success.is_none() {
@@ -112,8 +175,12 @@ impl Provider for GitHub {
                             let deduped = parts[1..].join("/");
                             attempts.push((deduped.clone(), None));
                             match Self::fetch_file(r, out_root, &deduped) {
-                                Ok(loc) => { success = Some((deduped.clone(), loc)); }
-                                Err(e) => { errors.push((deduped.clone(), format!("{}", e))); }
+                                Ok(loc) => {
+                                    success = Some((deduped.clone(), loc));
+                                }
+                                Err(e) => {
+                                    errors.push((deduped.clone(), format!("{}", e)));
+                                }
                             }
                         }
                     }
@@ -124,11 +191,18 @@ impl Provider for GitHub {
                             while let Some(parent) = ancestor.parent() {
                                 let try_path = parent.join(fname);
                                 let try_str = try_path.to_string_lossy().replace('\\', "/");
-                                if try_str == target { break; }
+                                if try_str == target {
+                                    break;
+                                }
                                 attempts.push((try_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &try_str) {
-                                    Ok(loc) => { success = Some((try_str.clone(), loc)); break; }
-                                    Err(e) => { errors.push((try_str.clone(), format!("{}", e))); }
+                                    Ok(loc) => {
+                                        success = Some((try_str.clone(), loc));
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        errors.push((try_str.clone(), format!("{}", e)));
+                                    }
                                 }
                                 ancestor = parent;
                             }
@@ -139,11 +213,16 @@ impl Provider for GitHub {
                         if let Some(fname) = Path::new(&target).file_name() {
                             if !entry_dir.is_empty() {
                                 let entry_dir_path = Path::new(&entry_dir).join(fname);
-                                let entry_dir_str = entry_dir_path.to_string_lossy().replace('\\', "/");
+                                let entry_dir_str =
+                                    entry_dir_path.to_string_lossy().replace('\\', "/");
                                 attempts.push((entry_dir_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &entry_dir_str) {
-                                    Ok(loc) => { success = Some((entry_dir_str.clone(), loc)); }
-                                    Err(e) => { errors.push((entry_dir_str.clone(), format!("{}", e))); }
+                                    Ok(loc) => {
+                                        success = Some((entry_dir_str.clone(), loc));
+                                    }
+                                    Err(e) => {
+                                        errors.push((entry_dir_str.clone(), format!("{}", e)));
+                                    }
                                 }
                             }
                         }
@@ -157,14 +236,25 @@ impl Provider for GitHub {
                     let error_msg = format!(
                         "Failed to fetch include '{}'. Attempts: {}. Errors: {}",
                         inc,
-                        attempts.iter().map(|(p, _)| format!("'{}'", p)).collect::<Vec<_>>().join(", "),
-                        errors.iter().map(|(p, e)| format!("{}: {}", p, e)).collect::<Vec<_>>().join("; ")
+                        attempts
+                            .iter()
+                            .map(|(p, _)| format!("'{}'", p))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        errors
+                            .iter()
+                            .map(|(p, e)| format!("{}: {}", p, e))
+                            .collect::<Vec<_>>()
+                            .join("; ")
                     );
                     return Err(error_msg.into());
                 }
             }
         }
-        Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
+        Ok(FetchResult {
+            entry_local: all[0].clone(),
+            all_files: all,
+        })
 
         // for b in Self::branch_candidates(&r_in.branch) {
         //     let r = RepoRef { branch: b.clone(), ..r_in.clone() };

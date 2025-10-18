@@ -5,7 +5,8 @@ use super::{
 };
 use std::{
     collections::{HashSet, VecDeque},
-    fs, path::{Path, PathBuf},
+    fs,
+    path::{Path, PathBuf},
 };
 use url::Url;
 
@@ -13,8 +14,10 @@ pub struct SourceHut;
 
 impl SourceHut {
     fn raw_url(r: &RepoRef, repo_rel: &str) -> String {
-        format!("https://git.sr.ht/{}/{}/blob/{}/{}?raw=1",
-            r.owner, r.repo, r.branch, repo_rel)
+        format!(
+            "https://git.sr.ht/{}/{}/blob/{}/{}?raw=1",
+            r.owner, r.repo, r.branch, repo_rel
+        )
     }
     // fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
     //     let url = Self::raw_url(r, repo_rel);
@@ -24,7 +27,11 @@ impl SourceHut {
     //     }
     //     None
     // }
-    fn fetch_file(r: &RepoRef, out_root: &Path, repo_rel: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn fetch_file(
+        r: &RepoRef,
+        out_root: &Path,
+        repo_rel: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let url = Self::raw_url(r, repo_rel);
         let bytes = http_get(&url)?;
         // Check for HTML/404 response
@@ -33,7 +40,9 @@ impl SourceHut {
             return Err(format!("SourceHut: Got HTML/404 for {}", url).into());
         }
         let local = out_root.join(repo_rel);
-        if let Some(p) = local.parent() { fs::create_dir_all(p)?; }
+        if let Some(p) = local.parent() {
+            fs::create_dir_all(p)?;
+        }
         write_bytes(&local, &bytes)?;
         Ok(local)
     }
@@ -42,15 +51,25 @@ impl SourceHut {
 impl Provider for SourceHut {
     fn parse_url(&self, url: &str) -> Option<RepoRef> {
         let u = Url::parse(url).ok()?;
-        if u.domain()? != "git.sr.ht" { return None; }
+        if u.domain()? != "git.sr.ht" {
+            return None;
+        }
         let segs = u.path_segments()?.collect::<Vec<_>>();
-        if segs.len() < 2 || !segs[0].starts_with('~') { return None; }
+        if segs.len() < 2 || !segs[0].starts_with('~') {
+            return None;
+        }
 
         let owner = segs[0].to_string();
-        let repo  = segs[1].to_string();
+        let repo = segs[1].to_string();
 
         if segs.len() == 2 {
-            return Some(RepoRef { host: "git.sr.ht".into(), owner, repo, branch: "HEAD".into(), path: None });
+            return Some(RepoRef {
+                host: "git.sr.ht".into(),
+                owner,
+                repo,
+                branch: "HEAD".into(),
+                path: None,
+            });
         }
 
         match segs[2] {
@@ -59,7 +78,7 @@ impl Provider for SourceHut {
                 let branch = segs[3].to_string();
                 // compute start of repo path
                 let mut path_start = 4;
-                if (segs[2] == "tree" || segs[2]=="log") && segs.get(4) == Some(&"item") {
+                if (segs[2] == "tree" || segs[2] == "log") && segs.get(4) == Some(&"item") {
                     path_start = 5;
                 }
                 let path = if segs.len() > path_start {
@@ -67,21 +86,49 @@ impl Provider for SourceHut {
                 } else {
                     None
                 };
-                Some(RepoRef { host: "git.sr.ht".into(), owner, repo, branch, path })
+                Some(RepoRef {
+                    host: "git.sr.ht".into(),
+                    owner,
+                    repo,
+                    branch,
+                    path,
+                })
             }
             _ => {
-                let path = if segs.len() > 2 { Some(segs[2..].join("/")) } else { None };
-                Some(RepoRef { host: "git.sr.ht".into(), owner, repo, branch: "HEAD".into(), path })
+                let path = if segs.len() > 2 {
+                    Some(segs[2..].join("/"))
+                } else {
+                    None
+                };
+                Some(RepoRef {
+                    host: "git.sr.ht".into(),
+                    owner,
+                    repo,
+                    branch: "HEAD".into(),
+                    path,
+                })
             }
         }
     }
 
-
-    fn fetch_tal_tree(&self, r: &RepoRef, out_root: &Path) -> Result<FetchResult, Box<dyn std::error::Error>> {
+    fn fetch_tal_tree(
+        &self,
+        r: &RepoRef,
+        out_root: &Path,
+    ) -> Result<FetchResult, Box<dyn std::error::Error>> {
         // Strict: must point to a file
         let entry_rel = match &r.path {
-            Some(p) if p.to_ascii_lowercase().ends_with(".tal") || p.to_ascii_lowercase().ends_with(".rom") => p.replace('\\', "/"),
-            _ => return Err("sr.ht: URL must point to a .tal or .rom file; not guessing entries".into()),
+            Some(p)
+                if p.to_ascii_lowercase().ends_with(".tal")
+                    || p.to_ascii_lowercase().ends_with(".rom") =>
+            {
+                p.replace('\\', "/")
+            }
+            _ => {
+                return Err(
+                    "sr.ht: URL must point to a .tal or .rom file; not guessing entries".into(),
+                )
+            }
         };
 
         // Fetch entry and walk includes
@@ -90,18 +137,24 @@ impl Provider for SourceHut {
         // Recursively fetch includes for .tal files
         if entry_rel.to_ascii_lowercase().ends_with(".tal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
-            let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
+            let mut q: VecDeque<(String, PathBuf)> =
+                VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
             while let Some((curr_rel, curr_local)) = q.pop_front() {
                 let src = fs::read_to_string(&curr_local).unwrap_or_default();
                 for inc in parse_includes(&src) {
                     let target = resolve_include(&curr_rel, &inc);
-                    if !visited.insert(target.clone()) { continue; }
-                    let mut attempts: Vec<(String, Option<std::path::PathBuf>)> = vec![(target.clone(), None)];
+                    if !visited.insert(target.clone()) {
+                        continue;
+                    }
+                    let mut attempts: Vec<(String, Option<std::path::PathBuf>)> =
+                        vec![(target.clone(), None)];
                     let mut success: Option<(String, PathBuf)> = None;
                     let mut errors: Vec<(String, String)> = vec![];
                     // Try original
                     match Self::fetch_file(r, out_root, &target) {
-                        Ok(loc) => { success = Some((target.clone(), loc)); }
+                        Ok(loc) => {
+                            success = Some((target.clone(), loc));
+                        }
                         Err(e) => {
                             let local = out_root.join(&target);
                             let _ = std::fs::remove_file(&local);
@@ -115,7 +168,9 @@ impl Provider for SourceHut {
                             let deduped = parts[1..].join("/");
                             attempts.push((deduped.clone(), None));
                             match Self::fetch_file(r, out_root, &deduped) {
-                                Ok(loc) => { success = Some((deduped.clone(), loc)); }
+                                Ok(loc) => {
+                                    success = Some((deduped.clone(), loc));
+                                }
                                 Err(e) => {
                                     let local = out_root.join(&deduped);
                                     let _ = std::fs::remove_file(&local);
@@ -131,10 +186,15 @@ impl Provider for SourceHut {
                             while let Some(parent) = ancestor.parent() {
                                 let try_path = parent.join(fname);
                                 let try_str = try_path.to_string_lossy().replace('\\', "/");
-                                if try_str == target { break; }
+                                if try_str == target {
+                                    break;
+                                }
                                 attempts.push((try_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &try_str) {
-                                    Ok(loc) => { success = Some((try_str.clone(), loc)); break; }
+                                    Ok(loc) => {
+                                        success = Some((try_str.clone(), loc));
+                                        break;
+                                    }
                                     Err(e) => {
                                         let local = out_root.join(&try_str);
                                         let _ = std::fs::remove_file(&local);
@@ -150,10 +210,13 @@ impl Provider for SourceHut {
                         if let Some(fname) = Path::new(&target).file_name() {
                             if let Some(entry_dir) = Path::new(&entry_rel).parent() {
                                 let entry_dir_path = entry_dir.join(fname);
-                                let entry_dir_str = entry_dir_path.to_string_lossy().replace('\\', "/");
+                                let entry_dir_str =
+                                    entry_dir_path.to_string_lossy().replace('\\', "/");
                                 attempts.push((entry_dir_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &entry_dir_str) {
-                                    Ok(loc) => { success = Some((entry_dir_str.clone(), loc)); }
+                                    Ok(loc) => {
+                                        success = Some((entry_dir_str.clone(), loc));
+                                    }
                                     Err(e) => {
                                         let local = out_root.join(&entry_dir_str);
                                         let _ = std::fs::remove_file(&local);
@@ -172,15 +235,26 @@ impl Provider for SourceHut {
                     let error_msg = format!(
                         "Failed to fetch include '{}'. Attempts: {}. Errors: {}",
                         inc,
-                        attempts.iter().map(|(p, _)| format!("'{}'", p)).collect::<Vec<_>>().join(", "),
-                        errors.iter().map(|(p, e)| format!("{}: {}", p, e)).collect::<Vec<_>>().join("; ")
+                        attempts
+                            .iter()
+                            .map(|(p, _)| format!("'{}'", p))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        errors
+                            .iter()
+                            .map(|(p, e)| format!("{}: {}", p, e))
+                            .collect::<Vec<_>>()
+                            .join("; ")
                     );
                     return Err(error_msg.into());
                 }
             }
         }
-        Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
-    
+        Ok(FetchResult {
+            entry_local: all[0].clone(),
+            all_files: all,
+        })
+
         // FAST PATH: if the URL points to a .tal, fetch it directly
         // if let Some(p) = &r.path {
         //     if p.ends_with(".tal") {
@@ -237,7 +311,6 @@ impl Provider for SourceHut {
         // Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
     }
 }
-
 
 // // BFS include walker for sr.ht
 // fn bfs_includes_srht(

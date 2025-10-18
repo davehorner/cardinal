@@ -1,8 +1,5 @@
 use crate::AssemblerError;
 
-
-
-
 pub trait AssemblerBackend {
     fn name(&self) -> &'static str;
     fn assemble(&self, tal_file: &str, tal_source: &str) -> Result<AssemblyOutput, AssemblerError>;

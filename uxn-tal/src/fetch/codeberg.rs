@@ -5,7 +5,8 @@ use super::{
 };
 use std::{
     collections::{HashSet, VecDeque},
-    fs, path::{Path, PathBuf},
+    fs,
+    path::{Path, PathBuf},
 };
 use url::Url;
 
@@ -40,7 +41,11 @@ impl Codeberg {
     //     vec!["main".into(), "master".into(), "trunk".into()]
     // }
 
-    fn fetch_file(r: &RepoRef, out_root: &Path, repo_rel: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn fetch_file(
+        r: &RepoRef,
+        out_root: &Path,
+        repo_rel: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let url = Self::raw_url(r, repo_rel);
         let bytes = http_get(&url)?;
         let local = out_root.join(repo_rel);
@@ -50,7 +55,9 @@ impl Codeberg {
             let _ = std::fs::remove_file(&local);
             return Err(format!("Codeberg: Got HTML/404 for {}", url).into());
         }
-        if let Some(p) = local.parent() { fs::create_dir_all(p)?; }
+        if let Some(p) = local.parent() {
+            fs::create_dir_all(p)?;
+        }
         write_bytes(&local, &bytes)?;
         Ok(local)
     }
@@ -67,7 +74,7 @@ impl Provider for Codeberg {
             return None;
         }
         let owner = segs[0].to_string();
-        let repo  = segs[1].trim_end_matches(".git").to_string();
+        let repo = segs[1].trim_end_matches(".git").to_string();
 
         if segs.len() == 2 {
             // repo root
@@ -87,7 +94,11 @@ impl Provider for Codeberg {
                 // handle multi-part ref: tag/<tag> or commit/<sha>
                 if segs[3] == "tag" && segs.len() >= 6 {
                     let branch = format!("tag/{}", segs[4]);
-                    let path   = if segs.len() > 5 { Some(segs[5..].join("/")) } else { None };
+                    let path = if segs.len() > 5 {
+                        Some(segs[5..].join("/"))
+                    } else {
+                        None
+                    };
                     return Some(RepoRef {
                         host: "codeberg.org".into(),
                         owner,
@@ -98,7 +109,11 @@ impl Provider for Codeberg {
                 }
                 if segs[3] == "commit" && segs.len() >= 6 {
                     let branch = format!("commit/{}", segs[4]);
-                    let path   = if segs.len() > 5 { Some(segs[5..].join("/")) } else { None };
+                    let path = if segs.len() > 5 {
+                        Some(segs[5..].join("/"))
+                    } else {
+                        None
+                    };
                     return Some(RepoRef {
                         host: "codeberg.org".into(),
                         owner,
@@ -109,7 +124,11 @@ impl Provider for Codeberg {
                 }
                 // Normal branch name
                 let branch = segs[3].to_string();
-                let path = if segs.len() > 4 { Some(segs[4..].join("/")) } else { None };
+                let path = if segs.len() > 4 {
+                    Some(segs[4..].join("/"))
+                } else {
+                    None
+                };
                 Some(RepoRef {
                     host: "codeberg.org".into(),
                     owner,
@@ -120,7 +139,11 @@ impl Provider for Codeberg {
             }
             _ => {
                 // Fallback: treat the rest as a path, unknown ref
-                let path = if segs.len() > 2 { Some(segs[2..].join("/")) } else { None };
+                let path = if segs.len() > 2 {
+                    Some(segs[2..].join("/"))
+                } else {
+                    None
+                };
                 Some(RepoRef {
                     host: "codeberg.org".into(),
                     owner,
@@ -137,10 +160,18 @@ impl Provider for Codeberg {
         r: &RepoRef,
         out_root: &Path,
     ) -> Result<FetchResult, Box<dyn std::error::Error>> {
-
         let entry_rel = match &r.path {
-            Some(p) if p.to_ascii_lowercase().ends_with(".tal") || p.to_ascii_lowercase().ends_with(".rom") => p.replace('\\', "/"),
-            _ => return Err("codeberg: URL must point to a .tal or .rom file; not guessing entries".into()),
+            Some(p)
+                if p.to_ascii_lowercase().ends_with(".tal")
+                    || p.to_ascii_lowercase().ends_with(".rom") =>
+            {
+                p.replace('\\', "/")
+            }
+            _ => {
+                return Err(
+                    "codeberg: URL must point to a .tal or .rom file; not guessing entries".into(),
+                )
+            }
         };
 
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
@@ -148,18 +179,24 @@ impl Provider for Codeberg {
         // Recursively fetch includes for .tal files
         if entry_rel.to_ascii_lowercase().ends_with(".tal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
-            let mut q: VecDeque<(String, PathBuf)> = VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
+            let mut q: VecDeque<(String, PathBuf)> =
+                VecDeque::from([(entry_rel.clone(), entry_local.clone())]);
             while let Some((curr_rel, curr_local)) = q.pop_front() {
                 let src = fs::read_to_string(&curr_local).unwrap_or_default();
                 for inc in parse_includes(&src) {
                     let target = resolve_include(&curr_rel, &inc);
-                    if !visited.insert(target.clone()) { continue; }
-                    let mut attempts: Vec<(String, Option<std::path::PathBuf>)> = vec![(target.clone(), None)];
+                    if !visited.insert(target.clone()) {
+                        continue;
+                    }
+                    let mut attempts: Vec<(String, Option<std::path::PathBuf>)> =
+                        vec![(target.clone(), None)];
                     let mut success: Option<(String, PathBuf)> = None;
                     let mut errors: Vec<(String, String)> = vec![];
                     // Try original
                     match Self::fetch_file(r, out_root, &target) {
-                        Ok(loc) => { success = Some((target.clone(), loc)); }
+                        Ok(loc) => {
+                            success = Some((target.clone(), loc));
+                        }
                         Err(e) => {
                             let local = out_root.join(&target);
                             let _ = std::fs::remove_file(&local);
@@ -173,7 +210,9 @@ impl Provider for Codeberg {
                             let deduped = parts[1..].join("/");
                             attempts.push((deduped.clone(), None));
                             match Self::fetch_file(r, out_root, &deduped) {
-                                Ok(loc) => { success = Some((deduped.clone(), loc)); }
+                                Ok(loc) => {
+                                    success = Some((deduped.clone(), loc));
+                                }
                                 Err(e) => {
                                     let local = out_root.join(&deduped);
                                     let _ = std::fs::remove_file(&local);
@@ -189,10 +228,15 @@ impl Provider for Codeberg {
                             while let Some(parent) = ancestor.parent() {
                                 let try_path = parent.join(fname);
                                 let try_str = try_path.to_string_lossy().replace('\\', "/");
-                                if try_str == target { break; }
+                                if try_str == target {
+                                    break;
+                                }
                                 attempts.push((try_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &try_str) {
-                                    Ok(loc) => { success = Some((try_str.clone(), loc)); break; }
+                                    Ok(loc) => {
+                                        success = Some((try_str.clone(), loc));
+                                        break;
+                                    }
                                     Err(e) => {
                                         let local = out_root.join(&try_str);
                                         let _ = std::fs::remove_file(&local);
@@ -208,10 +252,13 @@ impl Provider for Codeberg {
                         if let Some(fname) = Path::new(&target).file_name() {
                             if let Some(entry_dir) = Path::new(&entry_rel).parent() {
                                 let entry_dir_path = entry_dir.join(fname);
-                                let entry_dir_str = entry_dir_path.to_string_lossy().replace('\\', "/");
+                                let entry_dir_str =
+                                    entry_dir_path.to_string_lossy().replace('\\', "/");
                                 attempts.push((entry_dir_str.clone(), None));
                                 match Self::fetch_file(r, out_root, &entry_dir_str) {
-                                    Ok(loc) => { success = Some((entry_dir_str.clone(), loc)); }
+                                    Ok(loc) => {
+                                        success = Some((entry_dir_str.clone(), loc));
+                                    }
                                     Err(e) => {
                                         let local = out_root.join(&entry_dir_str);
                                         let _ = std::fs::remove_file(&local);
@@ -230,14 +277,25 @@ impl Provider for Codeberg {
                     let error_msg = format!(
                         "Failed to fetch include '{}'. Attempts: {}. Errors: {}",
                         inc,
-                        attempts.iter().map(|(p, _)| format!("'{}'", p)).collect::<Vec<_>>().join(", "),
-                        errors.iter().map(|(p, e)| format!("{}: {}", p, e)).collect::<Vec<_>>().join("; ")
+                        attempts
+                            .iter()
+                            .map(|(p, _)| format!("'{}'", p))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        errors
+                            .iter()
+                            .map(|(p, e)| format!("{}: {}", p, e))
+                            .collect::<Vec<_>>()
+                            .join("; ")
                     );
                     return Err(error_msg.into());
                 }
             }
         }
-        Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
+        Ok(FetchResult {
+            entry_local: all[0].clone(),
+            all_files: all,
+        })
 
         // for b in Self::branch_candidates(&r_in.branch) {
         //     let r = RepoRef {

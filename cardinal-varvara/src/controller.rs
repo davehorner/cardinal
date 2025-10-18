@@ -6,12 +6,7 @@ use uxn::{Ports, Uxn};
 use zerocopy::{BigEndian, U16};
 
 /// Helper to map pedal bits to controller key events
-pub fn inject_pedal_keys(
-    controller: &mut Controller,
-    vm: &mut Uxn,
-    prev: u8,
-    pedal: u8,
-) {
+pub fn inject_pedal_keys(controller: &mut Controller, vm: &mut Uxn, prev: u8, pedal: u8) {
     let pedal_map = [
         (0, Key::Shift),
         (1, Key::Ctrl),
@@ -33,12 +28,7 @@ pub fn inject_pedal_keys(
     }
 }
 
-#[derive(
-    zerocopy::FromBytes,
-    zerocopy::IntoBytes,
-    zerocopy::Immutable,
-    zerocopy::KnownLayout,
-)]
+#[derive(zerocopy::FromBytes, zerocopy::IntoBytes, zerocopy::Immutable, zerocopy::KnownLayout)]
 #[repr(C)]
 /// Controller port mappings for the Varvara system.
 pub struct ControllerPorts {
@@ -104,17 +94,18 @@ impl Controller {
                 clear: true,
             }),
         };
-        println!("[og CONTROLLER][char] char: '{}' (0x{:02x}), vector: 0x{:04x}, addr: 0x{:02x}", c as char, c, event.vector, ControllerPorts::KEY);
+        println!(
+            "[og CONTROLLER][char] char: '{}' (0x{:02x}), vector: 0x{:04x}, addr: 0x{:02x}",
+            c as char,
+            c,
+            event.vector,
+            ControllerPorts::KEY
+        );
         event
     }
 
     /// Send the given key event, returning an event if needed
-    pub fn pressed(
-        &mut self,
-        vm: &mut Uxn,
-        k: Key,
-        repeat: bool,
-    ) -> Option<Event> {
+    pub fn pressed(&mut self, vm: &mut Uxn, k: Key, repeat: bool) -> Option<Event> {
         if let Key::Char(k) = k {
             Some(self.char(vm, k))
         } else {
@@ -136,11 +127,7 @@ impl Controller {
     }
 
     /// Checks the current button states and returns an event if any button state changed.
-    pub fn check_buttons(
-        &mut self,
-        vm: &mut Uxn,
-        repeat: bool,
-    ) -> Option<Event> {
+    pub fn check_buttons(&mut self, vm: &mut Uxn, repeat: bool) -> Option<Event> {
         let mut buttons = 0;
         for (i, k) in [
             Key::Ctrl,
