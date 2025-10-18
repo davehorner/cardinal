@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.6...uxn-tal-v0.2.7) - 2025-10-18
+
+### Fixed
+
+- *(macro_context)* ?& and !& scope to the macro invocation context.  varaboy https://github.com/tbsp/varaboy/blob/main/src/varaboy.tal#L42 is the source of this fix.  varaboy runs test_roms OK.
+
 ## [0.2.6](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.5...uxn-tal-v0.2.6) - 2025-10-18
 
 ### Fixed
