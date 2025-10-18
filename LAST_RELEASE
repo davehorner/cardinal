@@ -1,7 +1,7 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/18|4f22802|0.5.0
+25/10/18|25993fc|0.5.0
 ## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.5...cardinal-uxn-v0.5.0) - 2025-10-18
 
 ### Added
@@ -10,19 +10,19 @@
 
 
 ## cardinal-varvara
-25/10/18|4f22802|0.6.0
-## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.5.0...cardinal-varvara-v0.6.0) - 2025-10-18
+25/10/18|25993fc|0.7.0
+## [0.7.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.6.0...cardinal-varvara-v0.7.0) - 2025-10-18
 
-### Added
+### Other
 
-- *(macos)* [**breaking**] macOS protocol handler + safer exec; docs/deps
+- *(macos)* [**breaking**] macOS protocol handler + safer exec; docs/deps  - macOS .app registers uxntal:// and forwards to uxntal - run-after uses direct exec with PATH lookup - docs updated; minor refactors - deps refreshed (no specifics)  BREAKING CHANGE: fix shell exploit.  # Multi-crate LAST_RELEASE
 
 
 ## cardinal-gui
-25/10/13|4f22802|0.3.11
-## [0.3.11](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.10...cardinal-gui-v0.3.11) - 2025-10-13
+25/10/18|25993fc|0.4.0
+## [0.4.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.3.11...cardinal-gui-v0.4.0) - 2025-10-18
 
-### Added
+### Other
 
-- *(wayland)* cardinal-gui works on wayland now; uxntal protocol handler works on ubuntu. run --register; then test with xdg-open uxntal://https///wiki.xxiivv.com/etc/cccc.tal.txt
+- *(macos)* [**breaking**] macOS protocol handler + safer exec; docs/deps  - macOS .app registers uxntal:// and forwards to uxntal - run-after uses direct exec with PATH lookup - docs updated; minor refactors - deps refreshed (no specifics)  BREAKING CHANGE: fix shell exploit.  # Multi-crate LAST_RELEASE
 
