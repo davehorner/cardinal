@@ -541,7 +541,20 @@ args[0] = entry_local
 
     if let Some(cmd) = run_after_assembly {
         let cmd_name = cmd.clone();
-        let path_to_emu = which::which(&cmd_name).map_err(|_| simple_err(Path::new("."), &format!("{cmd_name} not found in PATH")))?;
+        let path_to_emu = which::which(&cmd_name)
+            .or_else(|_| {
+                if let Ok(home) = std::env::var("HOME") {
+                    let p = PathBuf::from(format!("{}/.cargo/bin/{}", home, &cmd_name));
+                    if p.exists() {
+                        Ok(p)
+                    } else {
+                        Err(())
+                    }
+                } else {
+                    Err(())
+                }
+            })
+            .map_err(|_| simple_err(Path::new("."), &format!("{cmd_name} not found in PATH or ~/.cargo/bin")))?;
         println!("Running post-assembly command: {}", cmd);
         let dir_str = run_after_cwd
             .as_ref()
@@ -694,7 +707,6 @@ fn recursive_find(root: &Path, needle: &str, cap: usize) -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn register_protocol_per_user() -> std::io::Result<()> {
-    use std::fs::{self, File};
     use std::io::{Write, stdin, stdout};
     use std::path::PathBuf;
     use std::process::Command;
