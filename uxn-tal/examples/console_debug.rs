@@ -32,7 +32,7 @@ fn main() -> Result<(), AssemblerError> {
     println!("This should output 'ABC' followed by newline");
 
     // Also create a version that matches known working TAL programs
-    let working_example = r#"
+    let _working_example = r#"
         |0100
         
         ( Hello World - standard console pattern )
