@@ -1,23 +1,24 @@
+#![allow(clippy::module_inception)]
 pub mod cardinal_orcas_symbols {
-    #![allow(non_upper_case_globals)]
-    // Auto-generated: label address & size constants
-    pub const _cSYSTEM_VECTOR: usize = 0x0000;
-    pub const _cSYSTEM_VECTOR_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_EXPANSION: usize = 0x0002;
-    pub const _cSYSTEM_EXPANSION_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_WST: usize = 0x0004;
-    pub const _cSYSTEM_WST_SIZE: usize = 0x0001;
-    pub const _cSYSTEM_RST: usize = 0x0005;
-    pub const _cSYSTEM_RST_SIZE: usize = 0x0001;
-    pub const _cSYSTEM_METADATA: usize = 0x0006;
-    pub const _cSYSTEM_METADATA_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_R: usize = 0x0008;
-    pub const _cSYSTEM_R_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_G: usize = 0x000A;
-    pub const _cSYSTEM_G_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_B: usize = 0x000C;
-    pub const _cSYSTEM_B_SIZE: usize = 0x0002;
-    pub const _cSYSTEM_DEBUG: usize = 0x000E;
+#![allow(non_upper_case_globals)]
+// Auto-generated: label address & size constants
+pub const _cSYSTEM_VECTOR: usize = 0x0000;
+pub const _cSYSTEM_VECTOR_SIZE: usize = 0x0002;
+pub const _cSYSTEM_EXPANSION: usize = 0x0002;
+pub const _cSYSTEM_EXPANSION_SIZE: usize = 0x0002;
+pub const _cSYSTEM_WST: usize = 0x0004;
+pub const _cSYSTEM_WST_SIZE: usize = 0x0001;
+pub const _cSYSTEM_RST: usize = 0x0005;
+pub const _cSYSTEM_RST_SIZE: usize = 0x0001;
+pub const _cSYSTEM_METADATA: usize = 0x0006;
+pub const _cSYSTEM_METADATA_SIZE: usize = 0x0002;
+pub const _cSYSTEM_R: usize = 0x0008;
+pub const _cSYSTEM_R_SIZE: usize = 0x0002;
+pub const _cSYSTEM_G: usize = 0x000A;
+pub const _cSYSTEM_G_SIZE: usize = 0x0002;
+pub const _cSYSTEM_B: usize = 0x000C;
+pub const _cSYSTEM_B_SIZE: usize = 0x0002;
+pub const _cSYSTEM_DEBUG: usize = 0x000E;
     pub const _cSYSTEM_DEBUG_SIZE: usize = 0x0001;
     pub const _cSYSTEM_STATE: usize = 0x000F;
     pub const _cSYSTEM_STATE_SIZE: usize = 0x0001;

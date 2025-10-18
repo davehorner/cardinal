@@ -31,7 +31,7 @@ impl Opcodes {
             if name.len() < 3 {
                 continue;
             }
-            if &name[..3].to_ascii_uppercase() != base {
+            if name[..3].to_ascii_uppercase() != base {
                 continue;
             }
             let mut opcode = i as u8;

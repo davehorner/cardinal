@@ -159,7 +159,7 @@ impl AssemblerBackend for UxnBuxnBackend {
             .arg("buxn-linux")
             .arg("/app/bin/Release/linux/buxn-asm")
             .arg(tal_file)
-            .arg(&rom_path)
+            .arg(rom_path)
             .output()
             .map_err(|e| AssemblerError::Backend { message: format!("Failed to run docker buxn-asm: {e}") })?;
             println!(
@@ -181,12 +181,12 @@ impl AssemblerBackend for UxnBuxnBackend {
                 ),
             ));
         }
-        let bytes = fs::read(&rom_path).unwrap_or_default();
+        let bytes = fs::read(rom_path).unwrap_or_default();
         Ok(AssemblyOutput {
             rom_path: rom_path.to_string(),
             rom_bytes: bytes.clone(),
-            stdout: crate::emu_uxncli::run_uxncli_get_stdout(&rom_path)?,
-            disassembly: run_dis_file(&rom_path)?,
+            stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
+            disassembly: run_dis_file(rom_path)?,
         })
     }
 }

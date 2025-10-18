@@ -164,7 +164,7 @@ pub fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
         uxndis_path.to_string_lossy().to_string()
     };
     let rom_path = if cfg!(windows) {
-        wslpath::windows_to_wsl(&rom_path)
+        wslpath::windows_to_wsl(rom_path)
             .map_err(|e| dis_err(rom_path, &format!("Could not convert ROM path to WSL: {e}")))?
     } else {
         rom_path.to_string()
