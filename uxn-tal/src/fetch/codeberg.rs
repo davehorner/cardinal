@@ -1,6 +1,6 @@
 use super::{
     downloader::{http_get, write_bytes},
-    includes::{parse_includes, resolve_include, repo_entry_guesses},
+    includes::{parse_includes, resolve_include},
     provider::{FetchResult, Provider, RepoRef},
 };
 use std::{
@@ -21,24 +21,24 @@ impl Codeberg {
         )
     }
 
-    fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
-        let url = Self::raw_url(r, repo_rel);
-        if let Ok(bytes) = http_get(&url) {
-            let local = out.join(repo_rel);
-            if write_bytes(&local, &bytes).is_ok() {
-                return Some(local);
-            }
-        }
-        None
-    }
+    // fn try_entry(r: &RepoRef, out: &Path, repo_rel: &str) -> Option<PathBuf> {
+    //     let url = Self::raw_url(r, repo_rel);
+    //     if let Ok(bytes) = http_get(&url) {
+    //         let local = out.join(repo_rel);
+    //         if write_bytes(&local, &bytes).is_ok() {
+    //             return Some(local);
+    //         }
+    //     }
+    //     None
+    // }
 
-    fn branch_candidates(branch: &str) -> Vec<String> {
-        if branch != "HEAD" {
-            return vec![branch.to_string()];
-        }
-        // common defaults
-        vec!["main".into(), "master".into(), "trunk".into()]
-    }
+    // fn branch_candidates(branch: &str) -> Vec<String> {
+    //     if branch != "HEAD" {
+    //         return vec![branch.to_string()];
+    //     }
+    //     // common defaults
+    //     vec!["main".into(), "master".into(), "trunk".into()]
+    // }
 
     fn fetch_file(r: &RepoRef, out_root: &Path, repo_rel: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let url = Self::raw_url(r, repo_rel);
