@@ -6,8 +6,13 @@ pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if let Ok(out) = Command::new("curl").args(["-L", "-sS", url]).output() {
             if out.status.success() {
                 return Ok(out.stdout);
+            } else {
+                return Err(format!("curl failed with exit code {} for {}", out.status.code().unwrap_or(-1), url).into());
             }
         }
+    }
+    if resp.status().as_u16() == 404 {
+        return Err(format!("HTTP 404 Not Found for {}", url).into());
     }
     if !resp.status().is_success() {
         return Err(format!("HTTP {} for {}", resp.status(), url).into());

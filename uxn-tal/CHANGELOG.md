@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.2...uxn-tal-v0.2.3) - 2025-10-18
+
+### Fixed
+
+- *(includes)* additional include multi-resolution improvements.  the resolution is very forgiving, it will attempt to resolve the file at top level.  this fixes ~invalid/named.tal, which resolves to the top level via filename and root of repo.
+
 ## [0.2.2](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.1...uxn-tal-v0.2.2) - 2025-10-18
 
 ### Added

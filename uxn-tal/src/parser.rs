@@ -164,7 +164,7 @@ impl Parser {
                 }
                 _ => {
                     let node = self.parse_node()?;
-                    println!("{:?}", node);
+                    // println!("{:?}", node);
                     nodes.push(node);
                 }
             }
@@ -306,7 +306,7 @@ impl Parser {
                 let rune = rune;
                 let label = label.clone();
                 self.advance();
-                println!("DEBUG: Parsed label definition: @{}", label);
+                // println!("DEBUG: Parsed label definition: @{}", label);
                 Ok(AstNode::LabelDef(rune, label))
             }
             Token::LabelRef(rune, label) => {
@@ -315,10 +315,10 @@ impl Parser {
                 let rune = rune;
                 let tok = self.current_token().clone();
                 self.advance();
-                println!(
-                    "LabelRef: label='{}', rune={:?}, token=({}:{}:{})",
-                    label, rune, self.path, tok.line, tok.start_pos
-                );
+                // println!(
+                //     "LabelRef: label='{}', rune={:?}, token=({}:{}:{})",
+                //     label, rune, self.path, tok.line, tok.start_pos
+                // );
                 Ok(AstNode::LabelRef {
                     label,
                     rune: Rune::from(rune),
@@ -480,15 +480,15 @@ impl Parser {
             Token::MacroDef(name) => {
                 // Accept macro names like '=' for ={ ... } blocks
                 let name = name.clone();
-                println!(
-                    "MacroDef: {} {}:{}:{}:{} {:?}",
-                    name,
-                    self.path,
-                    self.current_token().line,
-                    self.current_token().start_pos,
-                    self.current_token().end_pos,
-                    self.current_token().token
-                );
+                // println!(
+                //     "MacroDef: {} {}:{}:{}:{} {:?}",
+                //     name,
+                //     self.path,
+                //     self.current_token().line,
+                //     self.current_token().start_pos,
+                //     self.current_token().end_pos,
+                //     self.current_token().token
+                // );
 
                 self.advance();
 
@@ -498,15 +498,15 @@ impl Parser {
                 ) {
                     self.advance();
                 }
-                println!(
-                    "MacroDef: {} {}:{}:{}:{} {:?}",
-                    name,
-                    self.path,
-                    self.current_token().line,
-                    self.current_token().start_pos,
-                    self.current_token().end_pos,
-                    self.current_token().token
-                );
+                // println!(
+                //     "MacroDef: {} {}:{}:{}:{} {:?}",
+                //     name,
+                //     self.path,
+                //     self.current_token().line,
+                //     self.current_token().start_pos,
+                //     self.current_token().end_pos,
+                //     self.current_token().token
+                // );
 
                 let mut body = Vec::new();
                 let mut depth = 1;
@@ -520,10 +520,10 @@ impl Parser {
                         ) {
                             self.advance();
                         }
-                        println!(
-                            "DEBUG: Macro body starts at token: {:?}",
-                            self.current_token()
-                        );
+                        // println!(
+                        //     "DEBUG: Macro body starts at token: {:?}",
+                        //     self.current_token()
+                        // );
                         while !self.is_at_end() && depth > 0 {
                             match &self.current_token().token {
                                 Token::Comment(_)
@@ -534,47 +534,47 @@ impl Parser {
                                 }
                                 Token::BraceOpen | Token::ConditionalBlockStart => {
                                     depth += 1;
-                                    println!(
-                                        "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
-                                        name,
-                                        depth,
-                                        self.current_token()
-                                    );
+                                    // println!(
+                                    //     "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
+                                    //     name,
+                                    //     depth,
+                                    //     self.current_token()
+                                    // );
                                     body.push(self.parse_node()?);
-                                    println!(
-                                        "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
-                                        name,
-                                        depth,
-                                        self.current_token()
-                                    );
+                                    // println!(
+                                    //     "BraceOpen Inside macro '{}', depth = {}, token = {:?}",
+                                    //     name,
+                                    //     depth,
+                                    //     self.current_token()
+                                    // );
                                 }
                                 Token::BraceClose => {
                                     depth -= 1;
                                     if depth == 0 {
-                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        // println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
                                         self.advance();
                                         break;
                                     } else {
-                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        // println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
                                         let n = self.parse_node()?;
-                                        println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                        // println!("BraceClose Inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
                                         body.push(n);
                                     }
                                 }
                                 Token::Eof => {
-                                    println!(
-                                        "Eof Inside macro '{}', depth = {}, token = {:?}",
-                                        name,
-                                        depth,
-                                        self.current_token()
-                                    );
+                                    // println!(
+                                    //     "Eof Inside macro '{}', depth = {}, token = {:?}",
+                                    //     name,
+                                    //     depth,
+                                    //     self.current_token()
+                                    // );
                                     break;
                                 }
                                 _ => {
                                     // if matches!(self.current_token().token, Token::Eof) {
                                     //     break;
                                     // }
-                                    println!("Unexpected token inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
+                                    // println!("Unexpected token inside macro '{}', depth = {}, token = {:?}", name, depth, self.current_token());
                                     // Only parse and push if not a macro name
                                     if let Token::Word(ref w) = self.current_token().token {
                                         if self.is_macro_defined(w) {
@@ -602,10 +602,10 @@ impl Parser {
                     }
                     Token::Eof => return Ok(AstNode::Ignored),
                     _ => {
-                        println!(
-                            "DEBUG: Unexpected token after macro name: {:?}",
-                            self.current_token().token
-                        );
+                        // println!(
+                        //     "DEBUG: Unexpected token after macro name: {:?}",
+                        //     self.current_token().token
+                        // );
                         let line = self.current_token().line;
                         let position = self.current_token().start_pos;
                         Err(AssemblerError::SyntaxError {
