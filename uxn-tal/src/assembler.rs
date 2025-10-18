@@ -847,7 +847,7 @@ impl Assembler {
                         return Ok(());
                     }
                 }
-                // Normal handling for !label
+                // Normal handling for !label, with macro sublabel resolution
                 let label = match &tok.token {
                     crate::lexer::Token::ExclamationRef(s) => s.clone(),
                     _ => {
@@ -860,13 +860,40 @@ impl Assembler {
                         })
                     }
                 };
-                let resolved_name = if label.starts_with('/') {
-                    let clean_label = label.strip_prefix('/').unwrap_or(&label);
-                    if let Some(ref scope) = tok.scope {
+                let resolved_name = if label.starts_with('&') {
+                    // Always resolve &sublabel as <current_label>/sublabel at macro expansion
+                    let sublabel = label.trim_start_matches('&');
+                    if let Some(scope) = self.current_label.as_ref() {
                         let main_scope = if let Some(slash_pos) = scope.find('/') {
                             &scope[..slash_pos]
                         } else {
-                            scope
+                            scope.as_str()
+                        };
+                        format!("{}/{}", main_scope, sublabel)
+                    } else if let Some(scope) = self.last_top_label.as_ref() {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope.as_str()
+                        };
+                        format!("{}/{}", main_scope, sublabel)
+                    } else {
+                        sublabel.to_string()
+                    }
+                } else if label.starts_with('/') {
+                    let clean_label = label.strip_prefix('/').unwrap_or(&label);
+                    if let Some(scope) = self.current_label.as_ref() {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope.as_str()
+                        };
+                        format!("{}/{}", main_scope, clean_label)
+                    } else if let Some(scope) = self.last_top_label.as_ref() {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope.as_str()
                         };
                         format!("{}/{}", main_scope, clean_label)
                     } else {
@@ -1311,8 +1338,31 @@ impl Assembler {
                     crate::lexer::Token::ConditionalRef(s) => s.clone(),
                     _ => unreachable!("ConditionalRef token mismatch"),
                 };
+                // PATCH: If label starts with '&', resolve as sublabel in current macro expansion scope
+                let resolved_label = if label.starts_with('&') {
+                    let sublabel = label.trim_start_matches('&');
+                    if let Some(scope) = self.current_label.as_ref() {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope.as_str()
+                        };
+                        format!("{}/{}", main_scope, sublabel)
+                    } else if let Some(scope) = self.last_top_label.as_ref() {
+                        let main_scope = if let Some(slash_pos) = scope.find('/') {
+                            &scope[..slash_pos]
+                        } else {
+                            scope.as_str()
+                        };
+                        format!("{}/{}", main_scope, sublabel)
+                    } else {
+                        sublabel.to_string()
+                    }
+                } else {
+                    label.clone()
+                };
                 self.references.push(Reference {
-                    name: label,
+                    name: resolved_label,
                     rune: '?',
                     address: self.rom.position() + 1,
                     line: tok.line,
