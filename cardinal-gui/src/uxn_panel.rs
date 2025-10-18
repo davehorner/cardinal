@@ -69,11 +69,9 @@ impl<'a> UxnPanel<'a> {
     pub fn show(&mut self, ui: &mut egui::Ui) -> egui::Response {
         // Allocate space and get response for interaction
         let panel_size =
-            egui::Vec2::new(self.stage.size.0 as f32, self.stage.size.1 as f32)
-                * self.stage.scale;
+            egui::Vec2::new(self.stage.size.0 as f32, self.stage.size.1 as f32) * self.stage.scale;
         let (rect_id, rect) = ui.allocate_space(panel_size);
-        let response =
-            ui.interact(rect, rect_id, egui::Sense::click_and_drag());
+        let response = ui.interact(rect, rect_id, egui::Sense::click_and_drag());
 
         // Request keyboard focus when clicked
         if response.clicked() {

@@ -7,12 +7,7 @@ use std::{
 use uxn::{Ports, Uxn, DEV_SIZE};
 use zerocopy::{BigEndian, U16};
 
-#[derive(
-    zerocopy::IntoBytes,
-    zerocopy::FromBytes,
-    zerocopy::KnownLayout,
-    zerocopy::Immutable,
-)]
+#[derive(zerocopy::IntoBytes, zerocopy::FromBytes, zerocopy::KnownLayout, zerocopy::Immutable)]
 #[repr(C)]
 pub struct FilePorts {
     _vector: U16<BigEndian>,
@@ -158,8 +153,7 @@ impl File {
         let mut depth = 0;
         for component in path.components() {
             match component {
-                std::path::Component::Prefix(..)
-                | std::path::Component::RootDir => {
+                std::path::Component::Prefix(..) | std::path::Component::RootDir => {
                     error!("path {path:?} is not relative");
                     return false;
                 }
@@ -368,9 +362,7 @@ impl File {
                                 let m = match d.metadata() {
                                     Ok(m) => m,
                                     Err(e) => {
-                                        error!(
-                                            "could not get entry metadata: {e}"
-                                        );
+                                        error!("could not get entry metadata: {e}");
                                         return;
                                     }
                                 };
@@ -388,9 +380,7 @@ impl File {
                                 scratch.push_back(b'\n');
                             }
                             Err(e) => {
-                                error!(
-                                    "error while iterating over {path:?}: {e}"
-                                );
+                                error!("error while iterating over {path:?}: {e}");
                                 return;
                             }
                         }

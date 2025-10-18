@@ -1,7 +1,5 @@
 use std::{fs, path::Path};
 
-
-
 pub fn detect_wsl() -> bool {
     std::env::var("WSL_DISTRO_NAME").is_ok()
         || std::env::var("WSLENV").is_ok()

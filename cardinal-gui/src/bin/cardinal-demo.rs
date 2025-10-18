@@ -14,9 +14,7 @@ use varvara::Key;
 
 /// Injects a string as Orca events, simulating character entry with right/left/down arrows
 #[allow(dead_code)]
-fn build_orca_inject_queue_from_chars(
-    chars: &str,
-) -> std::collections::VecDeque<InjectEvent> {
+fn build_orca_inject_queue_from_chars(chars: &str) -> std::collections::VecDeque<InjectEvent> {
     use std::collections::VecDeque;
     let mut queue = VecDeque::new();
     #[allow(dead_code)]
@@ -60,9 +58,7 @@ fn build_orca_inject_queue_from_chars(
 }
 #[allow(dead_code)]
 /// Build an InjectEvent queue for orca file injection with rectangle and efficient movement
-fn build_orca_inject_queue(
-    file_path: &str,
-) -> std::collections::VecDeque<InjectEvent> {
+fn build_orca_inject_queue(file_path: &str) -> std::collections::VecDeque<InjectEvent> {
     use std::collections::VecDeque;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -216,7 +212,6 @@ struct AppState {
     should_exit: Arc<Mutex<bool>>,
 }
 
-
 #[cfg(not(target_arch = "wasm32"))]
 fn egui_close_requested(ctx: &egui::Context) -> bool {
     ctx.input(|i| i.viewport().close_requested())
@@ -254,15 +249,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--width" => {
                 if i + 1 < args.len() {
-                    window_size.0 =
-                        args[i + 1].parse().unwrap_or(window_size.0);
+                    window_size.0 = args[i + 1].parse().unwrap_or(window_size.0);
                     i += 1;
                 }
             }
             "--height" => {
                 if i + 1 < args.len() {
-                    window_size.1 =
-                        args[i + 1].parse().unwrap_or(window_size.1);
+                    window_size.1 = args[i + 1].parse().unwrap_or(window_size.1);
                     i += 1;
                 }
             }
@@ -386,17 +379,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let sym_path = rom_file.clone();
                         let sym_path = sym_path.with_extension(format!(
                             "{}.sym",
-                            sym_path
-                                .extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or("")
+                            sym_path.extension().and_then(|e| e.to_str()).unwrap_or("")
                         ));
-                        std::fs::write(&sym_path, &sym)
-                            .map_err(|e| e.to_string())?;
-                        println!(
-                            "[DEBUG] Downloaded .sym file: {}",
-                            sym_path.display()
-                        );
+                        std::fs::write(&sym_path, &sym).map_err(|e| e.to_string())?;
+                        println!("[DEBUG] Downloaded .sym file: {}", sym_path.display());
                     }
                 }
                 title = format!("cardinal-demo - {}", github_roms[github_idx]);
@@ -448,10 +434,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // --- Helper to download static ROMs by URL ---
-    fn download_static_rom(
-        _label: &str,
-        url: &str,
-    ) -> Result<std::path::PathBuf, String> {
+    fn download_static_rom(_label: &str, url: &str) -> Result<std::path::PathBuf, String> {
         if let Some(stripped) = url.strip_prefix("file://") {
             println!("[DEBUG] Using local file path: {stripped}");
             // Use the local file path directly
@@ -503,8 +486,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Failed to create tempfile for static ROM");
 
             file.write_all(&bytes).map_err(|e| e.to_string())?;
-            let path =
-                file.into_temp_path().keep().map_err(|e| e.to_string())?;
+            let path = file.into_temp_path().keep().map_err(|e| e.to_string())?;
             Ok(path)
         }
     }
@@ -522,12 +504,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(event) = res {
                         if event.kind.is_modify() {
                             reload_tx.send(()).ok();
-                            println!("[ROM WATCHER] Detected change in ROM file: {:?}", event.paths);
+                            println!(
+                                "[ROM WATCHER] Detected change in ROM file: {:?}",
+                                event.paths
+                            );
                         }
                     }
                 },
                 Config::default(),
-            ).expect("Failed to create watcher");
+            )
+            .expect("Failed to create watcher");
             watcher
                 .watch(&rom_path_buf, RecursiveMode::NonRecursive)
                 .expect("Failed to watch ROM file");
@@ -572,8 +558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match std::fs::read_to_string(&sym_path) {
                 Ok(_sym_contents) => {
                     if let Some(ref mut varvara) = uxn_mod.varvara {
-                        let _ = varvara
-                            .load_symbols_into_self(sym_path.to_str().unwrap());
+                        let _ = varvara.load_symbols_into_self(sym_path.to_str().unwrap());
                         println!("[DEBUG] Loaded symbols from {sym_path:?}");
                     }
                 }
@@ -691,7 +676,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "uses_e_midi")]
     let midi_thread = Some(MidiPlayerThread::start());
 
-
     let result = eframe::run_native(
         &title,
         options,
@@ -724,9 +708,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if app_auto_rom_select {
                 let ctx = cc.egui_ctx.clone();
                 app.set_on_rom_change(move |rom_name| {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Title(
-                        format!("cardinal-demo - {rom_name}"),
-                    ));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
+                        "cardinal-demo - {rom_name}"
+                    )));
                 });
             }
 
@@ -751,8 +735,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(label) = &selected_rom_label {
                 if label.contains("orca.rom") {
                     let horners_orca_chars = "horners.orca";
-                    let queue =
-                        build_orca_inject_queue_from_chars(horners_orca_chars);
+                    let queue = build_orca_inject_queue_from_chars(horners_orca_chars);
                     app.queue_input(queue);
                 }
             }
@@ -769,7 +752,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     self.inner.update(ctx, frame);
                     #[cfg(feature = "uses_e_midi")]
                     if egui_close_requested(ctx) {
-                    println!("[DEBUG] AppWithClose update called");
+                        println!("[DEBUG] AppWithClose update called");
                         if let Some(thread) = self.midi_thread.take() {
                             thread.shutdown();
                         }
@@ -826,9 +809,7 @@ fn prompt_rom_selection(roms: &[String]) -> Result<String, String> {
     for (i, rom) in roms.iter().enumerate() {
         println!("  [{i}] {rom}", i = i + 1, rom = rom);
     }
-    println!(
-        "  [Return] Enable AUTO ROM CYCLING mode (cycle all ROMs every 10s)"
-    );
+    println!("  [Return] Enable AUTO ROM CYCLING mode (cycle all ROMs every 10s)");
     print!("Select a ROM by number, or hit return for auto cycling: ");
     let _ = std::io::stdout().flush();
     let mut input = String::new();
@@ -854,8 +835,7 @@ fn download_rom(_rom_name: &str) -> Result<PathBuf, String> {
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(dead_code)]
 fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
-    let url = format!(
-        "https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{rom_name}");
+    let url = format!("https://raw.githubusercontent.com/davehorner/cardinal/main/roms/{rom_name}");
 
     let client = Client::builder()
         .user_agent("cardinal-demo")
@@ -878,7 +858,6 @@ fn download_rom(rom_name: &str) -> Result<PathBuf, String> {
     let path = file.into_temp_path().keep().map_err(|e| e.to_string())?;
     Ok(path)
 }
-
 
 #[cfg(target_arch = "wasm32")]
 async fn _download_sym(sym_name: &str) -> Result<PathBuf, String> {

@@ -3,12 +3,7 @@ use std::mem::offset_of;
 use uxn::{Ports, Uxn};
 use zerocopy::{BigEndian, U16};
 
-#[derive(
-    zerocopy::IntoBytes,
-    zerocopy::KnownLayout,
-    zerocopy::Immutable,
-    zerocopy::FromBytes,
-)]
+#[derive(zerocopy::IntoBytes, zerocopy::KnownLayout, zerocopy::Immutable, zerocopy::FromBytes)]
 #[repr(C)]
 pub struct DatetimePorts {
     year: U16<BigEndian>,
@@ -56,12 +51,9 @@ impl Datetime {
             DatetimePorts::MINUTE => d.minute = t.minute().try_into().unwrap(),
             DatetimePorts::SECOND => d.second = t.second().try_into().unwrap(),
             DatetimePorts::DAY_OF_WEEK => {
-                d.day_of_week =
-                    t.weekday().num_days_from_sunday().try_into().unwrap()
+                d.day_of_week = t.weekday().num_days_from_sunday().try_into().unwrap()
             }
-            DatetimePorts::DAY_OF_YEAR => {
-                d.day_of_year.set(t.ordinal().try_into().unwrap())
-            }
+            DatetimePorts::DAY_OF_YEAR => d.day_of_year.set(t.ordinal().try_into().unwrap()),
             DatetimePorts::IS_DST => {
                 // https://github.com/chronotope/chrono/issues/1562
                 d.is_dst = 0u8; // TODO this is not correct

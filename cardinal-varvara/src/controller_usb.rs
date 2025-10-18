@@ -103,34 +103,24 @@ impl ControllerPollEvents for ControllerUsb {
             if let Some(&pedal_byte) = msg.data.first() {
                 match self.last_pedal {
                     Some(prev) => {
-                        println!("[USB] Pedal state changed: 0x{pedal_byte:02x} (was 0x{prev:02x})");
+                        println!(
+                            "[USB] Pedal state changed: 0x{pedal_byte:02x} (was 0x{prev:02x})"
+                        );
                         let changed = pedal_byte ^ prev;
                         for i in 0..8 {
                             let mask = 1 << i;
                             if changed & mask != 0 {
                                 if pedal_byte & mask != 0 {
-                                    println!(
-                                        "[USB] Pedal {i} pressed (bit {mask:02b})"
-                                    );
-                                    if let Some(e) = self.controller.pressed(
-                                        vm,
-                                        Key::Right,
-                                        true,
-                                    ) {
+                                    println!("[USB] Pedal {i} pressed (bit {mask:02b})");
+                                    if let Some(e) = self.controller.pressed(vm, Key::Right, true) {
                                         events.push(e);
                                     }
-                                    if let Some(event) =
-                                        self.controller.released(vm, Key::Right)
-                                    {
+                                    if let Some(event) = self.controller.released(vm, Key::Right) {
                                         events.push(event);
                                     }
                                 } else {
-                                    println!(
-                                        "[USB] Pedal {i} released (bit {mask:02b})"
-                                    );
-                                    if let Some(event) =
-                                        self.controller.released(vm, Key::Right)
-                                    {
+                                    println!("[USB] Pedal {i} released (bit {mask:02b})");
+                                    if let Some(event) = self.controller.released(vm, Key::Right) {
                                         events.push(event);
                                     }
                                 }
@@ -138,9 +128,7 @@ impl ControllerPollEvents for ControllerUsb {
                         }
                     }
                     None => {
-                        println!(
-                            "[USB] Initial pedal state: 0x{pedal_byte:02x}"
-                        );
+                        println!("[USB] Initial pedal state: 0x{pedal_byte:02x}");
                     }
                 }
                 self.last_pedal = Some(pedal_byte);
@@ -259,9 +247,7 @@ pub fn spawn_usb_controller_thread(
 ) -> mpsc::Receiver<UsbControllerMessage> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        println!(
-            "[USB] Starting HID thread, attempting to create API instance..."
-        );
+        println!("[USB] Starting HID thread, attempting to create API instance...");
         let api = match HidApi::new() {
             Ok(api) => api,
             Err(e) => {
@@ -269,7 +255,10 @@ pub fn spawn_usb_controller_thread(
                 return;
             }
         };
-        println!("[USB] HID API instance created. Attempting to open device {:04x}:{:04x}...", config.vendor_id, config.product_id);
+        println!(
+            "[USB] HID API instance created. Attempting to open device {:04x}:{:04x}...",
+            config.vendor_id, config.product_id
+        );
         let joystick = match api.open(config.vendor_id, config.product_id) {
             Ok(dev) => {
                 println!("[USB] Device opened successfully.");

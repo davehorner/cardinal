@@ -31,8 +31,8 @@ fn main() -> Result<()> {
     env_logger::init_from_env(env);
 
     let args = Args::parse();
-    let mut f = std::fs::File::open(&args.rom)
-        .with_context(|| format!("failed to open {:?}", args.rom))?;
+    let mut f =
+        std::fs::File::open(&args.rom).with_context(|| format!("failed to open {:?}", args.rom))?;
 
     let mut rom = vec![];
     f.read_to_end(&mut rom).context("failed to read file")?;

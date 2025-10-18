@@ -57,7 +57,9 @@ fn main() -> Result<(), AssemblerError> {
     let uxna = run_uxnasm(tal_path);
     let drif = run_drifblim(tal_path); // optional
     if have_uxncli() && Path::new("uxndis.rom").exists() {
-        if internal_rom.is_some() { dump_disassembly(&internal_out_path); }
+        if internal_rom.is_some() {
+            dump_disassembly(&internal_out_path);
+        }
         for r in [&uxna, &drif] {
             if r.ok {
                 if let Some(ref rp) = r.rom_path {
@@ -74,7 +76,13 @@ fn main() -> Result<(), AssemblerError> {
         "backend", "stat", "bytes"
     );
     if let Some(ref rom) = internal_rom {
-        println!("  {:<9} {:<5} {:>8}  {}", "uxntal", "OK", rom.len(), internal_out_path);
+        println!(
+            "  {:<9} {:<5} {:>8}  {}",
+            "uxntal",
+            "OK",
+            rom.len(),
+            internal_out_path
+        );
     } else {
         // Show last 3 non-empty lines of internal error (previously only last 1)
         let summary = internal_err
@@ -233,17 +241,23 @@ struct BackendResult {
 fn run_uxnasm(tal: &str) -> BackendResult {
     let out = format!("{tal}.uxnasm.rom");
     let (cmd, mut args): (&str, Vec<String>) = if in_wsl() {
-        ("uxnasm", vec!["--verbose".to_string(), tal.to_string(), out.to_string()])
+        (
+            "uxnasm",
+            vec!["--verbose".to_string(), tal.to_string(), out.to_string()],
+        )
     } else {
         // Convert Windows paths to WSL paths so uxnasm inside WSL can access them
         let wsl_tal = wslize(tal);
         let wsl_out = wslize(&out);
-        ("wsl", vec![
-            "uxnasm".to_string(),
-            "--verbose".to_string(),
-            wsl_tal,
-            wsl_out,
-        ])
+        (
+            "wsl",
+            vec![
+                "uxnasm".to_string(),
+                "--verbose".to_string(),
+                wsl_tal,
+                wsl_out,
+            ],
+        )
     };
     match spawn_capture(cmd, &mut args) {
         Ok((status, so, se)) if status.success() && Path::new(&out).exists() => {
@@ -257,7 +271,7 @@ fn run_uxnasm(tal: &str) -> BackendResult {
                 stderr: se,
                 error: None,
             }
-        },
+        }
         Ok((_s, so, se)) => BackendResult {
             name: "uxnasm",
             ok: false,
@@ -294,16 +308,22 @@ fn run_drifblim(tal: &str) -> BackendResult {
     }
     let out = format!("{tal}.drifblim.rom");
     let (cmd, mut args): (&str, Vec<String>) = if in_wsl() {
-        ("uxncli", vec!["drifblim.rom".to_string(), tal.to_string(), out.to_string()])
+        (
+            "uxncli",
+            vec!["drifblim.rom".to_string(), tal.to_string(), out.to_string()],
+        )
     } else {
         let wsl_tal = wslize(tal);
         let wsl_out = wslize(&out);
-        ("wsl", vec![
-            "uxncli".to_string(),
-            "drifblim.rom".to_string(),
-            wsl_tal,
-            wsl_out,
-        ])
+        (
+            "wsl",
+            vec![
+                "uxncli".to_string(),
+                "drifblim.rom".to_string(),
+                wsl_tal,
+                wsl_out,
+            ],
+        )
     };
     match spawn_capture(cmd, &mut args) {
         Ok((status, so, se)) if status.success() && Path::new(&out).exists() => {
@@ -317,7 +337,7 @@ fn run_drifblim(tal: &str) -> BackendResult {
                 stderr: se,
                 error: None,
             }
-        },
+        }
         Ok((_s, so, se)) => BackendResult {
             name: "drifblim",
             ok: false,
@@ -370,7 +390,9 @@ fn first_byte_diff(a: &[u8], b: &[u8]) -> Option<ByteDiff> {
 
 fn first_line_diff(a: &str, b: &str) -> Option<(usize, String, String)> {
     for (i, (la, lb)) in a.lines().zip(b.lines()).enumerate() {
-        if la == lb { continue; }
+        if la == lb {
+            continue;
+        }
         if DIS_IGNORE_COMMENT_DIFF {
             let na = strip_dis_comment(la);
             let nb = strip_dis_comment(lb);
@@ -409,10 +431,16 @@ fn disassemble(rom_path: &str) -> Option<String> {
         return None;
     }
     let (cmd, mut args): (&str, Vec<String>) = if in_wsl() {
-        ("uxncli", vec!["uxndis.rom".to_string(), rom_path.to_string()])
+        (
+            "uxncli",
+            vec!["uxndis.rom".to_string(), rom_path.to_string()],
+        )
     } else {
         let wsl_rom_path = wslize(rom_path);
-        ("wsl", vec!["uxncli".to_string(), "uxndis.rom".to_string(), wsl_rom_path])
+        (
+            "wsl",
+            vec!["uxncli".to_string(), "uxndis.rom".to_string(), wsl_rom_path],
+        )
     };
     if let Ok((status, out, _)) = spawn_capture(cmd, &mut args) {
         if status.success() {
@@ -431,7 +459,9 @@ fn dis_ok(rom_path: &str) -> bool {
 }
 
 fn dump_disassembly(rom_path: &str) {
-    if !dis_ok(rom_path) { return; }
+    if !dis_ok(rom_path) {
+        return;
+    }
     if let Some(text) = disassemble(rom_path) {
         let path = format!("{rom_path}.dis.txt");
         let _ = std::fs::write(&path, text);
@@ -501,12 +531,16 @@ fn have_uxncli() -> bool {
 /* ---------- Path translation (Windows host -> WSL) ---------- */
 fn wslize(p: &str) -> String {
     // Fast path: already looks like a Unix path
-    if p.starts_with('/') { return p.to_string(); }
+    if p.starts_with('/') {
+        return p.to_string();
+    }
     // Drive letter?
     if p.len() > 2 && p.as_bytes()[1] == b':' {
         let drive = p.chars().next().unwrap().to_ascii_lowercase();
         let rest = p[2..].replace('\\', "/");
-        if rest.is_empty() { return format!("/mnt/{drive}"); }
+        if rest.is_empty() {
+            return format!("/mnt/{drive}");
+        }
         return format!("/mnt/{drive}/{}", rest.trim_start_matches('/'));
     }
     p.replace('\\', "/")

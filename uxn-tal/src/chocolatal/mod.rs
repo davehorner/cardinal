@@ -9,7 +9,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-
 #[derive(Debug)]
 pub enum PreprocessError {
     Io(std::io::Error),
@@ -291,7 +290,8 @@ pub fn preprocess(input: &str, path: &str, root_dir: &PathBuf) -> Result<String>
             let incl_pattern_cwd_str = incl_pattern_cwd.to_str().unwrap_or("");
             debug!(
                 "root:{} Including file(s) with pattern2: {}",
-               root_dir.display(), incl_pattern_cwd.display()
+                root_dir.display(),
+                incl_pattern_cwd.display()
             );
             if incl_pattern_cwd.exists() {
                 process_include_pattern(
@@ -305,13 +305,7 @@ pub fn preprocess(input: &str, path: &str, root_dir: &PathBuf) -> Result<String>
                 // Fallback: try relative to the parent of the current file
                 let incl_pattern = input_dir.join(path_part);
                 let incl_pattern_str = incl_pattern.to_str().unwrap_or("");
-                process_include_pattern(
-                    incl_pattern_str,
-                    &mut output,
-                    sep,
-                    path_part,
-                    root_dir,
-                )?;
+                process_include_pattern(incl_pattern_str, &mut output, sep, path_part, root_dir)?;
             }
             i += 1;
             continue;
@@ -356,7 +350,7 @@ pub fn preprocess(input: &str, path: &str, root_dir: &PathBuf) -> Result<String>
             i += 1;
             continue;
         }
-          // Faithful prefix/prefix-rewrite rules from preprocess-tal.sh
+        // Faithful prefix/prefix-rewrite rules from preprocess-tal.sh
         // 1. &&* or [',.;_-=!?|$']&&*  => tok = tok[..tok.find("&&")] + "&" + &tok[tok.find("&&")+2..]
         if let Some(idx) = tok.find("&&") {
             let newtok = format!("{}&{}", &tok[..idx], &tok[idx + 2..]);
@@ -479,7 +473,11 @@ fn process_include_pattern(
     //     }
     // }
     let input_path = Path::new(incl_pattern_str).to_path_buf();
-    debug!("root: {} Including file(s) with pattern3: {}", root_dir.display(), incl_pattern_str);
+    debug!(
+        "root: {} Including file(s) with pattern3: {}",
+        root_dir.display(),
+        incl_pattern_str
+    );
     if incl_pattern_str.contains('*')
         || incl_pattern_str.contains('?')
         || incl_pattern_str.contains('[')
@@ -497,19 +495,19 @@ fn process_include_pattern(
         };
         let dir_path = Path::new(dir_trimmed);
 
-                //         let file_pat_path = root_dir.join(file_pat);
-                // //debug!("Including file (from root_dir): {}", file_pat_path.display());
-                // if file_pat_path.exists() && file_pat_path.is_file() {
-                //     debug!("Including file (from root_dir): {}", file_pat_path.display());
-                //     if file_pat_path.extension().and_then(OsStr::to_str) == Some("tal") {
-                //         let incl_pre = preprocess_include_file(&root_dir, &file_pat_path)?;
-                //         output.push_str(&incl_pre);
-                //         output.push_str(sep);
-                //     } else {
-                //         hexdump(output, sep, file_pat_path)?;
-                //     }
-                //     return Ok(());
-                // }
+        //         let file_pat_path = root_dir.join(file_pat);
+        // //debug!("Including file (from root_dir): {}", file_pat_path.display());
+        // if file_pat_path.exists() && file_pat_path.is_file() {
+        //     debug!("Including file (from root_dir): {}", file_pat_path.display());
+        //     if file_pat_path.extension().and_then(OsStr::to_str) == Some("tal") {
+        //         let incl_pre = preprocess_include_file(&root_dir, &file_pat_path)?;
+        //         output.push_str(&incl_pre);
+        //         output.push_str(sep);
+        //     } else {
+        //         hexdump(output, sep, file_pat_path)?;
+        //     }
+        //     return Ok(());
+        // }
 
         let read_dir = match fs::read_dir(dir_path) {
             Ok(rd) => rd,
@@ -548,11 +546,14 @@ fn process_include_pattern(
                             let incl_pre = match preprocess_include_file(&PathBuf::from("."), &path)
                             {
                                 Ok(s) => s,
-                                Err(_) => //preprocess_include_file(&input_path, &path)?,
+                                Err(_) =>
+                                //preprocess_include_file(&input_path, &path)?,
+                                {
                                     match preprocess_include_file(&input_path, &path) {
                                         Ok(s) => s,
                                         Err(_) => preprocess_include_file(root_dir, &path)?,
                                     }
+                                }
                             };
                             output.push_str(&incl_pre);
                             output.push_str(sep);
@@ -604,15 +605,18 @@ fn process_single_file(
                     Ok(s) => break s,
                     Err(e) => {
                         // Try root_dir as a fallback if not already tried
-                            if let Some(ref fname) = filename {
-                        if !tried_paths.contains(&root_dir.join(fname)) {
-
+                        if let Some(ref fname) = filename {
+                            if !tried_paths.contains(&root_dir.join(fname)) {
                                 let root_path = root_dir.join(fname);
                                 if !tried_paths.contains(&root_path) && root_path != try_path {
-                                    debug!("Trying filename in root_dir fallback: {}", root_path.display());
+                                    debug!(
+                                        "Trying filename in root_dir fallback: {}",
+                                        root_path.display()
+                                    );
                                     debug!("(was trying: {})", try_path.display());
-                                    try_path = root_dir.join(try_path.file_name().unwrap_or(&OsStr::new("")));
-                                                                        debug!("(was trying: {})", try_path.display());
+                                    try_path = root_dir
+                                        .join(try_path.file_name().unwrap_or(&OsStr::new("")));
+                                    debug!("(was trying: {})", try_path.display());
                                     continue;
                                 }
                             }
@@ -620,10 +624,10 @@ fn process_single_file(
                         tried_paths.push(try_path.clone());
                         // Try all parent directories up to and including cwd with the same filename
                         if let Some(fname) = &filename {
-                            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                            let cwd =
+                                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                             let mut tried_cwd = false;
                             loop {
-                                
                                 let mut parent_opt = match try_path.parent() {
                                     Some(parent) => Some(parent.to_path_buf()),
                                     None => {
@@ -639,13 +643,13 @@ fn process_single_file(
                                     // if parent == root_dir {
                                     //     debug!("Reached root directory: {}", parent.display());
                                     //     break;
-                                        
+
                                     // }
                                     debug!("Trying parent directory: {}", parent.display());
                                     if parent.display().to_string().is_empty() {
                                         debug!("Reached root directory (empty path).");
                                         parent_opt = Some(root_dir.clone());
-                                    }                                       
+                                    }
                                 } else {
                                     debug!("No parent directory found.");
                                 }
@@ -676,7 +680,10 @@ fn process_single_file(
                             if !tried_cwd {
                                 let cwd_path = cwd.join(fname);
                                 if !tried_paths.contains(&cwd_path) && cwd_path != try_path {
-                                    debug!("Trying filename in cwd last resort: {}", cwd_path.display());
+                                    debug!(
+                                        "Trying filename in cwd last resort: {}",
+                                        cwd_path.display()
+                                    );
                                     try_path = cwd_path;
                                     continue;
                                 }
@@ -738,12 +745,14 @@ fn preprocess_include_file(current_dir: &PathBuf, path: &PathBuf) -> Result<Stri
     //     .unwrap_or(rel_str);
     // let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     // eprintln!("Including file curr: {} (path): {} (rewritten path): {} cwd: {}", current_dir.display(), path.display(), rel_str, cwd.display());
-    let incl_str = match fs::read_to_string(&path) {//(&rel_str) {
+    let incl_str = match fs::read_to_string(&path) {
+        //(&rel_str) {
         Ok(s) => s,
         Err(e) => {
             return Err(PreprocessError::Other(format!(
                 "chocolatal: Failed to read file '{}': {}",
-                path.display(), e
+                path.display(),
+                e
             )));
         }
     };
@@ -821,7 +830,7 @@ fn matches_pattern(name: &str, pattern: &str) -> bool {
 #[allow(dead_code)]
 fn main() {
     use std::env;
-    
+
     use std::fs;
     use std::io::{self, Read, Write};
     use std::process;

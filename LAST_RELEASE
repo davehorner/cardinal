@@ -1,17 +1,21 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/18|60f520b|0.5.0
-## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.5...cardinal-uxn-v0.5.0) - 2025-10-18
+25/10/18|9dc0fc5|0.5.1
+## [0.5.1](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.0...cardinal-uxn-v0.5.1) - 2025-10-18
 
-### Added
+### Fixed
 
-- *(macos)* [**breaking**] macOS protocol handler + safer exec; docs/deps
+- *(fmt)* 4 the cargo fmt ppl.
 
 
 ## cardinal-varvara
-25/10/18|60f520b|0.7.1
-## [0.7.1](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.0...cardinal-varvara-v0.7.1) - 2025-10-18
+25/10/18|9dc0fc5|0.7.2
+## [0.7.2](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.1...cardinal-varvara-v0.7.2) - 2025-10-18
+
+### Fixed
+
+- *(fmt)* 4 the cargo fmt ppl.
 
 ### Other
 
@@ -19,10 +23,10 @@
 
 
 ## cardinal-gui
-25/10/18|60f520b|0.4.2
-## [0.4.2](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.1...cardinal-gui-v0.4.2) - 2025-10-18
+25/10/18|9dc0fc5|0.4.3
+## [0.4.3](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.2...cardinal-gui-v0.4.3) - 2025-10-18
 
-### Other
+### Fixed
 
-- *(clippy)* 4 the clippy purists
+- *(fmt)* 4 the cargo fmt ppl.
 

@@ -23,10 +23,10 @@ pub mod controller_gilrs;
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 pub mod controller_usb;
 
-    // #[cfg(not(all(feature = "uses_usb", not(target_arch = "wasm32"))))]
-    // /// USB controller device stub for the Varvara system (when `uses_usb` is not enabled or on wasm32).
-    // #[path = "controller_usb_stub.rs"]
-    // pub mod controller_usb;
+// #[cfg(not(all(feature = "uses_usb", not(target_arch = "wasm32"))))]
+// /// USB controller device stub for the Varvara system (when `uses_usb` is not enabled or on wasm32).
+// #[path = "controller_usb_stub.rs"]
+// pub mod controller_usb;
 #[cfg(all(feature = "uses_usb", target_arch = "wasm32"))]
 /// USB controller device stub for the Varvara system (when `uses_usb` is enabled on wasm32 target).
 #[path = "controller_usb_stub.rs"]
@@ -223,20 +223,14 @@ impl Device for Varvara {
 
 impl Varvara {
     /// Loads a .sym file into the Varvara instance
-    pub fn load_symbols_into_self(
-        &mut self,
-        path: &str,
-    ) -> std::io::Result<()> {
+    pub fn load_symbols_into_self(&mut self, path: &str) -> std::io::Result<()> {
         let map = Self::load_symbols(path)?;
         self.symbols = Some(map);
         Ok(())
     }
 
     /// Load a ROM from a file path and attempt to load a .sys symbol file if present
-    pub fn load_sym_with_rom_path<P: AsRef<std::path::Path>>(
-        &mut self,
-        path: P,
-    ) {
+    pub fn load_sym_with_rom_path<P: AsRef<std::path::Path>>(&mut self, path: P) {
         let path = path.as_ref();
         println!("[DEBUG][VARVARA] Loading symbols from {path:?}");
         if path.exists() {
@@ -257,31 +251,23 @@ impl Varvara {
                 }
                 #[cfg(not(windows))]
                 let sys_path_str = sys_path.to_string_lossy().to_string();
-                println!(
-                    "[DEBUG][VARVARA] Attempting to load symbols from {sys_path_str}");
+                println!("[DEBUG][VARVARA] Attempting to load symbols from {sys_path_str}");
                 if sys_path.exists() {
                     let _ = self.load_symbols_into_self(&sys_path_str);
-                    println!(
-                        "[DEBUG][VARVARA] Loaded symbols from {sys_path_str}"
-                    );
+                    println!("[DEBUG][VARVARA] Loaded symbols from {sys_path_str}");
                 }
             }
         }
     }
 
     /// Loads a .sym file from a byte vector and returns a map of address -> label
-    pub fn load_symbols_from_vec(
-        &mut self,
-        data: &[u8],
-    ) -> io::Result<HashMap<u16, String>> {
+    pub fn load_symbols_from_vec(&mut self, data: &[u8]) -> io::Result<HashMap<u16, String>> {
         let map = Self::parse_symbols_from_bytes(data)?;
         self.symbols = Some(map.clone());
         Ok(map)
     }
     /// Returns a mutable reference to the USB controller, if it exists.
-    pub fn controller_usb_mut(
-        &mut self,
-    ) -> Option<&mut controller_usb::ControllerUsb> {
+    pub fn controller_usb_mut(&mut self) -> Option<&mut controller_usb::ControllerUsb> {
         self.controller
             .as_mut()
             .as_any()
@@ -310,9 +296,7 @@ impl Varvara {
                     ),
                     last_pedal: None,
                     controller: controller::Controller::default(),
-                    gilrs: Some(ControllerGilrs::new(
-                        controller::Controller::default(),
-                    )),
+                    gilrs: Some(ControllerGilrs::new(controller::Controller::default())),
                 })
             }
             #[cfg(not(feature = "uses_gilrs"))]
@@ -330,9 +314,7 @@ impl Varvara {
             {
                 use crate::controller_gilrs::ControllerGilrs;
 
-                Box::new(
-                    ControllerGilrs::new(controller::Controller::default()),
-                )
+                Box::new(ControllerGilrs::new(controller::Controller::default()))
             }
             #[cfg(not(feature = "uses_gilrs"))]
             {
@@ -375,9 +357,7 @@ impl Varvara {
             controller: {
                 #[cfg(feature = "uses_gilrs")]
                 {
-                    Box::new(ControllerGilrs::new(
-                        controller::Controller::default(),
-                    ))
+                    Box::new(ControllerGilrs::new(controller::Controller::default()))
                 }
                 #[cfg(not(feature = "uses_gilrs"))]
                 {
@@ -410,9 +390,7 @@ impl Varvara {
                     ),
                     last_pedal: None,
                     controller: controller::Controller::default(),
-                    gilrs: Some(ControllerGilrs::new(
-                        controller::Controller::default(),
-                    )),
+                    gilrs: Some(ControllerGilrs::new(controller::Controller::default())),
                 })
             }
             #[cfg(not(feature = "uses_gilrs"))]
@@ -428,9 +406,7 @@ impl Varvara {
         } else {
             #[cfg(feature = "uses_gilrs")]
             {
-                Box::new(
-                    ControllerGilrs::new(controller::Controller::default()),
-                )
+                Box::new(ControllerGilrs::new(controller::Controller::default()))
             }
             #[cfg(not(feature = "uses_gilrs"))]
             {
@@ -454,9 +430,7 @@ impl Varvara {
         self.controller = {
             #[cfg(feature = "uses_gilrs")]
             {
-                Box::new(
-                    ControllerGilrs::new(controller::Controller::default()),
-                )
+                Box::new(ControllerGilrs::new(controller::Controller::default()))
             }
             #[cfg(not(feature = "uses_gilrs"))]
             {
@@ -598,7 +572,10 @@ impl Varvara {
             let skip_print = skip_labels.contains(&label);
 
             if self.last_vector != e.vector && !skip_print {
-                println!("[VARVARA][process_event] vector: 0x{:04x} [{}], data: {:?}", e.vector, label, e.data);
+                println!(
+                    "[VARVARA][process_event] vector: 0x{:04x} [{}], data: {:?}",
+                    e.vector, label, e.data
+                );
                 self.last_vector = e.vector;
             }
 
@@ -612,10 +589,7 @@ impl Varvara {
             if let Some(d) = e.data {
                 if d.clear {
                     if !skip_print {
-                        println!(
-                            "[VARVARA][process_event] clear addr: 0x{:02x}",
-                            d.addr
-                        );
+                        println!("[VARVARA][process_event] clear addr: 0x{:02x}", d.addr);
                     }
                     vm.write_dev_mem(d.addr, 0);
                 }

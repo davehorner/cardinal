@@ -3,12 +3,7 @@ use std::mem::offset_of;
 use uxn::{Ports, Uxn};
 use zerocopy::{BigEndian, FromBytes, U16};
 
-#[derive(
-    zerocopy::Immutable,
-    zerocopy::FromBytes,
-    zerocopy::IntoBytes,
-    zerocopy::KnownLayout,
-)]
+#[derive(zerocopy::Immutable, zerocopy::FromBytes, zerocopy::IntoBytes, zerocopy::KnownLayout)]
 #[repr(C)]
 pub struct ScreenPorts {
     vector: U16<BigEndian>,
@@ -89,12 +84,7 @@ impl Pixel {
 
 /// Decoder for the `sprite` port
 #[derive(
-    Copy,
-    Clone,
-    FromBytes,
-    zerocopy::IntoBytes,
-    zerocopy::Immutable,
-    zerocopy::KnownLayout,
+    Copy, Clone, FromBytes, zerocopy::IntoBytes, zerocopy::Immutable, zerocopy::KnownLayout,
 )]
 #[repr(C)]
 pub struct Sprite(u8);
@@ -206,9 +196,7 @@ impl Screen {
 
         if std::mem::take(&mut self.changed) {
             for (p, o) in self.pixels.iter().zip(self.buffer.chunks_mut(4)) {
-                o.copy_from_slice(
-                    &self.colors[(p.get() & 0b11) as usize].to_le_bytes(),
-                );
+                o.copy_from_slice(&self.colors[(p.get() & 0b11) as usize].to_le_bytes());
             }
         }
         &self.buffer
@@ -268,8 +256,8 @@ impl Screen {
             [2, 3, 1, 2, 2, 3, 1, 2, 2, 3, 1, 2, 2, 3, 1, 2],
         ];
         const OPAQUE: [bool; 16] = [
-            false, true, true, true, true, false, true, true, true, true,
-            false, true, true, true, true, false,
+            false, true, true, true, true, false, true, true, true, true, false, true, true, true,
+            true, false,
         ];
 
         let auto = v.auto;
@@ -299,8 +287,7 @@ impl Screen {
                     continue;
                 }
                 for dx in 0..8 {
-                    let x =
-                        x.wrapping_add(if s.flip_x() { 7 - dx } else { dx });
+                    let x = x.wrapping_add(if s.flip_x() { 7 - dx } else { dx });
                     if x >= self.width {
                         continue;
                     }

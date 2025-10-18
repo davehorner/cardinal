@@ -19,8 +19,7 @@ use varvara::Varvara;
 pub fn run() -> Result<()> {
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-    let window =
-        web_sys::window().ok_or_else(|| anyhow!("could not get window"))?;
+    let window = web_sys::window().ok_or_else(|| anyhow!("could not get window"))?;
     let loc = window.location();
     let hash = loc
         .hash()
@@ -91,9 +90,7 @@ pub fn run() -> Result<()> {
             .create_element("option")
             .map_err(|e| anyhow!("could not create option: {e:?}"))?
             .dyn_into::<web_sys::HtmlOptionElement>()
-            .map_err(|e| {
-                anyhow!("could not convert example-selector: {e:?}")
-            })?;
+            .map_err(|e| anyhow!("could not convert example-selector: {e:?}"))?;
         opt.set_text_content(Some(r));
         sel.append_child(&opt.get_root_node())
             .map_err(|e| anyhow!("could not append node: {e:?}"))?;
@@ -134,47 +131,45 @@ pub fn run() -> Result<()> {
         .dyn_into::<web_sys::HtmlInputElement>()
         .map_err(|e| anyhow!("could not convert load-file: {e:?}"))?;
     let tx_ = tx.clone();
-    let a =
-        Closure::<dyn FnMut(web_sys::Event)>::new(move |e: web_sys::Event| {
-            let Some(t) = e.target() else {
-                error!("could not get target from event");
-                return;
-            };
-            let t = t.dyn_into::<web_sys::HtmlInputElement>().unwrap();
-            let Some(f) = t.files() else {
-                error!("could not get file list");
-                return;
-            };
-            let Some(f) = f.item(0) else {
-                error!("could not get file");
-                return;
-            };
-            log::info!("got files {f:?}");
-            let fut = JsFuture::from(f.array_buffer());
-            let tx_ = tx_.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                let v = fut.await;
-                let v = match v {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("could not wait for future: {e:?}");
-                        return;
-                    }
-                };
-                let Ok(buf) = v.dyn_into::<web_sys::js_sys::ArrayBuffer>()
-                else {
-                    error!("could not cast to ArrayBuffer");
+    let a = Closure::<dyn FnMut(web_sys::Event)>::new(move |e: web_sys::Event| {
+        let Some(t) = e.target() else {
+            error!("could not get target from event");
+            return;
+        };
+        let t = t.dyn_into::<web_sys::HtmlInputElement>().unwrap();
+        let Some(f) = t.files() else {
+            error!("could not get file list");
+            return;
+        };
+        let Some(f) = f.item(0) else {
+            error!("could not get file");
+            return;
+        };
+        log::info!("got files {f:?}");
+        let fut = JsFuture::from(f.array_buffer());
+        let tx_ = tx_.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let v = fut.await;
+            let v = match v {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("could not wait for future: {e:?}");
                     return;
-                };
-                let buf = Uint8Array::new(&buf);
-                let mut dst = vec![0; buf.length() as usize];
-                buf.copy_to(&mut dst);
-                if tx_.send(Event::LoadRom(dst)).is_err() {
-                    error!("error loading rom");
                 }
-                log::info!("got result {buf:?}");
-            });
+            };
+            let Ok(buf) = v.dyn_into::<web_sys::js_sys::ArrayBuffer>() else {
+                error!("could not cast to ArrayBuffer");
+                return;
+            };
+            let buf = Uint8Array::new(&buf);
+            let mut dst = vec![0; buf.length() as usize];
+            buf.copy_to(&mut dst);
+            if tx_.send(Event::LoadRom(dst)).is_err() {
+                error!("error loading rom");
+            }
+            log::info!("got result {buf:?}");
         });
+    });
     file_load.set_onchange(Some(a.as_ref().unchecked_ref()));
     std::mem::forget(a);
 
@@ -222,14 +217,7 @@ pub fn run() -> Result<()> {
                 canvas,
                 options,
                 Box::new(move |cc| {
-                    let mut s = Box::new(Stage::new(
-                        vm,
-                        dev,
-                        size,
-                        1.0,
-                        rx,
-                        &cc.egui_ctx,
-                    ));
+                    let mut s = Box::new(Stage::new(vm, dev, size, 1.0, rx, &cc.egui_ctx));
                     s.set_resize_callback(resize_closure);
                     Ok(s)
                 }),

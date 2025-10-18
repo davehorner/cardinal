@@ -1,4 +1,3 @@
-
 // Use the real types for compatibility
 use crate::Event;
 use uxn::Uxn;

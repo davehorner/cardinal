@@ -57,8 +57,7 @@ impl<'a> Stage<'a> {
             vec![egui::Color32::BLACK; (size.0 as usize) * (size.1 as usize)],
         );
 
-        let texture =
-            ctx.load_texture("frame", image, egui::TextureOptions::NEAREST);
+        let texture = ctx.load_texture("frame", image, egui::TextureOptions::NEAREST);
 
         Stage {
             vm,
@@ -91,8 +90,7 @@ impl<'a> Stage<'a> {
         if let Some(path) = self.get_last_rom_path() {
             let sym_path = path.with_extension("sym");
             if sym_path.exists() {
-                let _ =
-                    self.dev.load_symbols_into_self(sym_path.to_str().unwrap());
+                let _ = self.dev.load_symbols_into_self(sym_path.to_str().unwrap());
             }
         }
         let out = self.dev.output(&self.vm);
@@ -138,8 +136,7 @@ impl eframe::App for Stage<'_> {
             if i.raw.dropped_files.len() == 1 {
                 let target = &i.raw.dropped_files[0];
                 let r = if let Some(path) = &target.path {
-                    let data =
-                        std::fs::read(path).expect("failed to read file");
+                    let data = std::fs::read(path).expect("failed to read file");
                     info!("loading {} bytes from {path:?}", data.len());
                     self.load_rom(&data)
                 } else if let Some(data) = &target.bytes {
@@ -158,8 +155,8 @@ impl eframe::App for Stage<'_> {
                     egui::Event::Text(s) => {
                         // ...existing code...
                         const RAW_CHARS: [u8; 16] = [
-                            b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*',
-                            b'&', b'^', b'%', b'$', b'#', b'@', b'!', b'~',
+                            b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&', b'^', b'%',
+                            b'$', b'#', b'@', b'!', b'~',
                         ];
                         for c in s.bytes() {
                             if RAW_CHARS.contains(&c) {
@@ -222,9 +219,7 @@ impl eframe::App for Stage<'_> {
                             // self.vm.deo_helper(&mut self.dev, 0xe, 0x1, 0x100);
                             #[cfg(target_os = "windows")]
                             unsafe {
-                                winapi::um::winuser::MessageBeep(
-                                    winapi::um::winuser::MB_OK,
-                                );
+                                winapi::um::winuser::MessageBeep(winapi::um::winuser::MB_OK);
                             }
                         }
                         if let Some(k) = decode_key(*key, shift_held) {
@@ -295,8 +290,7 @@ impl eframe::App for Stage<'_> {
         if self.size != out.size {
             info!("resizing window to {:?}", out.size);
             self.size = out.size;
-            let size = egui::Vec2::new(out.size.0 as f32, out.size.1 as f32)
-                * self.scale;
+            let size = egui::Vec2::new(out.size.0 as f32, out.size.1 as f32) * self.scale;
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
             if let Some(f) = self.resized.as_mut() {
                 f(out.size.0, out.size.1);
@@ -306,10 +300,7 @@ impl eframe::App for Stage<'_> {
         // TODO reduce allocation here?
         let mut image = egui::ColorImage::new(
             [out.size.0 as usize, out.size.1 as usize],
-            vec![
-                egui::Color32::BLACK;
-                (out.size.0 as usize) * (out.size.1 as usize)
-            ],
+            vec![egui::Color32::BLACK; (out.size.0 as usize) * (out.size.1 as usize)],
         );
         for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
             *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);

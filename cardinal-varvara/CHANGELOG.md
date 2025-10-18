@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.1...cardinal-varvara-v0.7.2) - 2025-10-18
+
+### Fixed
+
+- *(fmt)* 4 the cargo fmt ppl.
+
+### Other
+
+- *(clippy)* 4 the clippy purists
+
 ## [0.7.1](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.0...cardinal-varvara-v0.7.1) - 2025-10-18
 
 ### Other

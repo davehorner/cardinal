@@ -341,7 +341,7 @@ impl Lexer {
         let mut result = String::new();
         while self.position < self.input.len() {
             let ch = self.current_char();
-            if ch.is_ascii_hexdigit() && (ch.is_ascii_lowercase() || ch.is_ascii_digit()){
+            if ch.is_ascii_hexdigit() && (ch.is_ascii_lowercase() || ch.is_ascii_digit()) {
                 result.push(ch);
                 self.advance();
             } else {

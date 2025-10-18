@@ -2,7 +2,11 @@
 pub fn uxndis_repo_get_drifloon() -> PathBuf {
     let home_dir = dirs::home_dir();
     if let Some(home) = home_dir {
-        let drifloon_path = home.join(".uxntal").join(".uxndis").join("src").join("drifloon.rom");
+        let drifloon_path = home
+            .join(".uxntal")
+            .join(".uxndis")
+            .join("src")
+            .join("drifloon.rom");
         if drifloon_path.exists() {
             return drifloon_path;
         }
@@ -14,7 +18,11 @@ pub fn uxndis_repo_get_drifloon() -> PathBuf {
 pub fn uxndis_repo_get_uxndis() -> PathBuf {
     let home_dir = dirs::home_dir();
     if let Some(home) = home_dir {
-        let uxndis_path = home.join(".uxntal").join(".uxndis").join("src").join("uxndis.rom");
+        let uxndis_path = home
+            .join(".uxntal")
+            .join(".uxndis")
+            .join("src")
+            .join("uxndis.rom");
         if uxndis_path.exists() {
             return uxndis_path;
         }
@@ -22,22 +30,28 @@ pub fn uxndis_repo_get_uxndis() -> PathBuf {
     PathBuf::from("uxndis.rom")
 }
 
-
 /// Returns the path to uxndis-seed.rom in the user's home directory, or just "uxndis-seed.rom" if not found.
 pub fn uxndis_repo_get_uxndis_seed() -> PathBuf {
     let home_dir = dirs::home_dir();
     if let Some(home) = home_dir {
-        let uxndis_seed_path = home.join(".uxntal").join(".uxndis").join("bin").join("uxndis-seed.rom");
+        let uxndis_seed_path = home
+            .join(".uxntal")
+            .join(".uxndis")
+            .join("bin")
+            .join("uxndis-seed.rom");
         if uxndis_seed_path.exists() {
             return uxndis_seed_path;
         }
     }
     PathBuf::from("uxndis-seed.rom")
 }
-use std::{fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use crate::{wsl::detect_wsl, Assembler, AssemblerError};
-
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::SyntaxError {
@@ -70,7 +84,12 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
             let _ = std::env::set_current_dir(&self.original);
         }
     }
-    let home_dir = dirs::home_dir().ok_or_else(|| simple_err(Path::new("~/.uxntal/.uxndis"), "failed to get home directory"))?;
+    let home_dir = dirs::home_dir().ok_or_else(|| {
+        simple_err(
+            Path::new("~/.uxntal/.uxndis"),
+            "failed to get home directory",
+        )
+    })?;
     let uxntal_path = home_dir.join(".uxntal");
     let uxndis_path = uxntal_path.join(".uxndis");
     if !uxndis_path.exists() {
@@ -94,7 +113,7 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
             .ok();
         if let Some(status) = status {
             if !status.success() {
-            eprintln!("Failed to pull uxndis repository");
+                eprintln!("Failed to pull uxndis repository");
             }
         } else {
             eprintln!("Failed to execute git pull for uxndis repository");
@@ -102,7 +121,10 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
     }
     if !uxndis_path.exists() {
         eprintln!("uxndis repository not found after clone/pull");
-        return Err(simple_err(&uxndis_path, "uxndis repository not found after clone/pull"));
+        return Err(simple_err(
+            &uxndis_path,
+            "uxndis repository not found after clone/pull",
+        ));
     }
     let _guard = DirGuard::new(&uxndis_path);
 
@@ -119,19 +141,23 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
         let uxndis_tal_contents = match fs::read_to_string(&uxndis_tal) {
             Ok(contents) => contents,
             Err(e) => {
-            eprintln!("Failed to read uxndis.tal: {:?}", e);
-            return Err(simple_err(&uxndis_tal, "failed to read uxndis.tal"));
+                eprintln!("Failed to read uxndis.tal: {:?}", e);
+                return Err(simple_err(&uxndis_tal, "failed to read uxndis.tal"));
             }
         };
         let ret = asm.assemble(&uxndis_tal_contents, Some(uxndis_rom.display().to_string()));
         match ret {
             Ok(rom) => {
                 fs::write(&uxndis_rom, &rom)
-                    .map_err(|e| simple_err(&uxndis_rom, &format!("failed to write rom: {e}"))).ok();
+                    .map_err(|e| simple_err(&uxndis_rom, &format!("failed to write rom: {e}")))
+                    .ok();
                 if uxndis_rom.exists() {
                     eprintln!("Successfully assembled uxndis.tal {}", uxndis_rom.display());
                 } else {
-                    eprintln!("Assembly succeeded but uxndis.rom not found at {}", uxndis_rom.display());
+                    eprintln!(
+                        "Assembly succeeded but uxndis.rom not found at {}",
+                        uxndis_rom.display()
+                    );
                     return Err(simple_err(&uxndis_rom, "uxndis.rom not found"));
                 }
             }
@@ -141,25 +167,30 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
             }
         }
     }
-    
+
     Ok(Some(uxndis_path))
 }
 
 fn dis_err(path: &str, e: &str) -> AssemblerError {
-    AssemblerError::Disassembly { message: format!("dis error on {}: {}", path, e) }
-    
+    AssemblerError::Disassembly {
+        message: format!("dis error on {}: {}", path, e),
+    }
 }
 
 pub fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
-        // let sym = format!("{rom_path}.sym");
-        // if Path::new(&sym).exists() {
-        //     let _ = fs::remove_file(&sym);
-        // }
+    // let sym = format!("{rom_path}.sym");
+    // if Path::new(&sym).exists() {
+    //     let _ = fs::remove_file(&sym);
+    // }
     let in_wsl = detect_wsl();
     let uxndis_path = crate::dis_uxndis::uxndis_repo_get_uxndis();
     let uxndis_path: String = if cfg!(windows) {
-        wslpath::windows_to_wsl(&uxndis_path.to_string_lossy())
-            .map_err(|e| dis_err(rom_path, &format!("Could not convert uxndis path to WSL: {e}")))?
+        wslpath::windows_to_wsl(&uxndis_path.to_string_lossy()).map_err(|e| {
+            dis_err(
+                rom_path,
+                &format!("Could not convert uxndis path to WSL: {e}"),
+            )
+        })?
     } else {
         uxndis_path.to_string_lossy().to_string()
     };
@@ -187,22 +218,26 @@ pub fn run_dis_file(rom_path: &str) -> Result<String, AssemblerError> {
         }
         .map_err(|e| dis_err(&rom_path, &format!("uxndis failed: {e}")))?
     } else {
-            Command::new("uxncli")
-                .arg(&uxndis_path)
-                .arg(&rom_path)
-                .output()?
+        Command::new("uxncli")
+            .arg(&uxndis_path)
+            .arg(&rom_path)
+            .output()?
     };
     let rom_path = if cfg!(windows) {
-        wslpath::wsl_to_windows(&rom_path)
-        .map_err(|e| dis_err(&rom_path, &format!("Could not convert ROM path to Windows: {e}")))?
+        wslpath::wsl_to_windows(&rom_path).map_err(|e| {
+            dis_err(
+                &rom_path,
+                &format!("Could not convert ROM path to Windows: {e}"),
+            )
+        })?
     } else {
         rom_path.to_string()
-    }; 
+    };
     let dis = format!("{rom_path}.dis");
-        // Write disassembly output to .dis file
-        if let Err(e) = fs::write(&dis, &output.stdout) {
-            eprintln!("Failed to write disassembly to {}: {}", dis, e);
-        }
+    // Write disassembly output to .dis file
+    if let Err(e) = fs::write(&dis, &output.stdout) {
+        eprintln!("Failed to write disassembly to {}: {}", dis, e);
+    }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

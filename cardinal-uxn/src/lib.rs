@@ -376,13 +376,7 @@ impl<'a> Uxn<'a> {
         &self.ret.data[..len]
     }
     /// Helper to perform a DEO operation for a given port and value
-    pub fn deo_helper(
-        &mut self,
-        dev: &mut dyn Device,
-        port: u8,
-        value: u8,
-        pc: u16,
-    ) {
+    pub fn deo_helper(&mut self, dev: &mut dyn Device, port: u8, value: u8, pc: u16) {
         // Uxn expects value first, then port
         self.stack_mut().push_byte(value);
         self.stack_mut().push_byte(port);
@@ -522,28 +516,20 @@ impl<'a> Uxn<'a> {
 
     /// Converts raw ports memory into a [`Ports`] object
     #[inline]
-    pub fn dev<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(
-        &self,
-    ) -> &D {
+    pub fn dev<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(&self) -> &D {
         self.dev_at(D::BASE)
     }
 
     /// Returns a reference to a device located at `pos`
     #[inline]
-    pub fn dev_at<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(
-        &self,
-        pos: u8,
-    ) -> &D {
+    pub fn dev_at<D: Ports + zerocopy::KnownLayout + zerocopy::Immutable>(&self, pos: u8) -> &D {
         Self::check_dev_size::<D>();
         D::ref_from_bytes(&self.dev[usize::from(pos)..][..DEV_SIZE]).unwrap()
     }
 
     /// Returns a reference to a device located at `pos`
     #[inline]
-    pub fn dev_mut_at<D: Ports + zerocopy::KnownLayout>(
-        &mut self,
-        pos: u8,
-    ) -> &mut D {
+    pub fn dev_mut_at<D: Ports + zerocopy::KnownLayout>(&mut self, pos: u8) -> &mut D {
         Self::check_dev_size::<D>();
         let slice = &mut self.dev[usize::from(pos)..][..DEV_SIZE];
         D::mut_from_bytes(slice).unwrap()
@@ -1433,11 +1419,7 @@ impl<'a> Uxn<'a> {
     /// Pushes a value from the device page, to the top of the stack. The target
     /// device might capture the reading to trigger an I/O event.
     #[inline]
-    pub fn dei<const FLAGS: u8>(
-        &mut self,
-        dev: &mut dyn Device,
-        pc: u16,
-    ) -> Option<u16> {
+    pub fn dei<const FLAGS: u8>(&mut self, dev: &mut dyn Device, pc: u16) -> Option<u16> {
         let mut s = self.stack_view::<FLAGS>();
         let i = s.pop_byte();
 
@@ -1472,11 +1454,7 @@ impl<'a> Uxn<'a> {
     /// Writes a value to the device page. The target device might capture the
     /// writing to trigger an I/O event.
     #[inline]
-    pub fn deo<const FLAGS: u8>(
-        &mut self,
-        dev: &mut dyn Device,
-        pc: u16,
-    ) -> Option<u16> {
+    pub fn deo<const FLAGS: u8>(&mut self, dev: &mut dyn Device, pc: u16) -> Option<u16> {
         let mut s = self.stack_view::<FLAGS>();
         let i = s.pop_byte();
         let mut run = true;
@@ -1668,10 +1646,7 @@ pub trait Device {
 
 /// Trait for a type which can be cast to a device ports `struct`
 pub trait Ports:
-    zerocopy::IntoBytes
-    + zerocopy::FromBytes
-    + zerocopy::FromZeros
-    + zerocopy::Immutable
+    zerocopy::IntoBytes + zerocopy::FromBytes + zerocopy::FromZeros + zerocopy::Immutable
 {
     /// Base address of the port, of the form `0xA0`
     const BASE: u8;
@@ -1996,37 +1971,31 @@ pub mod op {
     pub const SFT2kr: u8 = 0xff;
 
     pub const NAMES: [&str; 256] = [
-        "BRK", "INC", "POP", "NIP", "SWP", "ROT", "DUP", "OVR", "EQU", "NEQ",
-        "GTH", "LTH", "JMP", "JCN", "JSR", "STH", "LDZ", "STZ", "LDR", "STR",
-        "LDA", "STA", "DEI", "DEO", "ADD", "SUB", "MUL", "DIV", "AND", "ORA",
-        "EOR", "SFT", "JCI", "INC2", "POP2", "NIP2", "SWP2", "ROT2", "DUP2",
-        "OVR2", "EQU2", "NEQ2", "GTH2", "LTH2", "JMP2", "JCN2", "JSR2", "STH2",
-        "LDZ2", "STZ2", "LDR2", "STR2", "LDA2", "STA2", "DEI2", "DEO2", "ADD2",
-        "SUB2", "MUL2", "DIV2", "AND2", "ORA2", "EOR2", "SFT2", "JMI", "INCr",
-        "POPr", "NIPr", "SWPr", "ROTr", "DUPr", "OVRr", "EQUr", "NEQr", "GTHr",
-        "LTHr", "JMPr", "JCNr", "JSRr", "STHr", "LDZr", "STZr", "LDRr", "STRr",
-        "LDAr", "STAr", "DEIr", "DEOr", "ADDr", "SUBr", "MULr", "DIVr", "ANDr",
-        "ORAr", "EORr", "SFTr", "JSI", "INC2r", "POP2r", "NIP2r", "SWP2r",
-        "ROT2r", "DUP2r", "OVR2r", "EQU2r", "NEQ2r", "GTH2r", "LTH2r", "JMP2r",
-        "JCN2r", "JSR2r", "STH2r", "LDZ2r", "STZ2r", "LDR2r", "STR2r", "LDA2r",
-        "STA2r", "DEI2r", "DEO2r", "ADD2r", "SUB2r", "MUL2r", "DIV2r", "AND2r",
-        "ORA2r", "EOR2r", "SFT2r", "LIT", "INCk", "POPk", "NIPk", "SWPk",
-        "ROTk", "DUPk", "OVRk", "EQUk", "NEQk", "GTHk", "LTHk", "JMPk", "JCNk",
-        "JSRk", "STHk", "LDZk", "STZk", "LDRk", "STRk", "LDAk", "STAk", "DEIk",
-        "DEOk", "ADDk", "SUBk", "MULk", "DIVk", "ANDk", "ORAk", "EORk", "SFTk",
-        "LIT2", "INC2k", "POP2k", "NIP2k", "SWP2k", "ROT2k", "DUP2k", "OVR2k",
-        "EQU2k", "NEQ2k", "GTH2k", "LTH2k", "JMP2k", "JCN2k", "JSR2k", "STH2k",
-        "LDZ2k", "STZ2k", "LDR2k", "STR2k", "LDA2k", "STA2k", "DEI2k", "DEO2k",
-        "ADD2k", "SUB2k", "MUL2k", "DIV2k", "AND2k", "ORA2k", "EOR2k", "SFT2k",
-        "LITr", "INCkr", "POPkr", "NIPkr", "SWPkr", "ROTkr", "DUPkr", "OVRkr",
-        "EQUkr", "NEQkr", "GTHkr", "LTHkr", "JMPkr", "JCNkr", "JSRkr", "STHkr",
-        "LDZkr", "STZkr", "LDRkr", "STRkr", "LDAkr", "STAkr", "DEIkr", "DEOkr",
-        "ADDkr", "SUBkr", "MULkr", "DIVkr", "ANDkr", "ORAkr", "EORkr", "SFTkr",
-        "LIT2r", "INC2kr", "POP2kr", "NIP2kr", "SWP2kr", "ROT2kr", "DUP2kr",
-        "OVR2kr", "EQU2kr", "NEQ2kr", "GTH2kr", "LTH2kr", "JMP2kr", "JCN2kr",
-        "JSR2kr", "STH2kr", "LDZ2kr", "STZ2kr", "LDR2kr", "STR2kr", "LDA2kr",
-        "STA2kr", "DEI2kr", "DEO2kr", "ADD2kr", "SUB2kr", "MUL2kr", "DIV2kr",
-        "AND2kr", "ORA2kr", "EOR2kr", "SFT2kr",
+        "BRK", "INC", "POP", "NIP", "SWP", "ROT", "DUP", "OVR", "EQU", "NEQ", "GTH", "LTH", "JMP",
+        "JCN", "JSR", "STH", "LDZ", "STZ", "LDR", "STR", "LDA", "STA", "DEI", "DEO", "ADD", "SUB",
+        "MUL", "DIV", "AND", "ORA", "EOR", "SFT", "JCI", "INC2", "POP2", "NIP2", "SWP2", "ROT2",
+        "DUP2", "OVR2", "EQU2", "NEQ2", "GTH2", "LTH2", "JMP2", "JCN2", "JSR2", "STH2", "LDZ2",
+        "STZ2", "LDR2", "STR2", "LDA2", "STA2", "DEI2", "DEO2", "ADD2", "SUB2", "MUL2", "DIV2",
+        "AND2", "ORA2", "EOR2", "SFT2", "JMI", "INCr", "POPr", "NIPr", "SWPr", "ROTr", "DUPr",
+        "OVRr", "EQUr", "NEQr", "GTHr", "LTHr", "JMPr", "JCNr", "JSRr", "STHr", "LDZr", "STZr",
+        "LDRr", "STRr", "LDAr", "STAr", "DEIr", "DEOr", "ADDr", "SUBr", "MULr", "DIVr", "ANDr",
+        "ORAr", "EORr", "SFTr", "JSI", "INC2r", "POP2r", "NIP2r", "SWP2r", "ROT2r", "DUP2r",
+        "OVR2r", "EQU2r", "NEQ2r", "GTH2r", "LTH2r", "JMP2r", "JCN2r", "JSR2r", "STH2r", "LDZ2r",
+        "STZ2r", "LDR2r", "STR2r", "LDA2r", "STA2r", "DEI2r", "DEO2r", "ADD2r", "SUB2r", "MUL2r",
+        "DIV2r", "AND2r", "ORA2r", "EOR2r", "SFT2r", "LIT", "INCk", "POPk", "NIPk", "SWPk", "ROTk",
+        "DUPk", "OVRk", "EQUk", "NEQk", "GTHk", "LTHk", "JMPk", "JCNk", "JSRk", "STHk", "LDZk",
+        "STZk", "LDRk", "STRk", "LDAk", "STAk", "DEIk", "DEOk", "ADDk", "SUBk", "MULk", "DIVk",
+        "ANDk", "ORAk", "EORk", "SFTk", "LIT2", "INC2k", "POP2k", "NIP2k", "SWP2k", "ROT2k",
+        "DUP2k", "OVR2k", "EQU2k", "NEQ2k", "GTH2k", "LTH2k", "JMP2k", "JCN2k", "JSR2k", "STH2k",
+        "LDZ2k", "STZ2k", "LDR2k", "STR2k", "LDA2k", "STA2k", "DEI2k", "DEO2k", "ADD2k", "SUB2k",
+        "MUL2k", "DIV2k", "AND2k", "ORA2k", "EOR2k", "SFT2k", "LITr", "INCkr", "POPkr", "NIPkr",
+        "SWPkr", "ROTkr", "DUPkr", "OVRkr", "EQUkr", "NEQkr", "GTHkr", "LTHkr", "JMPkr", "JCNkr",
+        "JSRkr", "STHkr", "LDZkr", "STZkr", "LDRkr", "STRkr", "LDAkr", "STAkr", "DEIkr", "DEOkr",
+        "ADDkr", "SUBkr", "MULkr", "DIVkr", "ANDkr", "ORAkr", "EORkr", "SFTkr", "LIT2r", "INC2kr",
+        "POP2kr", "NIP2kr", "SWP2kr", "ROT2kr", "DUP2kr", "OVR2kr", "EQU2kr", "NEQ2kr", "GTH2kr",
+        "LTH2kr", "JMP2kr", "JCN2kr", "JSR2kr", "STH2kr", "LDZ2kr", "STZ2kr", "LDR2kr", "STR2kr",
+        "LDA2kr", "STA2kr", "DEI2kr", "DEO2kr", "ADD2kr", "SUB2kr", "MUL2kr", "DIV2kr", "AND2kr",
+        "ORA2kr", "EOR2kr", "SFT2kr",
     ];
 }
 
@@ -2036,15 +2005,10 @@ mod test {
 
     /// Simple parser for textual opcodes
     fn decode_op(s: &str) -> Result<u8, &str> {
-        let (s, ret) =
-            s.strip_suffix('r').map(|s| (s, true)).unwrap_or((s, false));
-        let (s, keep) =
-            s.strip_suffix('k').map(|s| (s, true)).unwrap_or((s, false));
-        let (s, short) =
-            s.strip_suffix('2').map(|s| (s, true)).unwrap_or((s, false));
-        let mode = (u8::from(keep) << 7)
-            | (u8::from(ret) << 6)
-            | (u8::from(short) << 5);
+        let (s, ret) = s.strip_suffix('r').map(|s| (s, true)).unwrap_or((s, false));
+        let (s, keep) = s.strip_suffix('k').map(|s| (s, true)).unwrap_or((s, false));
+        let (s, short) = s.strip_suffix('2').map(|s| (s, true)).unwrap_or((s, false));
+        let mode = (u8::from(keep) << 7) | (u8::from(ret) << 6) | (u8::from(short) << 5);
         let out = match s {
             "BRK" => op::BRK,
             "JCI" => op::JCI,

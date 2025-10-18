@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.0...cardinal-uxn-v0.5.1) - 2025-10-18
+
+### Fixed
+
+- *(fmt)* 4 the cargo fmt ppl.
+
 ## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.4.5...cardinal-uxn-v0.5.0) - 2025-10-18
 
 ### Added

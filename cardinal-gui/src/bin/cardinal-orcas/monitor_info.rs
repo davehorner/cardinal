@@ -14,8 +14,7 @@ use display_info::DisplayInfo;
 use egui::{Pos2, Rect};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
-pub static MONITOR_RECTS: Lazy<Mutex<Vec<Rect>>> =
-    Lazy::new(|| Mutex::new(Vec::new()));
+pub static MONITOR_RECTS: Lazy<Mutex<Vec<Rect>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -95,12 +94,7 @@ pub fn wrap_sequential(
 }
 
 /// Returns (new_position, new_monitor_idx) after geometric wrap, or None if no wrap.
-pub fn wrap_geometric(
-    pos: Pos2,
-    dx: f32,
-    dy: f32,
-    rects: &[Rect],
-) -> Option<(Pos2, usize)> {
+pub fn wrap_geometric(pos: Pos2, dx: f32, dy: f32, rects: &[Rect]) -> Option<(Pos2, usize)> {
     // Find the farthest monitor in the direction, or the one that overlaps in that direction
     if rects.is_empty() {
         return None;
@@ -138,10 +132,7 @@ pub fn wrap_geometric(
             (pos.x - r.left()) / r.width(),
             (pos.y - r.top()) / r.height(),
         );
-        let new_pos = Pos2::new(
-            r.left() + rel.x * r.width(),
-            r.top() + rel.y * r.height(),
-        );
+        let new_pos = Pos2::new(r.left() + rel.x * r.width(), r.top() + rel.y * r.height());
         Some((new_pos, idx))
     } else {
         None

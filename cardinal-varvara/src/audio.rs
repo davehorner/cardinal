@@ -8,12 +8,7 @@ use std::{
 use uxn::{Ports, Uxn, DEV_SIZE};
 use zerocopy::{BigEndian, FromBytes, U16};
 
-#[derive(
-    zerocopy::IntoBytes,
-    zerocopy::FromBytes,
-    zerocopy::KnownLayout,
-    zerocopy::Immutable,
-)]
+#[derive(zerocopy::IntoBytes, zerocopy::FromBytes, zerocopy::KnownLayout, zerocopy::Immutable)]
 #[repr(C)]
 pub struct AudioPorts {
     vector: U16<BigEndian>,
@@ -100,9 +95,7 @@ pub const CHANNELS: usize = 1;
 const CROSSFADE_COUNT: usize = 200;
 
 /// Decoder for the `adsr` port
-#[derive(
-    Copy, Clone, Default, FromBytes, zerocopy::Immutable, zerocopy::IntoBytes,
-)]
+#[derive(Copy, Clone, Default, FromBytes, zerocopy::Immutable, zerocopy::IntoBytes)]
 #[repr(C)]
 struct Envelope(U16<BigEndian>);
 impl Envelope {
@@ -148,12 +141,7 @@ impl Volume {
 
 /// Decoder for the `pitch` port
 #[derive(
-    Copy,
-    Clone,
-    FromBytes,
-    zerocopy::Immutable,
-    zerocopy::IntoBytes,
-    zerocopy::KnownLayout,
+    Copy, Clone, FromBytes, zerocopy::Immutable, zerocopy::IntoBytes, zerocopy::KnownLayout,
 )]
 #[repr(C)]
 pub struct Pitch(u8);
@@ -172,25 +160,20 @@ impl Pitch {
 // From `audio.c` in the original implementation
 #[allow(clippy::excessive_precision)]
 const TUNING: [f32; 109] = [
-    0.00058853, 0.00062352, 0.00066060, 0.00069988, 0.00074150, 0.00078559,
-    0.00083230, 0.00088179, 0.00093423, 0.00098978, 0.00104863, 0.00111099,
-    0.00117705, 0.00124704, 0.00132120, 0.00139976, 0.00148299, 0.00157118,
-    0.00166460, 0.00176359, 0.00186845, 0.00197956, 0.00209727, 0.00222198,
-    0.00235410, 0.00249409, 0.00264239, 0.00279952, 0.00296599, 0.00314235,
-    0.00332921, 0.00352717, 0.00373691, 0.00395912, 0.00419454, 0.00444396,
-    0.00470821, 0.00498817, 0.00528479, 0.00559904, 0.00593197, 0.00628471,
-    0.00665841, 0.00705434, 0.00747382, 0.00791823, 0.00838908, 0.00888792,
-    0.00941642, 0.00997635, 0.01056957, 0.01119807, 0.01186395, 0.01256941,
-    0.01331683, 0.01410869, 0.01494763, 0.01583647, 0.01677815, 0.01777583,
-    0.01883284, 0.01995270, 0.02113915, 0.02239615, 0.02372789, 0.02513882,
-    0.02663366, 0.02821738, 0.02989527, 0.03167293, 0.03355631, 0.03555167,
-    0.03766568, 0.03990540, 0.04227830, 0.04479229, 0.04745578, 0.05027765,
-    0.05326731, 0.05643475, 0.05979054, 0.06334587, 0.06711261, 0.07110333,
-    0.07533136, 0.07981079, 0.08455659, 0.08958459, 0.09491156, 0.10055530,
-    0.10653463, 0.11286951, 0.11958108, 0.12669174, 0.13422522, 0.14220667,
-    0.15066272, 0.15962159, 0.16911318, 0.17916918, 0.18982313, 0.20111060,
-    0.21306926, 0.22573902, 0.23916216, 0.25338348, 0.26845044, 0.28441334,
-    0.30132544,
+    0.00058853, 0.00062352, 0.00066060, 0.00069988, 0.00074150, 0.00078559, 0.00083230, 0.00088179,
+    0.00093423, 0.00098978, 0.00104863, 0.00111099, 0.00117705, 0.00124704, 0.00132120, 0.00139976,
+    0.00148299, 0.00157118, 0.00166460, 0.00176359, 0.00186845, 0.00197956, 0.00209727, 0.00222198,
+    0.00235410, 0.00249409, 0.00264239, 0.00279952, 0.00296599, 0.00314235, 0.00332921, 0.00352717,
+    0.00373691, 0.00395912, 0.00419454, 0.00444396, 0.00470821, 0.00498817, 0.00528479, 0.00559904,
+    0.00593197, 0.00628471, 0.00665841, 0.00705434, 0.00747382, 0.00791823, 0.00838908, 0.00888792,
+    0.00941642, 0.00997635, 0.01056957, 0.01119807, 0.01186395, 0.01256941, 0.01331683, 0.01410869,
+    0.01494763, 0.01583647, 0.01677815, 0.01777583, 0.01883284, 0.01995270, 0.02113915, 0.02239615,
+    0.02372789, 0.02513882, 0.02663366, 0.02821738, 0.02989527, 0.03167293, 0.03355631, 0.03555167,
+    0.03766568, 0.03990540, 0.04227830, 0.04479229, 0.04745578, 0.05027765, 0.05326731, 0.05643475,
+    0.05979054, 0.06334587, 0.06711261, 0.07110333, 0.07533136, 0.07981079, 0.08455659, 0.08958459,
+    0.09491156, 0.10055530, 0.10653463, 0.11286951, 0.11958108, 0.12669174, 0.13422522, 0.14220667,
+    0.15066272, 0.15962159, 0.16911318, 0.17916918, 0.18982313, 0.20111060, 0.21306926, 0.22573902,
+    0.23916216, 0.25338348, 0.26845044, 0.28441334, 0.30132544,
 ];
 
 const MIDDLE_C: f32 = 261.6;
@@ -279,8 +262,7 @@ impl StreamData {
 
     /// Fills the buffer with stream data
     pub fn next(&mut self, data: &mut [f32]) {
-        self.duration -=
-            (data.len() / 2) as f32 / get_sample_rate() as f32 * 1000.0;
+        self.duration -= (data.len() / 2) as f32 / get_sample_rate() as f32 * 1000.0;
         if self.duration <= 0.0 {
             self.done.store(true, Ordering::Relaxed);
         }
@@ -325,8 +307,7 @@ impl StreamData {
             };
 
             if !self.crossfade.is_empty() {
-                let x = self.crossfade.len() as f32
-                    / (CROSSFADE_COUNT as f32 - 1.0);
+                let x = self.crossfade.len() as f32 / (CROSSFADE_COUNT as f32 - 1.0);
                 for j in 0..CHANNELS {
                     let v = self.crossfade.pop_front().unwrap();
                     data[i + j] = v * x + data[i + j] * (1.0 - x);
@@ -355,12 +336,11 @@ impl StreamData {
                     self.vol = self.envelope.sustain();
                 }
                 Stage::Release => {
-                    self.vol =
-                        if self.vol <= 0.0 || self.envelope.release() <= 0.0 {
-                            0.0
-                        } else {
-                            self.vol - self.envelope.release()
-                        };
+                    self.vol = if self.vol <= 0.0 || self.envelope.release() <= 0.0 {
+                        0.0
+                    } else {
+                        self.vol - self.envelope.release()
+                    };
                 }
             }
         }
@@ -383,8 +363,7 @@ impl Default for Audio {
 impl Audio {
     pub fn new() -> Self {
         let muted = Arc::new(AtomicBool::new(false));
-        let stream_data = [(); 4]
-            .map(|_| Arc::new(Mutex::new(StreamData::new(muted.clone()))));
+        let stream_data = [(); 4].map(|_| Arc::new(Mutex::new(StreamData::new(muted.clone()))));
         let streams = [0, 1, 2, 3].map(|i| Stream {
             done: stream_data[i].lock().unwrap().done.clone(),
             data: stream_data[i].clone(),

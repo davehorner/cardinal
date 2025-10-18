@@ -71,10 +71,7 @@ pub fn parse_device_map_line(line: &str) -> Option<Device> {
 
 /// Parse multiple device map lines from a TAL file
 pub fn parse_device_maps(source: &str) -> Vec<Device> {
-    source
-        .lines()
-        .filter_map(parse_device_map_line)
-        .collect()
+    source.lines().filter_map(parse_device_map_line).collect()
 }
 
 use once_cell::sync::Lazy;

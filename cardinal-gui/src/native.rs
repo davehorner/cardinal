@@ -40,8 +40,8 @@ pub fn run() -> Result<()> {
     env_logger::init_from_env(env);
 
     let args = Args::parse();
-    let mut f = std::fs::File::open(&args.rom)
-        .with_context(|| format!("failed to open {:?}", args.rom))?;
+    let mut f =
+        std::fs::File::open(&args.rom).with_context(|| format!("failed to open {:?}", args.rom))?;
 
     let mut rom = vec![];
     f.read_to_end(&mut rom).context("failed to read file")?;
@@ -80,10 +80,8 @@ pub fn run() -> Result<()> {
     info!("creating window with size ({width}, {height}) and scale {scale}");
     let options = eframe::NativeOptions {
         window_builder: Some(Box::new(move |v| {
-            v.with_inner_size(
-                egui::Vec2::new(width as f32, height as f32) * scale,
-            )
-            .with_resizable(false)
+            v.with_inner_size(egui::Vec2::new(width as f32, height as f32) * scale)
+                .with_resizable(false)
         })),
         ..Default::default()
     };
@@ -93,9 +91,7 @@ pub fn run() -> Result<()> {
     eframe::run_native(
         "Varvara",
         options,
-        Box::new(move |cc| {
-            Ok(Box::new(Stage::new(vm, dev, size, scale, rx, &cc.egui_ctx)))
-        }),
+        Box::new(move |cc| Ok(Box::new(Stage::new(vm, dev, size, scale, rx, &cc.egui_ctx)))),
     )
     .map_err(|e| anyhow!("got egui error: {e:?}"))
 }
