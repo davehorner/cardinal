@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.7...uxn-tal-v0.2.8) - 2025-10-19
+
+### Fixed
+
+- *(svitlyna)* smarter digit-start tokens and defined bare-word label refs
+
 ## [0.2.7](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.6...uxn-tal-v0.2.7) - 2025-10-18
 
 ### Fixed
