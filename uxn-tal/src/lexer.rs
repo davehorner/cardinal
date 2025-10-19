@@ -928,15 +928,46 @@ impl Lexer {
                 // Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
             }
             _ if ch.is_ascii_digit() => {
-                let number = self.read_hex_number()?;
-                // PATCH: treat 4 hex digits as a short, 2 as a byte
-                if number.len() == 4 && number.chars().all(|c| c.is_ascii_hexdigit()) {
-                    // This will be handled as AstNode::Short in parser
-                    Ok(Token::RawHex(number))
-                } else if number.len() == 2 && number.chars().all(|c| c.is_ascii_hexdigit()) {
-                    Ok(Token::RawHex(number))
+                // PATCH: If the digit is followed by +, -, or any valid identifier char, read as identifier
+                let mut lookahead = self.position + 1;
+                let mut is_complex = false;
+                while lookahead < self.input.len() {
+                    let next = self.input.chars().nth(lookahead).unwrap_or('\0');
+                    if !next.is_whitespace() && next != '(' && next != ')' {
+                        is_complex = true;
+                        break;
+                    } else if next.is_whitespace() || next == '\0' || next == '(' || next == ')' {
+                        break;
+                    }
+                    lookahead += 1;
+                }
+                if is_complex {
+                    let ident = self.read_identifier()?;
+                    // Only treat as hex if it's a simple pattern like "ff", "1234", etc.
+                    if ident.len() >= 2
+                        && ident.len() <= 4
+                        && ident.len() % 2 == 0
+                        && ident.chars().all(|c| c.is_ascii_hexdigit() && (c.is_ascii_lowercase() || c.is_ascii_digit()))
+                        && !ident.contains('-')
+                        && !ident.contains('/')
+                        && !ident.contains('_')
+                        && !is_instruction_name(&ident)
+                    {
+                        Ok(Token::RawHex(ident))
+                    } else if is_instruction_name(&ident) {
+                        Ok(Token::Instruction(ident))
+                    } else {
+                        Ok(Token::LabelRef(Rune::from(' '), ident))
+                    }
                 } else {
-                    Ok(Token::LabelRef(Rune::from(' '), number)) // Use Rune::from(' ') for numeric labels
+                    let number = self.read_hex_number()?;
+                    if number.len() == 4 && number.chars().all(|c| c.is_ascii_hexdigit()) {
+                        Ok(Token::RawHex(number))
+                    } else if number.len() == 2 && number.chars().all(|c| c.is_ascii_hexdigit()) {
+                        Ok(Token::RawHex(number))
+                    } else {
+                        Ok(Token::LabelRef(Rune::from(' '), number))
+                    }
                 }
             }
             _ if ch.is_ascii_alphabetic() || ch == '_' => {

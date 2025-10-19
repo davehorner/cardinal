@@ -207,13 +207,29 @@ impl Parser {
                     self.advance();
                     return Ok(AstNode::MacroCall(name.clone(), line, position));
                 }
-                Err(AssemblerError::SyntaxError {
-                    path: path.clone(),
-                    line,
-                    position,
-                    message: format!("Unexpected word '{}': not a macro or instruction", name),
-                    source_line: self.get_source_line(line),
-                })
+                // Otherwise, treat as a label reference (bare word)
+                let tok = self.current_token().clone();
+                self.advance();
+                // Check if label is defined in tokens
+                let label_defined = self.tokens.iter().any(|t| match &t.token {
+                    Token::LabelDef(_, def_name) => def_name == &name,
+                    _ => false,
+                });
+                if label_defined {
+                    Ok(AstNode::LabelRef {
+                        label: name.clone(),
+                        rune: Rune::from(' '),
+                        token: tok,
+                    })
+                } else {
+                    Err(AssemblerError::SyntaxError {
+                        path: path.clone(),
+                        line,
+                        position,
+                        message: format!("Label reference '{}' is not defined", name),
+                        source_line: self.get_source_line(line),
+                    })
+                }
             }
             Token::HexLiteral(hex) => {
                 let hex = hex.clone();
