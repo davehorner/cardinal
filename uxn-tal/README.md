@@ -1,8 +1,10 @@
-# UXN-TAL Assembler and things
+# UXN-TAL Assembler and protocol
 
-A fast and comprehensive Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.  
+A fast and comprehensive Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files.  It is also a url protocol handler `uxntal://` which allows users to quickly run tal and rom files via URL.
 
-This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging.  It was written by reading the source for uxn/uxnasm.c; building a comparison framework to compare the output of assemblers, and lots of comparison and LLM queries.  The tools are verbose by default and not yet optimized for speed or non-development purposes.  It is a goal to be able to assemble the drif assemblers and produce identical output as the drif assemblers.  If you find something doesn't work or match up, please submit an issue.
+This library provides functionality to parse TAL source code and generate bytecode compatible with the UXN virtual machine, with full symbol generation support for debugging. Unlike drif assemblers it includes line:col information in the error messages so you can ctrl+click to your source.  
+
+It was written by reading the source for uxn/uxnasm.c; building a comparison framework to compare the output of assemblers, and lots of comparison and LLM queries.  The tools are verbose by default and not yet optimized for speed or non-development purposes.  It is a goal to be able to assemble the drif assemblers and produce identical output as the drif assemblers.  If you find something doesn't work or match up, please submit an issue.
 
 uxn-tal and uxntal are names for the technology and a poor name for a specific project.  Given the name is published, I am going to continue with the uxl-tal and uxntal names.  The spirit of the cardinal project is a personal computing stack; and uxn-tal/uxntal crate will hopefully be used to faciliate wider usage of different assemblers, emulators, pre-processors, extensions in the UXN ecosystem.
 
@@ -39,7 +41,7 @@ A few unique arguments to call out specifically are the `--rust-interface`, `--c
 
 - `--cmp` will attempt to build your tal file against a number of different asm backends.  It will use the asm backend on the host machine if it is in the path.  Otherwise, if you are running a docker daemon, it will create docker images and generate roms via docker.
 
-- `--register` been tested on Windows, MacOS, and Linux.  `--register` will setup a protocol handler for `uxntal://` on your system.  It will also install the e_window and cardinal-gui crates as a dependency.  This feature allows you to place `uxntal://` in front of any http(s) url and uxntal will download, assemble, cache, and run the tal file pointed to by url.
+- `--register` been tested on Windows, MacOS, and Linux.  `--register` will setup a protocol handler for `uxntal://` on your system.  It will also install the e_window and cardinal-gui crates as a dependency.  This feature allows you to place `uxntal://` in front of any http(s) url and uxntal will download, assemble, cache, and run the tal/rom file pointed to by url.
 ```
 cargo install uxn-tal
 uxntal --register
@@ -49,6 +51,7 @@ The above will run a catclock from cmd.exe/pwsh.  You can prepend the uxntal:// 
 ```
 javascript:(function(){window.open('uxntal://' + location.href);})();
 ```
+
 This works for most webpages, however content from raw.githubusercontent.com/... is not a normal webpage and it’s delivered inside a sandboxed iframe by GitHub.  This means executing JavaScript from bookmarklets will not work on those pages.
 
 To provide another means of opening sandboxed webpages, you can install the [open-in-uxntal](https://github.com/davehorner/cardinal/tree/main/uxn-tal/open-in-uxntal) chrome extension via [chrome://extensions](chrome://extensions) `"Load unpacked"` button and pointing to the open-in-uxntal folder.  The extension exposes a new right click context menu on the webpage for `Open in uxntal`.
@@ -64,7 +67,9 @@ over-slashed forms (https///, https//, etc.)
 
 Using the extension and the bookmarklet, you will find a chrome dialog pop that asks if you want to run uxntal.exe to open an application.  Using the bookmarklet you sometimes have the option to allow always; the extension does not provide this option so you always have a second click to acknowledge the website opening the application.
 
-The protocol handler now has a provider abstraction over Github/Codeberg/Sourcehut urls; this means that the bookmarklet will work on view/log/blame pages on these websites.  Additionally, the downloader now parses and downloads all the includes.  For example `explorer uxntal://https://git.sr.ht/~rabbits/left/tree/main/item/src/left.tal`, which is a project with a few includes, runs fine.
+The protocol handler now has a provider abstraction over Github/Codeberg/Sourcehut urls; this means that the bookmarklet will work on view/log/blame pages on these websites.  Additionally, the downloader now parses and downloads all the includes. 
+
+For example `explorer uxntal://https://git.sr.ht/~rabbits/left/tree/main/item/src/left.tal`, which is a project with a few includes, runs fine.
 
 If you are often viewing code from a site like github, using the bookmarklet on a view/blame/history page instead of the raw allows you to use the protocol without the permission dialog being raised.  It's possible uxntal.exe could register a NativeMessagingHosts endpoint so that the chrome extension isn't using the protocol handler but instead invoke chrome.runtime.sendNativeMessage to side step the additional chrome dialog.
 
@@ -73,7 +78,32 @@ On macOS, `--register` creates a minimal GUI `.app` bundle in your `~/Applicatio
 **Requirements:**
 - You must have the `uxntal` binary installed (e.g., via `cargo install uxn-tal`).
 - You must have Xcode command line tools installed (`xcode-select --install`).
-- 
+
+## `uxntal:variables:key^^value://` Protocol Handler Variable Support 
+
+The protocol handler supports passing variables and flags directly in the protocol portion of URL using key-value pairs. These are used to select emulator or pass options.
+Variables are specified separated by colons (`:`). Key-value pairs use either `^` or `^^` as separators.
+
+`cardinal-gui` has been enhanced with a --widget flag.  This flag will turn on transparency for white pixels and turns off window decorations.  Additionally, ctrl+alt+click and drag will move the window.
+This flag is added by placing "widget" as a variable in the protocol after the first :.
+
+[uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt](uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt) will open in `cardinal-gui` in --widget mode.  catclock will show in a transparent window with no application decorations.
+
+In order to support different emulators, you can pass an `emu` variable, which currently supports buxn,cuxn,uxnemu emulators if they are within the PATH.
+
+[uxntal:emu^^buxn://https://wiki.xxiivv.com/etc/catclock.tal.txt](uxntal:emu^^buxn://https://wiki.xxiivv.com/etc/catclock.tal.txt) will open in `buxn-gui`
+
+You can use either `^` or `^^` as a separator. Both are supported and percent-encoded forms (e.g., `%5E`, `%5E%5E`) are also decoded automatically.
+The reason for both `^` and `^^` is that on windows, you must escape `^` with another `^`, so if you want a string that can be pasted in cmd.exe; use the double `^^` form.
+
+### Examples
+
+- `uxntal:emu^uxn://https://...` launches the ROM in the `uxnemu` emulator.
+- `uxntal:emu^buxn://https://...` launches the ROM in the `buxn-gui` emulator.
+- `uxntal:widget://https://...` passes the `--widget` flag to the emulator. (cardinal-gui is the only emu that supports this flag currently)
+
+You might create multiple bookmarklets to launch urls in the emulator and with the settings you desire.  Right now, the variables are restricted to `widget` and `emu` to limit arbitrary input on emu invocation.
+
 ## Warning
 
 A single click protocol handler that assembles and runs arbitrary code is considered a dangerous activity. uxntal protocol handler 0.1.18 and earlier had a shell exploit that could allow someone to craft a url/website which could run arbitrary code on your machine.  This security concern has been addressed, in 0.2.0.  This disclaimer is here to educate users on the security concerns involved, to request additional eyes for security, and to remind the user to apply upgrades as they become available so that any new security concerns found can be patched.  

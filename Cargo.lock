@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.5.0",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "zerocopy",
@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "cardinal-uxn 0.5.0",
  "chrono",
@@ -5108,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

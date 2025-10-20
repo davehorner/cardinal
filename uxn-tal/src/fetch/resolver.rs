@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     // Accept plain URLs and uxntal://… forms
     let url = if raw.starts_with("uxntal:") {
-        crate::urlutil::extract_target_from_uxntal(raw).ok_or("bad uxntal URL")?
+        crate::urlutil::extract_target_from_uxntal(raw).unwrap_or_else(|| raw.to_string())
     } else {
         raw.to_string()
     };

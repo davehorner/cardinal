@@ -473,6 +473,9 @@ impl<'a> UxnApp<'a> {
 }
 
 impl eframe::App for UxnApp<'_> {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // --- ROM hot-reload check ---
         if self.reload_rx.try_recv().is_ok() {
@@ -853,7 +856,7 @@ impl eframe::App for UxnApp<'_> {
         }
         self.texture.set(image, egui::TextureOptions::NEAREST);
         egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(egui::Color32::BLACK))
+            .frame(egui::Frame::default().fill(egui::Color32::TRANSPARENT))
             .show(ctx, |ui| {
                 let available = ui.available_size();
                 let frame_size = egui::Vec2::new(

@@ -16,6 +16,8 @@ pub enum Event {
 }
 
 pub struct Stage<'a> {
+    drag_started: bool,
+    stopped: bool,
     vm: Uxn<'a>,
     dev: Varvara,
 
@@ -41,9 +43,15 @@ pub struct Stage<'a> {
 
     /// Callback when the size is changed by the ROM
     resized: Option<Box<dyn FnMut(u16, u16)>>,
+    transparent_rgb: Option<(u8, u8, u8)>,
 }
 
 impl<'a> Stage<'a> {
+    /// Cleanly stop emulator and resources
+    pub fn shutdown(&mut self) {
+        self.stopped = true;
+    }
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vm: Uxn<'a>,
         dev: Varvara,
@@ -51,6 +59,8 @@ impl<'a> Stage<'a> {
         scale: f32,
         event_rx: mpsc::Receiver<Event>,
         ctx: &egui::Context,
+        _rom_title: String,
+        transparent_color: Option<String>,
     ) -> Self {
         let image = egui::ColorImage::new(
             [usize::from(size.0), usize::from(size.1)],
@@ -59,6 +69,16 @@ impl<'a> Stage<'a> {
 
         let texture = ctx.load_texture("frame", image, egui::TextureOptions::NEAREST);
 
+        let transparent_rgb = transparent_color.as_ref().and_then(|s| {
+            if s.len() == 6 {
+                let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+                let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+                let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+                Some((r, g, b))
+            } else {
+                None
+            }
+        });
         Stage {
             vm,
             dev,
@@ -74,6 +94,9 @@ impl<'a> Stage<'a> {
             cursor_pos: None,
 
             texture,
+            transparent_rgb,
+            stopped: false,
+            drag_started: false,
         }
     }
 
@@ -106,7 +129,25 @@ impl<'a> Stage<'a> {
 }
 
 impl eframe::App for Stage<'_> {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.stopped {
+            return;
+        }
+        let input = ctx.input(|i| i.clone());
+        // Ctrl+drag window move: use StartDrag for native drag, no manual offset or snap
+        let dragging_now =
+            input.modifiers.ctrl && input.modifiers.alt && input.pointer.primary_down();
+        if dragging_now && !self.drag_started {
+            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+            self.drag_started = true;
+        }
+        if !dragging_now {
+            self.drag_started = false;
+        }
         while let Ok(e) = self.event_rx.try_recv() {
             match e {
                 Event::LoadRom(data) => {
@@ -125,158 +166,126 @@ impl eframe::App for Stage<'_> {
 
         // Repaint at vsync rate (60 FPS)
         ctx.request_repaint();
-        ctx.input(|i| {
-            while i.time >= self.next_frame {
-                // Screen callback (limited to 60 FPS).  We want to err on the
-                // side of redrawing early, rather than missing frames.
-                self.next_frame += 0.0166667;
-                self.dev.redraw(&mut self.vm);
-            }
+        while input.time >= self.next_frame {
+            self.next_frame += 0.0166667;
+            self.dev.redraw(&mut self.vm);
+        }
 
-            if i.raw.dropped_files.len() == 1 {
-                let target = &i.raw.dropped_files[0];
-                let r = if let Some(path) = &target.path {
-                    let data = std::fs::read(path).expect("failed to read file");
-                    info!("loading {} bytes from {path:?}", data.len());
-                    self.load_rom(&data)
-                } else if let Some(data) = &target.bytes {
-                    self.load_rom(data)
-                } else {
-                    Ok(())
-                };
-                if let Err(e) = r {
-                    error!("could not load ROM: {e:?}");
-                }
-            }
-
-            let shift_held = i.modifiers.shift;
-            for e in i.events.iter() {
-                match e {
-                    egui::Event::Text(s) => {
-                        // ...existing code...
-                        const RAW_CHARS: [u8; 16] = [
-                            b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&', b'^', b'%',
-                            b'$', b'#', b'@', b'!', b'~',
-                        ];
-                        for c in s.bytes() {
-                            if RAW_CHARS.contains(&c) {
-                                self.dev.char(&mut self.vm, c);
-                            }
-                        }
-                        //                         for c in s.chars() {
-                        //     // Only send printable ASCII (or adjust as needed for your ROM)
-                        //     if c.is_ascii_graphic() || c == ' ' {
-                        //         let byte = c as u8;
-                        //         self.dev.char(&mut self.vm, byte);
-                        //     }
-                        // }
-                    }
-                    egui::Event::Key {
-                        key,
-                        pressed,
-                        repeat,
-                        ..
-                    } => {
-                        // F2 support: push #1234 #010e DEO BRK onto the execution stack
-                        if *pressed && *key == egui::Key::F2 {
-                            //                                                        println!("[F2] Stack after:");
-                            //                                                     dbg!(&self.vm.stack());
-                            //                                                     dbg!(&self.vm.ret());
-                            //                             let wst = self.vm.stack();
-                            //                             let rst = self.vm.ret();
-                            //                             // Disassemble WST and RST using the new disassembler module
-                            //                             let wst_data = wst.data_slice();
-                            //                             let rst_data = rst.data_slice();
-                            //                             println!("WST disassembly: {} raw bytes: {:?}", wst.len(), wst_data);
-                            //                             uxn::disassembler::disassemble(wst_data, wst.len() as usize, |instr| {
-                            //                                 println!(
-                            //                                     "{:04X}: {:<4} {:02X}{}{}{} {:?}",
-                            //                                     instr.addr,
-                            //         instr.mnemonic,
-                            //         instr.opcode,
-                            //         if instr.keep { "k" } else { "" },
-                            //         if instr.ret { "r" } else { "" },
-                            //         if instr.short { "s" } else { "" },
-                            //         instr.literal
-                            //     );
-                            // });
-                            // println!("RST disassembly:");
-                            // uxn::disassembler::disassemble(rst_data, rst.len() as usize, |instr| {
-                            //     println!(
-                            //         "{:04X}: {:<4} {:02X}{}{}{} {:?}",
-                            //         instr.addr,
-                            //         instr.mnemonic,
-                            //         instr.opcode,
-                            //         if instr.keep { "k" } else { "" },
-                            //         if instr.ret { "r" } else { "" },
-                            //         if instr.short { "s" } else { "" },
-                            //         instr.literal
-                            //     );
-                            // });
-                            self.dev.system.debug(&mut self.vm);
-                            // self.vm.deo::<0>(&mut self.dev, 0xe);
-                            // // Trigger execution using Uxn deo_helper
-                            // self.vm.deo_helper(&mut self.dev, 0xe, 0x1, 0x100);
-                            #[cfg(target_os = "windows")]
-                            unsafe {
-                                winapi::um::winuser::MessageBeep(winapi::um::winuser::MB_OK);
-                            }
-                        }
-                        if let Some(k) = decode_key(*key, shift_held) {
-                            if *pressed {
-                                self.dev.pressed(&mut self.vm, k, *repeat);
-                            } else {
-                                self.dev.released(&mut self.vm, k);
-                            }
-                        }
-                    }
-                    egui::Event::MouseWheel { delta, .. } => {
-                        self.scroll.0 += delta.x;
-                        self.scroll.1 -= delta.y;
-                    }
-                    _ => (),
-                }
-            }
-            for (b, k) in [
-                (i.modifiers.ctrl, Key::Ctrl),
-                (i.modifiers.alt, Key::Alt),
-                (i.modifiers.shift, Key::Shift),
-            ] {
-                if b {
-                    self.dev.pressed(&mut self.vm, k, false)
-                } else {
-                    self.dev.released(&mut self.vm, k)
-                }
-            }
-
-            let ptr = &i.pointer;
-            if let Some(p) = ptr.latest_pos() {
-                self.cursor_pos = Some((p.x / self.scale, p.y / self.scale));
-            }
-
-            let buttons = [
-                egui::PointerButton::Primary,
-                egui::PointerButton::Middle,
-                egui::PointerButton::Secondary,
-            ]
-            .into_iter()
-            .enumerate()
-            .map(|(i, b)| (ptr.button_down(b) as u8) << i)
-            .fold(0, |a, b| a | b);
-            let m = MouseState {
-                pos: self.cursor_pos.unwrap_or((0.0, 0.0)),
-                scroll: std::mem::take(&mut self.scroll),
-                buttons,
+        if input.raw.dropped_files.len() == 1 {
+            let target = &input.raw.dropped_files[0];
+            let r = if let Some(path) = &target.path {
+                let data = std::fs::read(path).expect("failed to read file");
+                info!("loading {} bytes from {path:?}", data.len());
+                self.load_rom(&data)
+            } else if let Some(data) = &target.bytes {
+                self.load_rom(data)
+            } else {
+                Ok(())
             };
-            self.dev.mouse(&mut self.vm, m);
-            let m = varvara::TrackerState {
-                pos: self.cursor_pos.unwrap_or((0.0, 0.0)),
-                scroll: std::mem::take(&mut self.scroll),
-                buttons,
-            };
-            self.dev.tracker(&mut self.vm, m);
-            i.time
-        });
+            if let Err(e) = r {
+                error!("could not load ROM: {e:?}");
+            }
+        }
+
+        let shift_held = input.modifiers.shift;
+        for e in input.events.iter() {
+            // Handle global shortcuts before passing to emulator
+            if let egui::Event::Key { key, pressed, .. } = e {
+                println!(
+                    "Key event received: {:?}, pressed: {}, ctrl: {}",
+                    key, pressed, input.modifiers.ctrl
+                );
+                if *key == egui::Key::C && input.modifiers.ctrl {
+                    println!("Ctrl+C handler triggered");
+                    self.shutdown();
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    return;
+                }
+            }
+            // Only pass non-global shortcut events to emulator
+            match e {
+                egui::Event::Text(s) => {
+                    const RAW_CHARS: [u8; 16] = [
+                        b'"', b'\'', b'{', b'}', b'_', b')', b'(', b'*', b'&', b'^', b'%', b'$',
+                        b'#', b'@', b'!', b'~',
+                    ];
+                    for c in s.bytes() {
+                        if RAW_CHARS.contains(&c) {
+                            self.dev.char(&mut self.vm, c);
+                        }
+                    }
+                }
+                egui::Event::Key {
+                    key,
+                    pressed,
+                    repeat,
+                    ..
+                } => {
+                    // Only handle Ctrl+C on key press, not release
+                    println!(
+                        "Key event: {:?}, pressed: {}, ctrl: {}",
+                        key, pressed, input.modifiers.ctrl
+                    );
+                    if *pressed && *key == egui::Key::F2 {
+                        self.dev.system.debug(&mut self.vm);
+                        #[cfg(target_os = "windows")]
+                        unsafe {
+                            winapi::um::winuser::MessageBeep(winapi::um::winuser::MB_OK);
+                        }
+                    }
+                    if let Some(k) = decode_key(*key, shift_held) {
+                        if *pressed {
+                            self.dev.pressed(&mut self.vm, k, *repeat);
+                        } else {
+                            self.dev.released(&mut self.vm, k);
+                        }
+                    }
+                }
+                egui::Event::MouseWheel { delta, .. } => {
+                    self.scroll.0 += delta.x;
+                    self.scroll.1 -= delta.y;
+                }
+                _ => (),
+            }
+        }
+        for (b, k) in [
+            (input.modifiers.ctrl, Key::Ctrl),
+            (input.modifiers.alt, Key::Alt),
+            (input.modifiers.shift, Key::Shift),
+        ] {
+            if b {
+                self.dev.pressed(&mut self.vm, k, false)
+            } else {
+                self.dev.released(&mut self.vm, k)
+            }
+        }
+
+        let ptr = &input.pointer;
+        if let Some(p) = ptr.latest_pos() {
+            self.cursor_pos = Some((p.x / self.scale, p.y / self.scale));
+        }
+
+        let buttons = [
+            egui::PointerButton::Primary,
+            egui::PointerButton::Middle,
+            egui::PointerButton::Secondary,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, b)| (ptr.button_down(b) as u8) << i)
+        .fold(0, |a, b| a | b);
+        let m = MouseState {
+            pos: self.cursor_pos.unwrap_or((0.0, 0.0)),
+            scroll: std::mem::take(&mut self.scroll),
+            buttons,
+        };
+        self.dev.mouse(&mut self.vm, m);
+        let m = varvara::TrackerState {
+            pos: self.cursor_pos.unwrap_or((0.0, 0.0)),
+            scroll: std::mem::take(&mut self.scroll),
+            buttons,
+        };
+        self.dev.tracker(&mut self.vm, m);
 
         // Handle audio callback
         self.dev.audio(&mut self.vm);
@@ -302,29 +311,53 @@ impl eframe::App for Stage<'_> {
             [out.size.0 as usize, out.size.1 as usize],
             vec![egui::Color32::BLACK; (out.size.0 as usize) * (out.size.1 as usize)],
         );
-        for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
-            *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);
+        if let Some((r, g, b)) = self.transparent_rgb {
+            // Make only the specified color transparent
+            for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
+                if i[2] == r && i[1] == g && i[0] == b {
+                    *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], 0);
+                } else {
+                    *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);
+                }
+            }
+        } else {
+            // Render all pixels as-is (white is visible)
+            for (i, o) in out.frame.chunks(4).zip(image.pixels.iter_mut()) {
+                *o = egui::Color32::from_rgba_unmultiplied(i[2], i[1], i[0], i[3]);
+            }
         }
         self.texture.set(image, egui::TextureOptions::NEAREST);
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let mut mesh = egui::Mesh::with_texture(self.texture.id());
-            mesh.add_rect_with_uv(
-                egui::Rect {
-                    min: egui::Pos2::new(0.0, 0.0),
-                    max: egui::Pos2::new(
-                        out.size.0 as f32 * self.scale,
-                        out.size.1 as f32 * self.scale,
-                    ),
-                },
-                egui::Rect {
-                    min: egui::Pos2::new(0.0, 0.0),
-                    max: egui::Pos2::new(1.0, 1.0),
-                },
-                egui::Color32::WHITE,
-            );
-            ui.painter().add(egui::Shape::mesh(mesh));
-        });
+        let panel_frame = egui::Frame::default().fill(egui::Color32::TRANSPARENT);
+        egui::CentralPanel::default()
+            .frame(panel_frame)
+            .show(ctx, |_ui| {
+                let panel_frame = egui::Frame::default().fill(egui::Color32::TRANSPARENT);
+                egui::CentralPanel::default()
+                    .frame(panel_frame)
+                    .show(ctx, |_ui| {
+                        let panel_frame = egui::Frame::default().fill(egui::Color32::TRANSPARENT);
+                        egui::CentralPanel::default()
+                            .frame(panel_frame)
+                            .show(ctx, |ui| {
+                                let mut mesh = egui::Mesh::with_texture(self.texture.id());
+                                mesh.add_rect_with_uv(
+                                    egui::Rect {
+                                        min: egui::Pos2::new(0.0, 0.0),
+                                        max: egui::Pos2::new(
+                                            out.size.0 as f32 * self.scale,
+                                            out.size.1 as f32 * self.scale,
+                                        ),
+                                    },
+                                    egui::Rect {
+                                        min: egui::Pos2::new(0.0, 0.0),
+                                        max: egui::Pos2::new(1.0, 1.0),
+                                    },
+                                    egui::Color32::WHITE,
+                                );
+                                ui.painter().add(egui::Shape::mesh(mesh));
+                            });
+                    });
+            });
 
         // Update stdout / stderr / exiting
         out.check().expect("failed to print output?");

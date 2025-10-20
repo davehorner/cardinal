@@ -51,34 +51,53 @@ fn real_main() -> Result<(), AssemblerError> {
     // Collect positional (non-flag) args after flag parsing
     let mut positional: Vec<String> = Vec::new();
 
+    // Store emulator flags for use after assembly
+    let mut emulator_flags: Vec<String> = Vec::new();
     if !args.is_empty() {
         let raw_url = &args[0];
-        if raw_url == "uxntal:"
-            || raw_url == "uxntal:/"
-            || raw_url == "uxntal://"
-            || raw_url == "uxntal:///"
-        {
-            // #[cfg(feature = "uses_gui")]
-            // {
-            //     println!("Starting GUI...");
-            //     if let Err(e) = gui::start_gui().await {
-            //         eprintln!("GUI error: {}", e);
-            //         log::error!("GUI error: {}", e);
-            //         std::process::exit(1);
-            //     }
-            // }
-
-            // #[cfg(not(feature = "uses_gui"))]
-            // {
-            //     eprintln!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
-            //     log::error!("GUI support is not enabled. Rebuild with the `uses_gui` feature.");
-            //     std::process::exit(1);
-            // }
-            std::process::exit(0);
-        }
-
-        if raw_url.starts_with("uxntal://") {
-            let (entry_local, rom_dir) = match resolve_entry_from_url(raw_url) {
+        if raw_url.starts_with("uxntal:") {
+            use uxn_tal::urlutil::extract_target_from_uxntal;
+            println!("[DEBUG] raw_url: {}", raw_url);
+            let (url_map, extracted_url) = uxn_tal::urlutil::parse_uxntal_url_to_map(raw_url);
+            println!(
+                "[DEBUG] extracted_url from parse_uxntal_url_to_map: {}",
+                extracted_url
+            );
+            // Default emulator
+            let mut emulator = "cardinal-gui".to_owned();
+            let mut extra_flags: Vec<String> = Vec::new();
+            if !url_map.is_empty() {
+                for (k, v) in &url_map {
+                    if k == "emu" {
+                        if v.eq_ignore_ascii_case("buxn") {
+                            emulator = "buxn-gui".to_owned();
+                        } else if v.eq_ignore_ascii_case("cuxn") {
+                            emulator = "cardinal-gui".to_owned();
+                        } else if v.eq_ignore_ascii_case("uxn") {
+                            emulator = "uxnemu".to_owned();
+                        }
+                    } else if k == "widget" {
+                        extra_flags.push("--widget".to_string());
+                    }
+                    // else if v.is_empty() {
+                    //     extra_flags.push(format!("--{}", k));
+                    // } else {
+                    //     extra_flags.push(format!("--{}={}", k, v));
+                    // }
+                }
+            }
+            // Extract the actual ROM URL (after flags)
+            let actual_url = extract_target_from_uxntal(&extracted_url)
+                .unwrap_or_else(|| extracted_url.to_string());
+            println!(
+                "[DEBUG] actual_url after extract_target_from_uxntal: {}",
+                actual_url
+            );
+            println!(
+                "[DEBUG] raw_url: {}\nextracted_url: {}\nactual_url: {}",
+                raw_url, extracted_url, actual_url
+            );
+            let (entry_local, rom_dir) = match resolve_entry_from_url(&actual_url) {
                 Ok(v) => v,
                 Err(e) => {
                     eprintln!("Failed to resolve uxntal URL: {}", e);
@@ -86,144 +105,17 @@ fn real_main() -> Result<(), AssemblerError> {
                     std::process::exit(1);
                 }
             };
-            println!("Resolved entry: {}", entry_local.display());
-
-            run_after_assembly = Some("cardinal-gui".to_owned());
+            println!("[DEBUG] Resolved entry_local: {}", entry_local.display());
+            run_after_assembly = Some(emulator);
             run_after_cwd = Some(rom_dir.clone());
-
-            // Replace args[0] so the rest compiles the correct file
-            args[0] = entry_local
+            let rom_path = entry_local
                 .strip_prefix(r"\\?\")
                 .unwrap_or(&entry_local)
                 .display()
                 .to_string();
-
-            // println!("Handling uxntal:// URL: {}", raw_url);
-            // let rebuilt_url = if let Some(rebuilt_url) = extract_target_from_uxntal(raw_url) {
-            //     println!("Received URL: {:?}", rebuilt_url);
-            //     rebuilt_url
-            // } else {
-            //     eprintln!("Malformed uxntal URL: {}", raw_url);
-            //     std::process::exit(1);
-            // };
-            // // Rebuild the URL from the uxntal:// scheme.
-            // // Example: uxntal://https///wiki.xxiivv.com/etc/cccc.tal.txt -> https://wiki.xxiivv.com/etc/cccc.tal.txt
-            // // let path_part = &raw_url[9..];
-            // // let rebuilt_url = if path_part.starts_with("https///") {
-            // //     format!("https://{}", &path_part[8..])
-            // // } else if path_part.starts_with("http///") {
-            // //     format!("http://{}", &path_part[7..])
-            // // } else if path_part.starts_with("file///") {
-            // //     format!("file://{}", &path_part[7..])
-            // // } else if path_part.starts_with("https//") {
-            // //     format!("https://{}", &path_part[7..])
-            // // } else if path_part.starts_with("http//") {
-            // //     format!("http://{}", &path_part[6..])
-            // // } else if path_part.starts_with("file//") {
-            // //     format!("file://{}", &path_part[7..])
-            // // } else {
-            // //     // fallback: treat as a normal path or URL
-            // //     path_part.to_string()
-            // // };
-
-            // // log::debug!("Received URL: {}", raw_url);
-            // println!("Received URL: {:?}", rebuilt_url);
-            // // let status = Command::new("e_window")
-            // //     .arg(&format!("--title={}", rebuilt_url))
-            // //     .arg(&rebuilt_url)
-            // //     .status();
-            // // match status {
-            // //     Ok(s) if s.success() => {
-            // //         println!("e_window launched successfully.");
-            // //     }
-            // //     Ok(s) => {
-            // //         eprintln!("e_window exited with status: {}", s);
-            // //     }
-            // //     Err(e) => {
-            // //         eprintln!("Failed to launch e_window: {}", e);
-            // //     }
-            // // }
-            // // Compute a hash of the URL for directory naming
-            // fn hash_url(url: &str) -> u64 {
-            //     let mut hasher = DefaultHasher::new();
-            //     url.hash(&mut hasher);
-            //     hasher.finish()
-            // }
-
-            // // Extract filename from URL, fallback to "downloaded.tal"
-            // fn filename_from_url(url: &str) -> String {
-            //     url.split('/')
-            //         .last()
-            //         .and_then(|s| if s.is_empty() { None } else { Some(s) })
-            //         .unwrap_or("downloaded.tal")
-            //         .to_string()
-            // }
-
-            // // Download the file from the URL
-            // fn download_url(url: &str, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-            //     let resp = reqwest::blocking::get(url)?;
-            //     if resp.status() == reqwest::StatusCode::FORBIDDEN {
-            //         // Try using curl if available
-            //         let status = Command::new("curl")
-            //             .arg("-L")
-            //             .arg("-o")
-            //             .arg(dest)
-            //             .arg(url)
-            //             .status();
-            //         match status {
-            //             Ok(s) if s.success() => return Ok(()),
-            //             Ok(s) => return Err(format!("curl exited with status: {}", s).into()),
-            //             Err(e) => return Err(format!("Failed to run curl: {}", e).into()),
-            //         }
-            //     }
-            //     if !resp.status().is_success() {
-            //         return Err(format!("Failed to download: HTTP {}", resp.status()).into());
-            //     }
-            //     let bytes = resp.bytes()?;
-            //     let mut file = std::fs::File::create(dest)?;
-            //     file.write_all(&bytes)?;
-            //     Ok(())
-            // }
-
-            // let url = &rebuilt_url;
-            // let hash = hash_url(url);
-            // let fname = filename_from_url(url);
-            // let roms_dir = uxn_tal::paths::uxntal_roms_get_path().unwrap_or_else(|| PathBuf::from(".uxntal/roms"));
-            // let rom_dir = roms_dir.join(format!("{}", hash));
-            // // let status = Command::new("e_window")
-            // //     .arg(&format!("--title={}", rom_dir.display()))
-            // //     .arg(&rebuilt_url)
-            // //     .status();
-            // fs::create_dir_all(&rom_dir).map_err(|e| simple_err(&rom_dir, &format!("failed to create dir: {e}")))?;
-            // let file_path = rom_dir.join(&fname);
-
-            // if !file_path.exists() {
-            //     println!("Downloading {} to {}", url, file_path.display());
-            //     if let Err(e) = download_url(url, &file_path) {
-            //         eprintln!("Download error: {}", e);
-            //         let status = Command::new("e_window")
-            //             .arg(&format!("--title={}", e))
-            //             .arg(&rebuilt_url)
-            //             .status();
-            //         exit(1);
-            //     }
-            //     let url_file_path = file_path.with_extension("url");
-            //     let url_file_contents = format!(
-            //         "[InternetShortcut]\nURL={}\n",
-            //         url
-            //     );
-            //     if let Err(e) = fs::write(&url_file_path, url_file_contents) {
-            //         eprintln!("Failed to write .url file: {}", e);
-            //     }
-            // } else {
-            //     println!("File already downloaded: {}", file_path.display());
-            // }
-            // run_after_assembly = Some(
-            //     "cardinal-gui".to_owned()
-            // );
-            // run_after_cwd = Some(rom_dir.clone());
-            // // Replace args[0] with the downloaded file path and continue as if user input that path
-            // args[0] = file_path.strip_prefix(r"\\?\").unwrap_or(&file_path).display().to_string();
+            args = vec![rom_path.clone()];
+            // Store extra_flags for use with the emulator after assembly
+            emulator_flags.extend(extra_flags);
         }
     }
     println!("args: {:?}", args);
@@ -629,8 +521,12 @@ fn real_main() -> Result<(), AssemblerError> {
             });
         println!("In directory: {}", dir_str);
 
+        // Pass emulator_flags to the emulator, not to uxntal
+        let mut cmd_args = Vec::new();
+        cmd_args.extend(emulator_flags);
+        cmd_args.push(rom_path.to_string());
         let status = Command::new(path_to_emu)
-            .arg(rom_path)
+            .args(&cmd_args)
             .current_dir(run_after_cwd.unwrap_or_else(|| PathBuf::from(".")))
             .status();
 
@@ -640,9 +536,11 @@ fn real_main() -> Result<(), AssemblerError> {
             }
             Ok(s) => {
                 eprintln!("Post-assembly command exited with status: {}", s);
+                pause_on_error();
             }
             Err(e) => {
                 eprintln!("Failed to run post-assembly command: {}", e);
+                pause_on_error();
             }
         }
     }
