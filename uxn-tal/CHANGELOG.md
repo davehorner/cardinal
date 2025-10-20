@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.10](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.9...uxn-tal-v0.2.10) - 2025-10-20
+
+### Fixed
+
+- *(protocol)* uxntal:// urls were broken in last release.
+
 ## [0.2.9](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.8...uxn-tal-v0.2.9) - 2025-10-20
 
 ### Added

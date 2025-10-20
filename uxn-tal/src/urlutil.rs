@@ -42,13 +42,18 @@ pub fn parse_uxntal_url_to_map(raw_url: &str) -> (HashMap<String, String>, Strin
             map.insert(decoded.to_string(), String::new());
         }
     }
-    // Remove leading double slash from url if present (for uxntal:// and uxntal:widget://)
-    // Only trim // if the URL starts with //https:// or //http://, otherwise leave as-is
+    // Normalize url_part for all malformed cases
     let url = if url_part.starts_with("//https://")
         || url_part.starts_with("//http://")
         || url_part.starts_with("//file://")
     {
         url_part.trim_start_matches("//").to_string()
+    } else if url_part.starts_with("//https//") {
+        format!("https://{}", &url_part[9..])
+    } else if url_part.starts_with("//http//") {
+        format!("http://{}", &url_part[8..])
+    } else if url_part.starts_with("//file//") {
+        format!("file://{}", &url_part[8..])
     } else {
         url_part.to_string()
     };
@@ -75,12 +80,28 @@ pub fn extract_target_from_uxntal(url: &str) -> Option<String> {
         None
     }
     let s = url;
+    // Strip leading double slashes for //http, //https, //file
+    let s = if s.starts_with("//https://")
+        || s.starts_with("//http://")
+        || s.starts_with("//file://")
+    {
+        s.trim_start_matches("//").to_string()
+    } else if s.starts_with("//https//") {
+        // Handle //https// (missing colon)
+        format!("https://{}", &s[9..])
+    } else if s.starts_with("//http//") {
+        format!("http://{}", &s[8..])
+    } else if s.starts_with("//file//") {
+        format!("file://{}", &s[8..])
+    } else {
+        s.to_string()
+    };
     // Handle open?url=... and b64, cases as before
     if s.starts_with("open") {
         let (path, rest) = if let Some(qpos) = s.find('?') {
             (&s[..qpos], &s[qpos + 1..])
         } else {
-            (s, "")
+            (&s[..], "")
         };
         if path == "open" || path == "open/" {
             if let Some(v) = qs_get(rest, "url") {
@@ -110,7 +131,7 @@ pub fn extract_target_from_uxntal(url: &str) -> Option<String> {
     }
 
     if s.contains('%') {
-        let dec = pct_decode(s);
+        let dec = pct_decode(&s);
         if dec.starts_with("http://") || dec.starts_with("https://") || dec.starts_with("file://") {
             return Some(dec);
         }

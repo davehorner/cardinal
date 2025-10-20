@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.4...cardinal-gui-v0.4.5) - 2025-10-20
+
+### Fixed
+
+- *(protocol)* uxntal:// urls were broken in last release.
+
 ## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.3...cardinal-gui-v0.4.4) - 2025-10-20
 
 ### Added
