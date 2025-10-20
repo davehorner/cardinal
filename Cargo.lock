@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.5.0",
@@ -5108,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
