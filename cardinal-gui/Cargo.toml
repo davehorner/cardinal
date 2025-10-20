@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.4.5"
+version = "0.4.6"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -19,6 +19,10 @@ gilrs = ["dep:gilrs"]
 [[bin]]
 name="cardinal-orcas"
 path="src/bin/cardinal-orcas/main.rs"
+
+[[bin]]
+name = "cardinal-gui-win"
+path = "src/bin/cardinal-gui-win.rs"
 
 [dependencies]
 anyhow.workspace = true

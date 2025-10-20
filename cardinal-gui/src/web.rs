@@ -11,8 +11,8 @@ use std::sync::mpsc;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Uint8Array;
 
-use crate::{Event, Stage};
-use cardinal_gui::uxn::audio_setup;
+use crate::stage::{Stage, Event};
+use crate::uxn::audio_setup;
 use uxn::{Backend, Uxn, UxnRam};
 use varvara::Varvara;
 

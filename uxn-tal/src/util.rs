@@ -17,7 +17,7 @@ pub fn pause_on_error() {
         return;
     }
     use std::{thread, time};
-    eprintln!("\n---\nKeeping window open for 15 seconds so you can read the error above. Press Enter to continue...");
+    eprintln!("\n---\nKeeping window open for 15 seconds so you can read the above. Press Enter to continue...");
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {

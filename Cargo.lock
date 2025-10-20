@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.4.5"
+version = "0.4.6"
 dependencies = [
  "anyhow",
  "cardinal-uxn 0.5.0",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "zerocopy",
@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "cardinal-uxn 0.5.0",
  "chrono",
@@ -5108,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5129,6 +5129,7 @@ dependencies = [
  "url",
  "walkdir",
  "which 8.0.0",
+ "winapi",
  "wslpath",
 ]
 

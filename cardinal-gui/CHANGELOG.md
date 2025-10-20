@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.5...cardinal-gui-v0.4.6) - 2025-10-20
+
+### Added
+
+- *(windows_console)* changes to support widgets and roms without the default console flashing.  crate now ships with a cardinal-gui-win binary that is windows subsystem, uxntal also is now gui window subsystem and allocs a console when --debug -d are passed.  --widget is now ontop.
+
 ## [0.4.5](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.4...cardinal-gui-v0.4.5) - 2025-10-20
 
 ### Fixed
