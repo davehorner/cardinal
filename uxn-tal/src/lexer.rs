@@ -947,7 +947,9 @@ impl Lexer {
                     if ident.len() >= 2
                         && ident.len() <= 4
                         && ident.len() % 2 == 0
-                        && ident.chars().all(|c| c.is_ascii_hexdigit() && (c.is_ascii_lowercase() || c.is_ascii_digit()))
+                        && ident.chars().all(|c| {
+                            c.is_ascii_hexdigit() && (c.is_ascii_lowercase() || c.is_ascii_digit())
+                        })
                         && !ident.contains('-')
                         && !ident.contains('/')
                         && !ident.contains('_')
@@ -961,7 +963,11 @@ impl Lexer {
                     }
                 } else {
                     let number = self.read_hex_number()?;
-                    if (number.len() == 2 || number.len() == 4) && number.chars().all(|c| c.is_ascii_hexdigit() && (c.is_ascii_lowercase() || c.is_ascii_digit())) {
+                    if (number.len() == 2 || number.len() == 4)
+                        && number.chars().all(|c| {
+                            c.is_ascii_hexdigit() && (c.is_ascii_lowercase() || c.is_ascii_digit())
+                        })
+                    {
                         Ok(Token::RawHex(number))
                     } else {
                         Ok(Token::LabelRef(Rune::from(' '), number))

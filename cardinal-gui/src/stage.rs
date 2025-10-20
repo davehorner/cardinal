@@ -134,7 +134,7 @@ impl<'a> Stage<'a> {
                 min: egui::Pos2::new(0.0, 0.0),
                 max: egui::Pos2::new(1.0, 1.0),
             },
-            egui::Color32::WHITE,
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 0),
         );
         ui.painter().add(egui::Shape::mesh(mesh));
     }
@@ -447,7 +447,7 @@ impl<'a> Stage<'a> {
                 min: egui::Pos2::new(0.0, 0.0),
                 max: egui::Pos2::new(1.0, 1.0),
             },
-            egui::Color32::WHITE,
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 0),
         );
         ui.painter().add(egui::Shape::mesh(mesh));
     }

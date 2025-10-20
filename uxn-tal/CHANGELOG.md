@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.8...uxn-tal-v0.2.9) - 2025-10-20
+
+### Added
+
+- *(cardinal-gui, uxn-tal)* add --widget/transparent windows, ctrl-alt-drag move, ctrl+c exit, f2 debug, and uxntal proto URL variables (emu, widget); pass flags through to emulator; update README `uxntal uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt`
+
+### Other
+
+- *(svitlyna)* smarter digit-start tokens and defined bare-word label refs  Previously any token starting with a digit was eagerly parsed as a hex number. Complex forms like 1+foo or names beginning with a digit were misclassified, and simple bare words that werenΓÇÖt macros or instructions caused a generic ΓÇ£not a macro or instructionΓÇ¥ error.  In the lexer, digit-start tokens now use a lightweight lookahead. Simple 2- or 4-char lowercase hex like ff or 1234 still become RawHex. Known instruction mnemonics are emitted as instructions. Everything else is treated as a label reference, which preserves numeric-prefixed identifiers and expressions instead of misparsing them as hex.  In the parser, a bare word that isnΓÇÖt a macro or instruction is accepted as a label reference when a matching LabelDef exists in the token stream. If no such label is present, the error message is upgraded to ΓÇ£Label reference '<name>' is not defined,ΓÇ¥ pointing to the exact line and position.  This improves correctness for numeric-prefixed identifiers, avoids accidental hex tokenization, recognizes instruction names reliably, and replaces a vague parse error with a precise undefined-label diagnostic.  git clone https://github.com/gardenappl/svitlyna.git cd svitlyna uxntal --cmp svitlyna.tal cardinal-gui svitlyna.tal_uxntal.rom showcase\autumn.qoi  this fixes: Syntax error at svitlyna.tal:1715:34 Unexpected word '+8s-clamp': not a macro or instruction  btw all the other assemblers did not work drifloon stderr: Number invalid: add32 in part-get-median/loop Invalid number: Invalid number of hex digits (`add32`) buxn
+
 ## [0.2.8](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.7...uxn-tal-v0.2.8) - 2025-10-19
 
 ### Fixed

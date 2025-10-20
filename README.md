@@ -75,6 +75,10 @@ July 2025 Changes
 - [/notes/07.xbox_controller_gilrs](https://github.com/davehorner/cardinal/tree/main/notes/07.xbox_controller_gilrs/README.md)
 - [/notes/08.e_midi](https://github.com/davehorner/cardinal/tree/main/notes/08.e_midi/README.md)  
 
+October 2025 Changes
+- cardinal-gui ctrl+c exits, f2 debugs, ctrl+alt+drag moves the window.
+- uxn-tal now supports protocol variables `emu` and `widget` [uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt](uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt)
+
 © 2024-2025 Matthew Keeter, David Horner
 Released under the [Mozilla Public License 2.0](/LICENSE.txt)
 

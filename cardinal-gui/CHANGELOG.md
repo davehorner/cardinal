@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.3...cardinal-gui-v0.4.4) - 2025-10-20
+
+### Added
+
+- *(cardinal-gui, uxn-tal)* add --widget/transparent windows, ctrl-alt-drag move, ctrl+c exit, f2 debug, and uxntal proto URL variables (emu, widget); pass flags through to emulator; update README `uxntal uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt`
+
 ## [0.4.3](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.2...cardinal-gui-v0.4.3) - 2025-10-18
 
 ### Fixed

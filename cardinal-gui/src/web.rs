@@ -217,7 +217,7 @@ pub fn run() -> Result<()> {
                 canvas,
                 options,
                 Box::new(move |cc| {
-                    let mut s = Box::new(Stage::new(vm, dev, size, 1.0, rx, &cc.egui_ctx));
+                    let mut s = Box::new(Stage::new(vm, dev, size, 1.0, rx, &cc.egui_ctx, String::new(), None));
                     s.set_resize_callback(resize_closure);
                     Ok(s)
                 }),
