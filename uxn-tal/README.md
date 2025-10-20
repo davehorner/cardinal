@@ -27,6 +27,9 @@ Flags:
     --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
     --r, --root[=DIR]     Set root directory for includes (default: current dir)
     --register            Register uxntal as a file handler
+    --debug, -d           Show debug console and extra diagnostic output in the emulator (cardinal-gui windows only)
+    --ontop[=true|false]  Make window always-on-top (widget implies ontop unless --ontop=false)
+    --widget              Widget mode: implies --transparent=ffffff, --no-decorations, ctrl-move, and ontop
     --help, -h            Show this help
 
 Behavior:
@@ -38,6 +41,7 @@ Behavior:
 A few unique arguments to call out specifically are the `--rust-interface`, `--cmp`, and the `--register` arguments.
 
 - `--rust-interface` generates a rust file that contains all of the labels, sizes, and offsets so that you can access that data via rust interface.  This means you can run a rom and access ram data via label.
+
 
 - `--cmp` will attempt to build your tal file against a number of different asm backends.  It will use the asm backend on the host machine if it is in the path.  Otherwise, if you are running a docker daemon, it will create docker images and generate roms via docker.
 
@@ -82,12 +86,12 @@ On macOS, `--register` creates a minimal GUI `.app` bundle in your `~/Applicatio
 ## `uxntal:variables:key^^value://` Protocol Handler Variable Support 
 
 The protocol handler supports passing variables and flags directly in the protocol portion of URL using key-value pairs. These are used to select emulator or pass options.
+
 Variables are specified separated by colons (`:`). Key-value pairs use either `^` or `^^` as separators.
 
-`cardinal-gui` has been enhanced with a --widget flag.  This flag will turn on transparency for white pixels and turns off window decorations.  Additionally, ctrl+alt+click and drag will move the window.
-This flag is added by placing "widget" as a variable in the protocol after the first :.
+`cardinal-gui` supports the `--widget` flag, which turns on transparency for white pixels, disables window decorations, enables ctrl+alt+click-and-drag to move the window, and sets the window always-on-top by default. If you want to disable always-on-top while using widget mode, pass `ontop^false` in the URL or use `--ontop=false` on the CLI.
 
-[uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt](uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt) will open in `cardinal-gui` in --widget mode.  catclock will show in a transparent window with no application decorations.
+[uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt](uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt) will open in `cardinal-gui` in --widget mode.  catclock will show in a transparent window with no application decorations and will be always-on-top unless you specify `ontop^false`.
 
 In order to support different emulators, you can pass an `emu` variable, which currently supports buxn,cuxn,uxnemu emulators if they are within the PATH.
 
@@ -98,11 +102,13 @@ The reason for both `^` and `^^` is that on windows, you must escape `^` with an
 
 ### Examples
 
-- `uxntal:emu^uxn://https://...` launches the ROM in the `uxnemu` emulator.
-- `uxntal:emu^buxn://https://...` launches the ROM in the `buxn-gui` emulator.
-- `uxntal:widget://https://...` passes the `--widget` flag to the emulator. (cardinal-gui is the only emu that supports this flag currently)
+- `uxntal:emu^uxn://https://wiki.xxiivv.com/etc/catclock.tal.txt` launches catclock in the `uxnemu` emulator.
+- `uxntal:emu^buxn://https://wiki.xxiivv.com/etc/catclock.tal.txt` launches catclock in the `buxn-gui` emulator.
+- `uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt` passes the `--widget` flag to the emulator. (cardinal-gui is the only emu that supports this flag currently)
+- `uxntal:widget:ontop^false://https://wiki.xxiivv.com/etc/catclock.tal.txt` passes the `--widget` flag but disables always-on-top, showing widget mode without ontop.
+- `uxntal:widget:debug://https://wiki.xxiivv.com/etc/cccc.tal.txt` opens cccc in widget mode with debug console enabled. (windows only)
 
-You might create multiple bookmarklets to launch urls in the emulator and with the settings you desire.  Right now, the variables are restricted to `widget` and `emu` to limit arbitrary input on emu invocation.
+You might create multiple bookmarklets to launch urls in the emulator and with the settings you desire.  Right now, the variables are restricted to `widget`,`debug`,`ontop` and `emu` to limit arbitrary input on emu invocation.
 
 ## Warning
 

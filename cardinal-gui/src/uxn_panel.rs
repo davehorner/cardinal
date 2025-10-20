@@ -15,13 +15,13 @@ impl<'a> UxnPanel<'a> {
             .unwrap_or_else(|| egui::Id::new("uxn_panel_default"))
     }
     /// Set the ROM data for this panel from a byte slice
-    pub fn set_rom_bytes(&mut self, data: &[u8]) {
-        self.stage.load_rom(data);
+    pub fn set_rom_bytes(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        self.stage.load_rom(data)
     }
 
     /// Set the symbol data for this panel from a byte slice
-    pub fn set_sym_bytes(&mut self, data: &[u8]) {
-        self.stage.load_symbols(data);
+    pub fn set_sym_bytes(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        self.stage.load_symbols(data)
     }
     /// Set the ROM path for this panel and load the ROM and .sys symbol file if present
     pub fn set_rom_path<P: AsRef<std::path::Path>>(&mut self, path: P) {
@@ -32,16 +32,17 @@ impl<'a> UxnPanel<'a> {
         rom: Option<&[u8]>,
         size: (u16, u16),
         texture_name: String,
+        transparent_color: Option<String>,
     ) -> Self {
         let ram = Box::new([0u8; 65536]);
         let ram_for_leak = ram.clone();
-        let ram_static: &'static mut [u8; 65536] = Box::leak(ram_for_leak);
+        let ram_static: &'a mut [u8; 65536] = Box::leak(ram_for_leak);
         let vm = Uxn::new(ram_static, Backend::Interpreter);
         let dev = Varvara::default();
         let (_tx, rx) = std::sync::mpsc::channel();
-        let mut stage = Stage::new(vm, dev, size, 1.0, rx, ctx, texture_name);
+        let mut stage = Stage::new(vm, dev, size, 1.0, rx, ctx, texture_name, transparent_color);
         if let Some(rom) = rom {
-            stage.load_rom(rom);
+            let _ = stage.load_rom(rom);
         }
         Self {
             stage,
@@ -56,13 +57,8 @@ impl<'a> UxnPanel<'a> {
     }
 
     /// Forward input events to the panel (keyboard and mouse)
-    pub fn handle_input(
-        &mut self,
-        input: &egui::InputState,
-        response: &egui::Response,
-        rect: egui::Rect,
-    ) {
-        self.stage.handle_input(input, response, rect);
+    pub fn handle_input(&mut self, input: &egui::InputState, rect: egui::Rect) {
+        self.stage.handle_input(input, rect);
     }
 
     /// Show the panel and forward input events if hovered/focused
@@ -87,13 +83,12 @@ impl<'a> UxnPanel<'a> {
 
         // If focused, process keyboard input (including char/text events)
         if self.focused {
-            self.stage.handle_input(&input, &response, rect);
+            self.stage.handle_input(&input, rect);
             self.stage.handle_usb_input();
         }
 
-        // Step VM, update texture, draw
         self.stage.step();
-        self.stage.update_texture();
+        self.stage.update_texture(ui.ctx());
         // Draw mesh at rect
         self.stage.draw_at(ui, rect);
         self.last_response_id = Some(response.id);

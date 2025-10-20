@@ -1,3 +1,4 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
 use std::collections::VecDeque;
 // use std::path;
 use std::{
@@ -23,7 +24,45 @@ use uxn_tal::{Assembler, AssemblerError};
 // use std::collections::hash_map::DefaultHasher;
 // use std::time::Duration;
 
+#[cfg(windows)]
+unsafe fn show_console() {
+    unsafe {
+        // AllocConsole returns nonzero on success
+        if winapi::um::consoleapi::AllocConsole() != 0 {
+            // Optionally, redirect stdout/stderr to the new console
+            use std::fs::File;
+            use std::io::Write;
+
+            let _ = File::create("CONOUT$").map(|mut f| {
+                let _ = writeln!(f, "Debug console attached.");
+            });
+        }
+    }
+}
+
+#[cfg(not(windows))]
+unsafe fn show_console() {
+    // no-op stub for non-Windows
+}
+
+#[cfg(windows)]
+fn maybe_show_console() {
+    use std::env;
+    if env::args().any(|arg| arg == "--debug")
+        || env::args().next().is_none()
+        || env::args().any(|a| a == "--help")
+    {
+        unsafe {
+            show_console();
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn maybe_show_console() {}
+
 fn main() {
+    maybe_show_console();
     if let Err(e) = real_main() {
         eprintln!("error: {e}");
         pause_on_error();
@@ -33,6 +72,11 @@ fn main() {
 
 fn real_main() -> Result<(), AssemblerError> {
     let mut args: Vec<String> = env::args().skip(1).collect();
+    if args.is_empty() {
+        unsafe { show_console() };
+        print_usage();
+        return Ok(());
+    }
     let root_dir = &std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     println!("root dir: {:?}", root_dir);
     let mut pre = false;
@@ -59,6 +103,12 @@ fn real_main() -> Result<(), AssemblerError> {
             use uxn_tal::urlutil::extract_target_from_uxntal;
             println!("[DEBUG] raw_url: {}", raw_url);
             let (url_map, extracted_url) = uxn_tal::urlutil::parse_uxntal_url_to_map(raw_url);
+            if url_map.contains_key("debug") {
+                unsafe {
+                    show_console();
+                }
+                println!("[DEBUG] url_map: {:?}", url_map);
+            }
             println!(
                 "[DEBUG] extracted_url from parse_uxntal_url_to_map: {}",
                 extracted_url
@@ -78,12 +128,41 @@ fn real_main() -> Result<(), AssemblerError> {
                         }
                     } else if k == "widget" {
                         extra_flags.push("--widget".to_string());
+                    } else if k == "ontop" {
+                        // If ontop is present by itself, treat as true
+                        if v.is_empty() {
+                            extra_flags.push("--ontop".to_string());
+                        } else {
+                            let val = v.trim();
+                            let value = if val.is_empty() {
+                                "true"
+                            } else {
+                                match val.to_ascii_lowercase().as_str() {
+                                    "1" | "true" | "yes" | "on" => "true",
+                                    "0" | "false" | "no" | "off" => "false",
+                                    _ => val,
+                                }
+                            };
+                            if value == "false" {
+                                extra_flags.push("--ontop=false".to_string());
+                            } else {
+                                extra_flags.push("--ontop".to_string());
+                            }
+                        }
                     }
                     // else if v.is_empty() {
                     //     extra_flags.push(format!("--{}", k));
                     // } else {
                     //     extra_flags.push(format!("--{}={}", k, v));
                     // }
+                }
+            }
+            // On Windows, if no debug param, use cardinal-gui-win
+            #[cfg(windows)]
+            {
+                if !url_map.contains_key("debug") && emulator == "cardinal-gui" {
+                    emulator = "cardinal-gui-win".to_owned();
+                    println!("[DEBUG] Switching to cardinal-gui-win.exe (no debug param)");
                 }
             }
             // Extract the actual ROM URL (after flags)
@@ -569,15 +648,15 @@ Flags:
     --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
     --r, --root[=DIR]     Set root directory for includes (default: current dir)
     --register            Register uxntal as a file handler (Windows only)
-    --r, --root[=DIR]     Set root directory for includes (default: current dir)
-    --register            Register uxntal as a file handler (Windows only)
     --help, -h            Show this help
 
 Behavior:
     If output.rom omitted, use input path with .rom extension, or 'out.rom' if reading from stdin.
     You can also pass /dev/stdin as the input filename to read from stdin.
-    Rust interface file path: <output>.rom.symbols.rs"
+    Rust interface file path: <output>.rom.symbols.rs
+    See README.md for more protocol and flag examples."
     );
+    pause_on_error();
 }
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {

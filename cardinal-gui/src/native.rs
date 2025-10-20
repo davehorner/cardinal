@@ -10,8 +10,7 @@ use log::info;
 
 use clap::Parser;
 
-use crate::Stage;
-use cardinal_gui::uxn::audio_setup; // Removed due to unresolved import error
+use crate::uxn::audio_setup;
 
 /// Uxn runner
 #[derive(Parser)]
@@ -39,6 +38,14 @@ struct Args {
     /// Widget mode: implies --transparent=ffffff, --no-decorations, and enables ctrl-move
     #[clap(long)]
     widget: bool,
+
+    /// Make the window always on top (true/false). If not set, widget implies ontop.
+    #[clap(long)]
+    ontop: Option<bool>,
+
+    /// Show debug console
+    #[clap(long, short = 'd')]
+    debug: bool,
 
     /// Arguments to pass into the VM
     #[arg(trailing_var_arg = true)]
@@ -87,6 +94,14 @@ pub fn run() -> Result<()> {
     dev.output(&vm).check()?;
     dev.send_args(&mut vm, &args.args).check()?;
 
+    // // Hide the console after ROM is loaded, unless --debug is present
+    // #[cfg(windows)]
+    // {
+    //     if !args.debug {
+    //         unsafe { winapi::um::wincon::FreeConsole(); }
+    //     }
+    // }
+
     let size @ (width, height) = dev.output(&vm).size;
     let scale = args.scale.unwrap_or(if width < 320 { 2.0 } else { 1.0 });
     info!("creating window with size ({width}, {height}) and scale {scale}");
@@ -105,21 +120,29 @@ pub fn run() -> Result<()> {
     };
     let no_decorations = args.widget || args.no_decorations;
 
+    let mut viewport_builder = egui::ViewportBuilder::default()
+        .with_inner_size([width as f32 * scale, height as f32 * scale])
+        .with_transparent(transparent)
+        .with_decorations(!no_decorations);
+    let ontop = match args.ontop {
+        Some(val) => val,
+        None => args.widget,
+    };
+    if ontop {
+        viewport_builder = viewport_builder.with_always_on_top();
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([width as f32 * scale, height as f32 * scale])
-            .with_transparent(transparent)
-            .with_decorations(!no_decorations), // .with_title(Some(rom_title))
+        viewport: viewport_builder,
         ..Default::default()
     };
 
     let (tx, rx) = mpsc::channel();
-    varvara::spawn_console_worker(move |c| tx.send(crate::Event::Console(c)));
+    varvara::spawn_console_worker(move |c| tx.send(crate::stage::Event::Console(c)));
     eframe::run_native(
         "Varvara",
         options,
         Box::new(move |cc| {
-            Ok(Box::new(Stage::new(
+            Ok(Box::new(crate::stage::Stage::new(
                 vm,
                 dev,
                 size,

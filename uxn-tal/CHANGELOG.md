@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.10...uxn-tal-v0.2.11) - 2025-10-20
+
+### Added
+
+- *(windows_console)* changes to support widgets and roms without the default console flashing.  crate now ships with a cardinal-gui-win binary that is windows subsystem, uxntal also is now gui window subsystem and allocs a console when --debug -d are passed.  --widget is now ontop.
+
 ## [0.2.10](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.9...uxn-tal-v0.2.10) - 2025-10-20
 
 ### Fixed

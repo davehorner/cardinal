@@ -48,12 +48,12 @@ pub fn parse_uxntal_url_to_map(raw_url: &str) -> (HashMap<String, String>, Strin
         || url_part.starts_with("//file://")
     {
         url_part.trim_start_matches("//").to_string()
-    } else if url_part.starts_with("//https//") {
-        format!("https://{}", &url_part[9..])
-    } else if url_part.starts_with("//http//") {
-        format!("http://{}", &url_part[8..])
-    } else if url_part.starts_with("//file//") {
-        format!("file://{}", &url_part[8..])
+    } else if let Some(stripped) = url_part.strip_prefix("//https//") {
+        format!("https://{}", stripped)
+    } else if let Some(stripped) = url_part.strip_prefix("//http//") {
+        format!("http://{}", stripped)
+    } else if let Some(stripped) = url_part.strip_prefix("//file//") {
+        format!("file://{}", stripped)
     } else {
         url_part.to_string()
     };
@@ -86,13 +86,13 @@ pub fn extract_target_from_uxntal(url: &str) -> Option<String> {
         || s.starts_with("//file://")
     {
         s.trim_start_matches("//").to_string()
-    } else if s.starts_with("//https//") {
+    } else if let Some(stripped) = s.strip_prefix("//https//") {
         // Handle //https// (missing colon)
-        format!("https://{}", &s[9..])
-    } else if s.starts_with("//http//") {
-        format!("http://{}", &s[8..])
-    } else if s.starts_with("//file//") {
-        format!("file://{}", &s[8..])
+        format!("https://{}", stripped)
+    } else if let Some(stripped) = s.strip_prefix("//http//") {
+        format!("http://{}", stripped)
+    } else if let Some(stripped) = s.strip_prefix("//file//") {
+        format!("file://{}", stripped)
     } else {
         s.to_string()
     };

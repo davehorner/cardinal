@@ -1,6 +1,39 @@
-//! Example: cardinal-orcas
-// Spawns animated viewport windows in N, S, W, E directions on key press.
-
+use std::cell::RefCell;
+use std::rc::Rc;
+impl<'a> CardinalViewportsApp<'a> {
+    /// Create a UxnPanel for a given PanelState (by id), using persistent data.
+    /// This does not store the panel, but reconstructs it as needed for the UI layer.
+    pub fn panel_for_state(
+        &self,
+        panel_state: &PanelState,
+        ctx: &'a egui::Context,
+        panel_size: (u32, u32),
+        panel_scale: f32,
+    ) -> uxn_panel::UxnPanel<'a> {
+        let panel_size_u16 = (panel_size.0 as u16, panel_size.1 as u16);
+        let mut panel = uxn_panel::UxnPanel::new(
+            ctx,
+            None,
+            panel_size_u16,
+            format!("uxn_panel_texture_{:?}", panel_state.id),
+            None,
+        );
+        panel.set_rom_bytes(CARDINAL_ORCAS_ROM).ok();
+        panel.set_sym_bytes(CARDINAL_ORCAS_SYM).ok();
+        panel.stage.scale = panel_scale;
+        panel
+    }
+}
+// Persistent per-panel state (no egui/eframe references)
+pub struct PanelState {
+    pub id: egui::Id,
+    /// This field is reserved for future use (e.g. lazy panel initialization or migration).
+    /// It is not currently used, but kept for compatibility with previous state management logic.
+    pub initialized: bool,
+    // Add any persistent data you need here (e.g. ROM, VM state, etc.)
+}
+/// Example: cardinal-orcas
+/// Spawns animated viewport windows in N, S, W, E directions on key press.
 use cardinal_gui::uxn_panel;
 use eframe::egui;
 use egui::{StrokeKind, ViewportBuilder, ViewportId}; // Import the UxnPanel module
@@ -48,7 +81,8 @@ pub struct CardinalViewportsApp<'a> {
     viewports: Vec<CardinalViewport>,
     collision_enabled: bool,
     wrap_mode: WrapMode,
-    uxn_panels: Option<Vec<uxn_panel::UxnPanel<'a>>>,
+    panels: Vec<PanelState>,
+    uxn_panels: Vec<Rc<RefCell<uxn_panel::UxnPanel<'a>>>>,
     grid_cols: usize,
     grid_rows: usize,
     focused_panel: Option<usize>,
@@ -72,11 +106,19 @@ impl<'a> Default for CardinalViewportsApp<'a> {
     fn default() -> Self {
         let grid_cols = 2;
         let grid_rows = 2;
+        let mut panels = Vec::new();
+        for i in 0..(grid_cols * grid_rows) {
+            panels.push(PanelState {
+                id: egui::Id::new(format!("uxn_panel_{i}")),
+                initialized: false,
+            });
+        }
         Self {
             viewports: Vec::new(),
             collision_enabled: true,
             wrap_mode: WrapMode::ParentRect,
-            uxn_panels: None,
+            panels,
+            uxn_panels: Vec::new(),
             grid_cols,
             grid_rows,
             focused_panel: Some(0), // Focus the first panel by default
@@ -91,6 +133,24 @@ impl<'a> Default for CardinalViewportsApp<'a> {
 
 impl<'a> eframe::App for CardinalViewportsApp<'a> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Initialize uxn_panels only once, with the real egui::Context
+        if self.uxn_panels.is_empty() {
+            let panel_size = (680u16, 456u16);
+            for (i, panel_state) in self.panels.iter_mut().enumerate() {
+                if !panel_state.initialized {
+                    let texture_name = format!("uxn_panel_texture_{i}");
+                    let mut panel =
+                        uxn_panel::UxnPanel::new(ctx, None, panel_size, texture_name, None);
+                    panel.set_rom_bytes(CARDINAL_ORCAS_ROM).ok();
+                    panel.set_sym_bytes(CARDINAL_ORCAS_SYM).ok();
+                    self.uxn_panels.push(Rc::new(RefCell::new(panel)));
+                    panel_state.initialized = true;
+                } else {
+                    // Already initialized, reuse existing
+                    // (Assumes panels and uxn_panels are kept in sync by index)
+                }
+            }
+        }
         // --- Ctrl+Q to exit the app ---
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Q)) {
             std::process::exit(0); // not nice to do this, sorry
@@ -393,16 +453,37 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
             }
         }
 
+        // --- UxnPanel grid config (panel_size, panel_scale) ---
+        let mut panel_scale: f32 = 1.0;
+        let panel_size = (680, 456);
+        let panel_padding = 16.0;
+        // TOP_PANEL_HEIGHT is already defined at module level
+        // Handle Ctrl++ and Ctrl+- for scaling
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Plus)) {
+            panel_scale *= 1.1;
+        }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Minus)) {
+            panel_scale /= 1.1;
+        }
+        // Clamp scale
+        panel_scale = panel_scale.clamp(0.5, 3.0);
+        // Calculate window size
+        let window_width =
+            self.grid_cols as f32 * (panel_size.0 as f32 * panel_scale + panel_padding);
+        let window_height = self.grid_rows as f32
+            * (panel_size.1 as f32 * panel_scale + panel_padding)
+            + TOP_PANEL_HEIGHT;
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            window_width,
+            window_height,
+        )));
         // --- USB Pedal Polling and Debug Panel ---
         #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
         {
             // Try to poll pedal state from the first panel's controller if available
-            if let Some(uxn_panels) = self.uxn_panels.as_mut() {
-                // Get the currently focused panel, if any
-                // let focused_panel = self.focused_panel.and_then(|idx| uxn_panels.get_mut(idx));
-                // if let Some(panel) = focused_panel {
-                if let Some(panel) = uxn_panels.get_mut(0) {
-                    //panel.stage.handle_usb_input();
+            if let Some(idx) = self.focused_panel {
+                if let Some(panel_rc) = self.uxn_panels.get(idx) {
+                    let mut panel = panel_rc.borrow_mut();
                     if let Some(varvara_controller) = panel
                         .stage
                         .dev
@@ -410,15 +491,6 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                         .as_any()
                         .downcast_mut::<varvara::controller_usb::ControllerUsb>(
                     ) {
-                        // use varvara::controller::inject_pedal_keys;
-                        // inject_pedal_keys(
-                        //     &mut varvara_controller.controller,
-                        //     &mut panel.stage.vm,
-                        //     varvara_controller.last_pedal.unwrap_or(0),
-                        //     varvara_controller.last_pedal.unwrap_or(0),
-                        // );
-                        // varvara_controller
-                        //     .poll_pedal_event(&mut panel.stage.vm);
                         if let Some(pedal) = varvara_controller.last_pedal {
                             self.last_usb_pedal = Some(pedal);
                             // Map pedal bits to panel focus: bits 1,2,4,8 -> panels 0-3, 7 (all pressed) -> panel 4
@@ -434,36 +506,35 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
                                 println!("[DEBUG][pedal] pedal=0x{pedal:02X} -> focus panel {new_focus:?}");
                                 self.focused_panel = new_focus;
                                 // Also request egui focus for the newly focused panel
-                                if let Some(idx) = new_focus {
-                                    if let Some(uxn_panels) = self.uxn_panels.as_mut() {
-                                        if let Some(panel) = uxn_panels.get(idx) {
-                                            let response_id = panel.last_response_id();
-                                            ctx.memory_mut(|mem| mem.request_focus(response_id));
-                                        }
-                                    }
-                                }
+                                // if let Some(idx) = new_focus {
+                                //     if let Some(panel_rc) = self.uxn_panels.get(idx) {
+                                //         // let panel = panel_rc.borrow();
+                                //         //let response_id = panel.last_response_id();
+                                //         // ctx.memory_mut(|mem| mem.request_focus(response_id));
+                                //     }
+                                // }
                             }
-                        } else {
-                            //println!("[DEBUG][pedal] No pedal events received yet.");
                         }
-                        // Optionally print debug info
-                        // println!("[DEBUG][orcas] poll_pedal_event: changed={:?}, last_pedal={:?}", changed, varvara_controller.last_pedal);
                     }
                 }
             }
             egui::TopBottomPanel::bottom("usb_pedal_debug").show(ctx, |ui| {
                 let panel_id_str = if let Some(idx) = self.focused_panel {
-                    if let Some(uxn_panels) = self.uxn_panels.as_ref() {
-                        if let Some(panel) = uxn_panels.get(idx) {
-                            use cardinal_gui::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice;
-                            let bang=get_slice(panel.stage.vm.ram(),"*");
-                            let x = get_slice(panel.stage.vm.ram(),"Mouse/x");
-                            let posx = get_slice(panel.stage.vm.ram(),"cursor/x");
-                            let grid = get_slice(panel.stage.vm.ram(),"grid/buf");
-                            format!("{:?} bang  {:?} x {:?} posx {:?} grid {:?}", panel.last_response_id(), bang, x, posx, grid)
-                        } else {
-                            "None".to_string()
-                        }
+                    if let Some(panel_rc) = self.uxn_panels.get(idx) {
+                        let panel = panel_rc.borrow();
+                        use cardinal_gui::cardinal_orcas_symbols::cardinal_orcas_symbols::get_slice;
+                        let bang = get_slice(panel.stage.vm.ram(), "*");
+                        let x = get_slice(panel.stage.vm.ram(), "Mouse/x");
+                        let posx = get_slice(panel.stage.vm.ram(), "cursor/x");
+                        let grid = get_slice(panel.stage.vm.ram(), "grid/buf");
+                        format!(
+                            "{:?} bang  {:?} x {:?} posx {:?} grid {:?}",
+                            panel.last_response_id(),
+                            bang,
+                            x,
+                            posx,
+                            grid
+                        )
                     } else {
                         "None".to_string()
                     }
@@ -510,165 +581,138 @@ impl<'a> eframe::App for CardinalViewportsApp<'a> {
             window_width,
             window_height,
         )));
-        // Create panels if needed
-        if self.uxn_panels.is_none() {
-            let mut uxn_panels = Vec::new();
-            // Use embedded ROM and sym data
-            let rom_data = CARDINAL_ORCAS_ROM;
-            let sym_data = CARDINAL_ORCAS_SYM;
-            for i in 0..(self.grid_cols * self.grid_rows) {
-                let texture_name = format!("uxn_panel_texture_{i}");
-                let mut panel = uxn_panel::UxnPanel::new(ctx, None, panel_size, texture_name);
-                // Provide embedded ROM and sym data to the panel
-                panel.set_rom_bytes(rom_data);
-                panel.set_sym_bytes(sym_data);
-                panel.stage.scale = panel_scale;
-                uxn_panels.push(panel);
-            }
-            self.uxn_panels = Some(uxn_panels);
-        }
-        if let Some(uxn_panels) = self.uxn_panels.as_mut() {
-            for panel in uxn_panels.iter_mut() {
-                panel.stage.scale = panel_scale;
-                if !panel.is_focused() {
-                    panel.stage.step();
-                }
-            }
-            egui::CentralPanel::default().show(ctx, |ui| {
-                egui::Grid::new("uxn_grid")
-                    .num_columns(self.grid_cols)
-                    .show(ui, |ui| {
-                        let input = ctx.input(|i| i.clone());
-                        for (i, panel) in uxn_panels.iter_mut().enumerate() {
+        // --- UxnPanel grid in main area (refactored to use persistent PanelState) ---
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::Grid::new("uxn_grid")
+                .num_columns(self.grid_cols)
+                .show(ui, |ui| {
+                    let input = ctx.input(|i| i.clone());
+                    for (i, panel_rc) in self.uxn_panels.iter().enumerate() {
+                        // First borrow: only extract needed fields
+                        // First borrow: only extract needed fields
+                        let (rect, response_id, clicked);
+                        {
+                            let mut panel = panel_rc.borrow_mut();
                             let response = panel.show(ui);
+                            rect = response.rect;
+                            response_id = response.id;
+                            clicked = response.clicked();
                             let is_focused = self.focused_panel == Some(i);
-                            let rect = response.rect;
                             if is_focused {
                                 let painter = ui.painter();
+                                // Inflate the rect by 2px for the border to avoid overlap
+                                let border_rect = rect.expand(2.0);
                                 painter.rect_stroke(
-                                    rect,
-                                    egui::CornerRadius::same(4),
+                                    border_rect,
+                                    egui::CornerRadius::same(6),
                                     egui::Stroke::new(3.0, egui::Color32::from_rgb(0, 120, 255)),
-                                    StrokeKind::Middle,
+                                    StrokeKind::Outside,
                                 );
-                                // Always request egui focus for the focused panel
-                                response.request_focus();
-                                ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                                // Do NOT request egui focus every frame for the focused panel
                             }
-                            if response.clicked() {
+                            if clicked {
                                 println!("[DEBUG] Panel {i} clicked, requesting focus");
                                 self.focused_panel = Some(i);
-                                // Request egui focus for this panel
+                                // Request egui focus for this panel only on click
                                 response.request_focus();
-                                ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
-                            }
-                            // Filter input events: only the focused panel gets keyboard events unless all_panels_receive_input is true
-                            let filtered_input = if self.all_panels_receive_input || is_focused {
-                                input.clone()
-                            } else {
-                                let mut no_events = input.clone();
-                                no_events.events.clear();
-                                no_events
-                            };
-                            // If all_panels_receive_mouse is set, inject mouse state directly into the VM device for all panels
-                            let filtered_input = if self.all_panels_receive_mouse {
-                                // This panel is already getting all events, so use filtered_input as normal
-                                if self.all_panels_receive_input || is_focused {
-                                    filtered_input
-                                } else {
-                                    // Instead of injecting synthetic egui events, inject mouse state directly into the VM device below
-                                    let pointer_pos = ctx.input(|i| i.pointer.latest_pos());
-                                    if let Some(global_pos) = pointer_pos {
-                                        // Map global pointer position into this panel's rect
-                                        let local_x =
-                                            (global_pos.x - rect.min.x).max(0.0).min(rect.width())
-                                                + rect.min.x;
-                                        let local_y =
-                                            (global_pos.y - rect.min.y).max(0.0).min(rect.height())
-                                                + rect.min.y;
-                                        let local_pos = egui::Pos2::new(local_x, local_y);
-                                        // Get button state
-                                        let pointer = ctx.input(|i| i.pointer.clone());
-                                        let left =
-                                            pointer.button_down(egui::PointerButton::Primary);
-                                        let right =
-                                            pointer.button_down(egui::PointerButton::Secondary);
-                                        let middle =
-                                            pointer.button_down(egui::PointerButton::Middle);
-                                        // Inject directly into the VM device (Varvara mouse)
-                                        let mut buttons = 0u8;
-                                        if left {
-                                            buttons |= 1;
-                                        }
-                                        if middle {
-                                            buttons |= 2;
-                                        }
-                                        if right {
-                                            buttons |= 4;
-                                        }
-                                        let mouse_state = varvara::MouseState {
-                                            pos: (local_pos.x, local_pos.y),
-                                            scroll: (0.0, 0.0),
-                                            buttons,
-                                        };
-                                        // Directly update the mouse state using panel.stage.vm and panel.stage.dev.mouse
-                                        panel.stage.dev.mouse.set_active();
-                                        panel
-                                            .stage
-                                            .dev
-                                            .mouse
-                                            .update(&mut panel.stage.vm, mouse_state);
-                                    }
-                                    // Return filtered_input with no pointer events (so egui doesn't double-handle)
-                                    let mut no_mouse = filtered_input.clone();
-                                    no_mouse.events.retain(|e| {
-                                        !matches!(
-                                            e,
-                                            egui::Event::PointerButton { .. }
-                                                | egui::Event::PointerMoved(_)
-                                                | egui::Event::PointerGone
-                                        )
-                                    });
-                                    no_mouse
-                                }
-                            } else {
-                                filtered_input
-                            };
-                            if self.all_panels_receive_input
-                                || is_focused
-                                || self.all_panels_receive_mouse
-                            {
-                                // Print egui focus state for this panel (public info only)
-                                // let has_focus = response.has_focus();
-                                // Print all egui input events for this panel
-                                for event in &filtered_input.events {
-                                    // Silence MouseMoved events in debug output
-                                    if matches!(event, egui::Event::MouseMoved(_)) {
-                                        continue;
-                                    }
-                                    // println!("[DEBUG] Panel {i} egui event: {event:?}");
-                                    if let egui::Event::Text(s) = event {
-                                        println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
-                                    }
-                                }
-                                panel.stage.handle_input(&filtered_input, &response, rect);
-                                // Step the VM and update the texture so UI reflects input
-                                // panel.stage.vm.run(&mut panel.stage.dev, 0x100);
-                                panel.stage.dev.redraw(&mut panel.stage.vm);
-                                panel.stage.update_texture();
-                            }
-                            if (i + 1) % self.grid_cols == 0 {
-                                ui.end_row();
+                                ui.ctx().memory_mut(|mem| mem.request_focus(response_id));
                             }
                         }
-                    });
-            });
+                        let is_focused = self.focused_panel == Some(i);
+                        let filtered_input = if self.all_panels_receive_input || is_focused {
+                            input.clone()
+                        } else {
+                            let mut no_events = input.clone();
+                            no_events.events.clear();
+                            no_events
+                        };
+                        let filtered_input = if self.all_panels_receive_mouse {
+                            if self.all_panels_receive_input || is_focused {
+                                filtered_input
+                            } else {
+                                let pointer_pos = ctx.input(|i| i.pointer.latest_pos());
+                                if let Some(global_pos) = pointer_pos {
+                                    let local_x =
+                                        (global_pos.x - rect.min.x).max(0.0).min(rect.width())
+                                            + rect.min.x;
+                                    let local_y =
+                                        (global_pos.y - rect.min.y).max(0.0).min(rect.height())
+                                            + rect.min.y;
+                                    let local_pos = egui::Pos2::new(local_x, local_y);
+                                    let pointer = ctx.input(|i| i.pointer.clone());
+                                    let left = pointer.button_down(egui::PointerButton::Primary);
+                                    let right = pointer.button_down(egui::PointerButton::Secondary);
+                                    let middle = pointer.button_down(egui::PointerButton::Middle);
+                                    let mut buttons = 0u8;
+                                    if left {
+                                        buttons |= 1;
+                                    }
+                                    if middle {
+                                        buttons |= 2;
+                                    }
+                                    if right {
+                                        buttons |= 4;
+                                    }
+                                    let mouse_state = varvara::MouseState {
+                                        pos: (local_pos.x, local_pos.y),
+                                        scroll: (0.0, 0.0),
+                                        buttons,
+                                    };
+                                    // Mouse update borrow
+                                    {
+                                        let mut panel = panel_rc.borrow_mut();
+                                        let stage = &mut panel.stage;
+                                        stage.dev.mouse.set_active();
+                                        stage.dev.mouse.update(&mut stage.vm, mouse_state);
+                                    }
+                                }
+                                let mut no_mouse = filtered_input.clone();
+                                no_mouse.events.retain(|e| {
+                                    !matches!(
+                                        e,
+                                        egui::Event::PointerButton { .. }
+                                            | egui::Event::PointerMoved(_)
+                                            | egui::Event::PointerGone
+                                    )
+                                });
+                                no_mouse
+                            }
+                        } else {
+                            filtered_input
+                        };
+                        if self.all_panels_receive_input
+                            || is_focused
+                            || self.all_panels_receive_mouse
+                        {
+                            for event in &filtered_input.events {
+                                if matches!(event, egui::Event::MouseMoved(_)) {
+                                    continue;
+                                }
+                                if let egui::Event::Text(s) = event {
+                                    println!("[DEBUG] Panel {i} egui::Event::Text: {s:?}");
+                                }
+                            }
+                            // Redraw/update borrow
+                            {
+                                let mut panel = panel_rc.borrow_mut();
+                                panel.handle_input(&filtered_input, rect);
+                                let stage = &mut panel.stage;
+                                stage.dev.redraw(&mut stage.vm);
+                                stage.update_texture(ui.ctx());
+                            }
+                        }
+                        if (i + 1) % self.grid_cols == 0 {
+                            ui.end_row();
+                        }
+                    }
+                }); // end Grid
+        }); // end CentralPanel
             // After all panels are shown, if a focus is pending, request it now
-            if let Some(idx) = self.pending_focus_panel.take() {
-                if let Some(panel) = self.uxn_panels.as_ref().and_then(|v| v.get(idx)) {
-                    let response_id = panel.last_response_id();
-                    ctx.memory_mut(|mem| mem.request_focus(response_id));
-                }
+        if let Some(idx) = self.pending_focus_panel.take() {
+            if let Some(panel_rc) = self.uxn_panels.get(idx) {
+                let panel = panel_rc.borrow();
+                let response_id = panel.last_response_id();
+                ctx.memory_mut(|mem| mem.request_focus(response_id));
             }
         }
         // ...existing code...
