@@ -1,28 +1,28 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/20|a6757ff|0.5.3
-## [0.5.3](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.2...cardinal-uxn-v0.5.3) - 2025-10-20
+25/10/21|b123808|0.5.4
+## [0.5.4](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.3...cardinal-uxn-v0.5.4) - 2025-10-21
 
 ### Added
 
-- *(windows_console)* changes to support widgets and roms without the default console flashing.  crate now ships with a cardinal-gui-win binary that is windows subsystem, uxntal also is now gui window subsystem and allocs a console when --debug -d are passed.  --widget is now ontop.
+- *(linkedin-redirects)* uxntal uxntal:widget://https://lnkd.in/ec8ySaDV redirects to catclock.  I am looking for new work; visit my linkedin if that interests you. https://www.linkedin.com/in/mrdavidhorner/
 
 
 ## cardinal-varvara
-25/10/20|a6757ff|0.7.4
-## [0.7.4](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.3...cardinal-varvara-v0.7.4) - 2025-10-20
+25/10/21|b123808|0.7.5
+## [0.7.5](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.4...cardinal-varvara-v0.7.5) - 2025-10-21
 
 ### Added
 
-- *(windows_console)* changes to support widgets and roms without the default console flashing.  crate now ships with a cardinal-gui-win binary that is windows subsystem, uxntal also is now gui window subsystem and allocs a console when --debug -d are passed.  --widget is now ontop.
+- *(linkedin-redirects)* uxntal uxntal:widget://https://lnkd.in/ec8ySaDV redirects to catclock.  I am looking for new work; visit my linkedin if that interests you. https://www.linkedin.com/in/mrdavidhorner/
 
 
 ## cardinal-gui
-25/10/20|a6757ff|0.4.6
-## [0.4.6](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.5...cardinal-gui-v0.4.6) - 2025-10-20
+25/10/21|b123808|0.4.7
+## [0.4.7](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.6...cardinal-gui-v0.4.7) - 2025-10-21
 
 ### Added
 
-- *(windows_console)* changes to support widgets and roms without the default console flashing.  crate now ships with a cardinal-gui-win binary that is windows subsystem, uxntal also is now gui window subsystem and allocs a console when --debug -d are passed.  --widget is now ontop.
+- *(linkedin-redirects)* uxntal uxntal:widget://https://lnkd.in/ec8ySaDV redirects to catclock.  I am looking for new work; visit my linkedin if that interests you. https://www.linkedin.com/in/mrdavidhorner/
 

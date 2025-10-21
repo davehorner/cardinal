@@ -1,6 +1,7 @@
 pub mod codeberg;
 pub mod downloader;
 pub mod github;
+pub mod html_redirect;
 pub mod includes;
 pub mod provider;
 pub mod resolver;

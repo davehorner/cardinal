@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2021"
 authors = ["David Horner"]
 description = "uxntal:// protocol | a Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
@@ -30,6 +30,7 @@ reqwest = { version = "0.12.23", features = ["blocking", "http2", "native-tls-al
 percent-encoding = "2.3.2"
 base64 = "0.22.1"
 url = "2.5.7"
+scraper = "0.24.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["consoleapi"] }
