@@ -78,6 +78,7 @@ July 2025 Changes
 October 2025 Changes
 - cardinal-gui ctrl+c exits, f2 debugs, ctrl+alt+drag moves the window.
 - uxn-tal now supports protocol variables `emu`,`debug`,`ontop`,`widget`
+- linkedin redirect support `uxntal uxntal:widget://https://lnkd.in/ec8ySaDV` catclock and a +1 impression on linkedin.  +1 impressions and likes appreciated.
 
 `uxntal:widget://https://wiki.xxiivv.com/etc/catclock.tal.txt`
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.11...uxn-tal-v0.2.12) - 2025-10-21
+
+### Added
+
+- *(linkedin-redirects)* uxntal uxntal:widget://https://lnkd.in/ec8ySaDV redirects to catclock.  I am looking for new work; visit my linkedin if that interests you. https://www.linkedin.com/in/mrdavidhorner/
+
 ## [0.2.11](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.10...uxn-tal-v0.2.11) - 2025-10-20
 
 ### Added
