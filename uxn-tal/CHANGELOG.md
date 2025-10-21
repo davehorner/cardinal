@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.13](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.12...uxn-tal-v0.2.13) - 2025-10-21
+
+### Fixed
+
+- *(fetch)* update resolver to handle legacy redirect messages and improve error handling in URL resolution process
+
 ## [0.2.12](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.11...uxn-tal-v0.2.12) - 2025-10-21
 
 ### Added
