@@ -61,6 +61,10 @@ pub mod paths;
 pub mod urlutil;
 pub mod util;
 pub use fetch::resolver::resolve_entry_from_url;
+pub mod emu_buxn;
+pub mod emu_cuxn;
+pub mod emu_uxn;
+pub mod uxntal_protocol;
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();
     a.assemble(source, None)

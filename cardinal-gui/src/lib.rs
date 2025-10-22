@@ -1,3 +1,4 @@
+pub mod effects;
 use log::{error, info};
 
 #[cfg_attr(target_arch = "wasm32", path = "web.rs")]
