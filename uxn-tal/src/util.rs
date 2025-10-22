@@ -20,6 +20,7 @@ pub fn pause_on_error() {
     eprintln!("\n---\nKeeping window open for 15 seconds so you can read the above. Press Enter to continue...");
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
+    #[cfg(not(target_arch = "wasm32"))]
     thread::spawn(move || {
         let mut _buf = String::new();
         let _ = std::io::stdin().read_line(&mut _buf);

@@ -255,8 +255,8 @@ pub struct UxnApp<'a> {
     texture: egui::TextureHandle,
     event_rx: mpsc::Receiver<Event>,
     resized: Option<Box<dyn FnMut(u16, u16)>>,
-    window_mode: String,
-    aspect_ratio: f32,
+    _window_mode: String,
+    _aspect_ratio: f32,
     // For auto ROM cycling
     auto_rom_select: bool,
     auto_timer: f64,
@@ -368,8 +368,8 @@ impl<'a> UxnApp<'a> {
             scroll: (0.0, 0.0),
             cursor_pos: None,
             texture,
-            window_mode,
-            aspect_ratio,
+            _window_mode: window_mode,
+            _aspect_ratio: aspect_ratio,
             auto_rom_select,
             auto_timer,
             auto_index,
@@ -815,38 +815,38 @@ impl eframe::App for UxnApp<'_> {
         }
         if self.size != out.size {
             // Get current window size in logical points
-            let current_window_size = ctx.input(|i| {
+            let _current_window_size = ctx.input(|i| {
                 i.viewport()
                     .inner_rect
                     .map_or(egui::Vec2::ZERO, |rect| rect.size())
             });
-            let new_size = egui::Vec2::new(out.size.0 as f32, out.size.1 as f32) * self.scale;
+            let _new_size = egui::Vec2::new(out.size.0 as f32, out.size.1 as f32) * self.scale;
             // let should_resize = new_size.x > current_window_size.x || new_size.y > current_window_size.y
             //     || new_size.x < current_window_size.x || new_size.y < current_window_size.y;
             // // Only resize if the new frame is larger, or if it's smaller than the window
             // if should_resize {
             // Only resize if the new frame is larger than the current window
-            if new_size.x > current_window_size.x || new_size.y > current_window_size.y {
-                info!("resizing window to {:?}", out.size);
-                self.size = out.size;
-                let mut size = new_size;
-                // Enforce proportional resizing if needed
-                if self.window_mode == "proportional" {
-                    let aspect = self.aspect_ratio;
-                    let w = size.x;
-                    let h = size.y;
-                    let (new_w, new_h) = if w / h > aspect {
-                        (h * aspect, h)
-                    } else {
-                        (w, w / aspect)
-                    };
-                    size = egui::Vec2::new(new_w, new_h);
-                }
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
-                if let Some(f) = self.resized.as_mut() {
-                    f(out.size.0, out.size.1);
-                }
-            }
+            // if new_size.x > current_window_size.x || new_size.y > current_window_size.y {
+            //     info!("resizing window to {:?}", out.size);
+            //     self.size = out.size;
+            //     let mut size = new_size;
+            //     // Enforce proportional resizing if needed
+            //     if self.window_mode == "proportional" {
+            //         let aspect = self.aspect_ratio;
+            //         let w = size.x;
+            //         let h = size.y;
+            //         let (new_w, new_h) = if w / h > aspect {
+            //             (h * aspect, h)
+            //         } else {
+            //             (w, w / aspect)
+            //         };
+            //         size = egui::Vec2::new(new_w, new_h);
+            //     }
+            //     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+            //     if let Some(f) = self.resized.as_mut() {
+            //         f(out.size.0, out.size.1);
+            //     }
+            // }
         }
         let w = out.size.0 as usize;
         let h = out.size.1 as usize;
