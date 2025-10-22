@@ -309,7 +309,18 @@ impl StreamData {
             if !self.crossfade.is_empty() {
                 let x = self.crossfade.len() as f32 / (CROSSFADE_COUNT as f32 - 1.0);
                 for j in 0..CHANNELS {
-                    let v = self.crossfade.pop_front().unwrap();
+                    let v = match self.crossfade.pop_front() {
+                        Some(val) => val,
+                        None => {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                log::error!("crossfade pop_front failed: None");
+                                return;
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            panic!("crossfade pop_front failed: None");
+                        }
+                    };
                     data[i + j] = v * x + data[i + j] * (1.0 - x);
                 }
             }
@@ -365,7 +376,21 @@ impl Audio {
         let muted = Arc::new(AtomicBool::new(false));
         let stream_data = [(); 4].map(|_| Arc::new(Mutex::new(StreamData::new(muted.clone()))));
         let streams = [0, 1, 2, 3].map(|i| Stream {
-            done: stream_data[i].lock().unwrap().done.clone(),
+            done: match stream_data[i].lock() {
+                Ok(guard) => guard.done.clone(),
+                Err(_) => {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        log::error!("stream_data lock failed");
+                        return Stream {
+                            done: Arc::new(AtomicBool::new(false)),
+                            data: Arc::new(Mutex::new(StreamData::new(muted.clone()))),
+                        };
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    panic!("stream_data lock failed");
+                }
+            },
             data: stream_data[i].clone(),
         });
 
@@ -380,7 +405,15 @@ impl Audio {
     /// Resets the audio stream data, preserving the same allocation
     pub fn reset(&mut self) {
         for s in &self.streams {
-            *s.data.lock().unwrap() = StreamData::new(self.muted.clone());
+            match s.data.lock() {
+                Ok(mut guard) => *guard = StreamData::new(self.muted.clone()),
+                Err(_) => {
+                    #[cfg(target_arch = "wasm32")]
+                    log::error!("s.data lock failed");
+                    #[cfg(not(target_arch = "wasm32"))]
+                    panic!("s.data lock failed");
+                }
+            }
             s.done.store(false, Ordering::Relaxed);
         }
     }
@@ -401,7 +434,15 @@ impl Audio {
         if target == AudioPorts::PITCH {
             let p = AudioPorts::dev(vm, i);
             if p.pitch.is_empty() {
-                let mut d = self.streams[i].data.lock().unwrap();
+                let mut d = match self.streams[i].data.lock() {
+                    Ok(guard) => guard,
+                    Err(_) => {
+                        #[cfg(target_arch = "wasm32")]
+                        log::error!("streams[i].data lock failed");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        panic!("streams[i].data lock failed");
+                    }
+                };
                 d.stage = Stage::Release;
                 d.duration = p.duration();
             } else {
@@ -415,7 +456,15 @@ impl Audio {
 
                 // Compute a crossfade transition from the previous sample
                 // (this may just be all zeros, which is fine)
-                let mut d = self.streams[i].data.lock().unwrap();
+                let mut d = match self.streams[i].data.lock() {
+                    Ok(guard) => guard,
+                    Err(_) => {
+                        #[cfg(target_arch = "wasm32")]
+                        log::error!("streams[i].data lock failed");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        panic!("streams[i].data lock failed");
+                    }
+                };
 
                 // Populate crossfade samples by sampling the previous stream
                 let mut crossfade = std::mem::take(&mut d.crossfade);
@@ -473,14 +522,30 @@ impl Audio {
         // the existing values in device port memory?
         match target {
             AudioPorts::POSITION_H => {
-                let pos = self.streams[i].data.lock().unwrap().pos as u16;
+                let pos = match self.streams[i].data.lock() {
+                    Ok(guard) => guard.pos as u16,
+                    Err(_) => {
+                        #[cfg(target_arch = "wasm32")]
+                        log::error!("streams[i].data lock failed");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        panic!("streams[i].data lock failed");
+                    }
+                };
                 p.position = pos.into();
             }
             AudioPorts::POSITION_L => {
                 // We assume POSITION_H is read first, so this is already loaded
             }
             AudioPorts::OUTPUT => {
-                let vol = self.streams[i].data.lock().unwrap().vol * 255.0;
+                let vol = match self.streams[i].data.lock() {
+                    Ok(guard) => guard.vol * 255.0,
+                    Err(_) => {
+                        #[cfg(target_arch = "wasm32")]
+                        log::error!("streams[i].data lock failed");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        panic!("streams[i].data lock failed");
+                    }
+                };
                 p.output = vol as u8;
             }
             _ => (),

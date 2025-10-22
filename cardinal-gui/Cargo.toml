@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-gui"
-version = "0.4.7"
+version = "0.4.8"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -37,7 +37,7 @@ serde_json = "1.0.141"
 tempfile = "3.20.0"
 #e_window = "0.1.13"
 
-varvara = { package = "cardinal-varvara", version = "0.7.1", default-features = false }
+varvara = { package = "cardinal-varvara", version = "0.7.6", default-features = false }
 #varvara = { path = "../cardinal-varvara", package = "cardinal-varvara" }
 gilrs = { version = "0.11.0", optional = true }
 
@@ -53,7 +53,10 @@ reqwest = { version = "0.12.22", features = ["blocking", "json"] }
 wasm-bindgen-futures.workspace = true
 web-sys.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
-#getrandom = { version = "0.3.3", features = ["wasm_js"] }
+# For WASM builds, set the getrandom backend environment variable before building:
+# PowerShell: $env:RUSTFLAGS='--cfg getrandom_backend="wasm_js"'
+# CMD:        set RUSTFLAGS=--cfg getrandom_backend="wasm_js"
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
 reqwest-wasm = { version = "0.11.16", features = ["blocking"] }
 eframe = { version = "0.33", default-features = false, features = [
     "default_fonts",
@@ -69,10 +72,10 @@ eframe = { version = "0.33", default-features = false, features = [
 ] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.0", features = ["native"] }
+uxn = { package = "cardinal-uxn", version = "0.5.5", features = ["native"] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.0" }
+uxn = { package = "cardinal-uxn", version = "0.5.5" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 hidapi = { version = "2.6.3", optional = true, features = [] }
