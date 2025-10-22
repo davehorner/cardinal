@@ -441,6 +441,8 @@ impl Audio {
                         log::error!("streams[i].data lock failed");
                         #[cfg(not(target_arch = "wasm32"))]
                         panic!("streams[i].data lock failed");
+                        // Return a default StreamData to satisfy type
+                        return;
                     }
                 };
                 d.stage = Stage::Release;
@@ -463,6 +465,7 @@ impl Audio {
                         log::error!("streams[i].data lock failed");
                         #[cfg(not(target_arch = "wasm32"))]
                         panic!("streams[i].data lock failed");
+                        return;
                     }
                 };
 
@@ -529,6 +532,7 @@ impl Audio {
                         log::error!("streams[i].data lock failed");
                         #[cfg(not(target_arch = "wasm32"))]
                         panic!("streams[i].data lock failed");
+                        0
                     }
                 };
                 p.position = pos.into();
@@ -544,6 +548,7 @@ impl Audio {
                         log::error!("streams[i].data lock failed");
                         #[cfg(not(target_arch = "wasm32"))]
                         panic!("streams[i].data lock failed");
+                        0.0
                     }
                 };
                 p.output = vol as u8;
