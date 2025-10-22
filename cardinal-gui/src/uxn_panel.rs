@@ -28,11 +28,11 @@ impl<'a> UxnPanel<'a> {
         self.stage.load_rom_with_path(path);
     }
     pub fn new(
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         rom: Option<&[u8]>,
         size: (u16, u16),
         texture_name: String,
-        transparent_color: Option<String>,
+        transparent: Option<String>,
     ) -> Self {
         let ram = Box::new([0u8; 65536]);
         let ram_for_leak = ram.clone();
@@ -40,7 +40,32 @@ impl<'a> UxnPanel<'a> {
         let vm = Uxn::new(ram_static, Backend::Interpreter);
         let dev = Varvara::default();
         let (_tx, rx) = std::sync::mpsc::channel();
-        let mut stage = Stage::new(vm, dev, size, 1.0, rx, ctx, texture_name, transparent_color);
+        let mut stage = Stage::new(
+            vm,
+            dev,
+            rx,
+            crate::stage::StageConfig {
+                size,
+                scale: 1.0,
+                rom_title: texture_name,
+                transparent,
+                color_transform_name: "invert".to_string(),
+                color_params: vec![],
+                effects: crate::stage::EffectsConfig {
+                    efxt: 3.0,
+                    effect_mode: 0,
+                    effect_order: (0..crate::effects::EFFECT_COUNT).collect(),
+                    efx: None,
+                    efxmode: None,
+                    efx_ndx: 0,
+                    last_effect_switch: 0.0,
+                },
+                fit_mode: "contain".to_string(),
+                mouse_mode: crate::stage::MouseDragMode::None,
+                mouse_resize: crate::stage::MouseResizeMode::None,
+            },
+            None,
+        );
         if let Some(rom) = rom {
             let _ = stage.load_rom(rom);
         }
@@ -76,7 +101,8 @@ impl<'a> UxnPanel<'a> {
         let input = ui.ctx().input(|i| i.clone());
         // Mouse events: always forward when hovered
         if response.hovered() {
-            self.stage.handle_mouse_input(&input, &response, rect);
+            self.stage
+                .handle_mouse_input(ui.ctx(), &input, &response, rect);
         }
         // Keyboard focus state
         self.focused = response.has_focus();

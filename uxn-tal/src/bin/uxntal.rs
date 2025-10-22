@@ -16,13 +16,8 @@ use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
-use uxn_tal::resolve_entry_from_url;
 use uxn_tal::util::pause_on_error;
 use uxn_tal::{Assembler, AssemblerError};
-// use std::fs::File;
-// use std::hash::{Hasher, Hash};
-// use std::collections::hash_map::DefaultHasher;
-// use std::time::Duration;
 
 #[cfg(windows)]
 unsafe fn show_console() {
@@ -96,87 +91,36 @@ fn real_main() -> Result<(), AssemblerError> {
     let mut positional: Vec<String> = Vec::new();
 
     // Store emulator flags for use after assembly
-    let mut emulator_flags: Vec<String> = Vec::new();
+    let emulator_flags: Vec<String> = Vec::new();
     if !args.is_empty() {
         let raw_url = &args[0];
         if raw_url.starts_with("uxntal:") {
-            use uxn_tal::urlutil::extract_target_from_uxntal;
-            println!("[DEBUG] raw_url: {}", raw_url);
-            let (url_map, extracted_url) = uxn_tal::urlutil::parse_uxntal_url_to_map(raw_url);
-            if url_map.contains_key("debug") {
+            use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser, ProtocolVarVar};
+
+            let result = ProtocolParser::parse(raw_url);
+            #[cfg(windows)]
+            if matches!(
+                result.proto_vars.get("debug"),
+                Some(ProtocolVarVar::Bool(true))
+            ) {
                 unsafe {
                     show_console();
                 }
-                println!("[DEBUG] url_map: {:?}", url_map);
             }
-            println!(
-                "[DEBUG] extracted_url from parse_uxntal_url_to_map: {}",
-                extracted_url
-            );
-            // Default emulator
-            let mut emulator = "cardinal-gui".to_owned();
-            let mut extra_flags: Vec<String> = Vec::new();
-            if !url_map.is_empty() {
-                for (k, v) in &url_map {
-                    if k == "emu" {
-                        if v.eq_ignore_ascii_case("buxn") {
-                            emulator = "buxn-gui".to_owned();
-                        } else if v.eq_ignore_ascii_case("cuxn") {
-                            emulator = "cardinal-gui".to_owned();
-                        } else if v.eq_ignore_ascii_case("uxn") {
-                            emulator = "uxnemu".to_owned();
-                        }
-                    } else if k == "widget" {
-                        extra_flags.push("--widget".to_string());
-                    } else if k == "ontop" {
-                        // If ontop is present by itself, treat as true
-                        if v.is_empty() {
-                            extra_flags.push("--ontop".to_string());
-                        } else {
-                            let val = v.trim();
-                            let value = if val.is_empty() {
-                                "true"
-                            } else {
-                                match val.to_ascii_lowercase().as_str() {
-                                    "1" | "true" | "yes" | "on" => "true",
-                                    "0" | "false" | "no" | "off" => "false",
-                                    _ => val,
-                                }
-                            };
-                            if value == "false" {
-                                extra_flags.push("--ontop=false".to_string());
-                            } else {
-                                extra_flags.push("--ontop".to_string());
-                            }
-                        }
-                    }
-                    // else if v.is_empty() {
-                    //     extra_flags.push(format!("--{}", k));
-                    // } else {
-                    //     extra_flags.push(format!("--{}={}", k, v));
-                    // }
+            println!("uxntal {}", raw_url);
+            println!("[DEBUG] parsed uxntal protocol result: {:?}", result);
+            // Select emulator and get path
+            let (mapper, emulator_path) = match get_emulator_launcher(&result) {
+                Some(pair) => pair,
+                None => {
+                    eprintln!("No suitable emulator found in PATH.");
+                    pause_on_error();
+                    std::process::exit(1);
                 }
-            }
-            // On Windows, if no debug param, use cardinal-gui-win
-            #[cfg(windows)]
-            {
-                if !url_map.contains_key("debug") && emulator == "cardinal-gui" {
-                    emulator = "cardinal-gui-win".to_owned();
-                    println!("[DEBUG] Switching to cardinal-gui-win.exe (no debug param)");
-                }
-            }
-            // Extract the actual ROM URL (after flags)
-            let actual_url = extract_target_from_uxntal(&extracted_url)
-                .unwrap_or_else(|| extracted_url.to_string());
-            println!(
-                "[DEBUG] actual_url after extract_target_from_uxntal: {}",
-                actual_url
-            );
-            println!(
-                "[DEBUG] raw_url: {}\nextracted_url: {}\nactual_url: {}",
-                raw_url, extracted_url, actual_url
-            );
-            let (entry_local, rom_dir) = match resolve_entry_from_url(&actual_url) {
+            };
+            // Resolve ROM path and working directory
+            let actual_url = &result.url;
+            let (entry_local, rom_dir) = match uxn_tal::resolve_entry_from_url(actual_url) {
                 Ok(v) => v,
                 Err(e) => {
                     eprintln!("Failed to resolve uxntal URL: {}", e);
@@ -184,17 +128,23 @@ fn real_main() -> Result<(), AssemblerError> {
                     std::process::exit(1);
                 }
             };
-            println!("[DEBUG] Resolved entry_local: {}", entry_local.display());
-            run_after_assembly = Some(emulator);
-            run_after_cwd = Some(rom_dir.clone());
             let rom_path = entry_local
                 .strip_prefix(r"\\?\")
                 .unwrap_or(&entry_local)
                 .display()
                 .to_string();
-            args = vec![rom_path.clone()];
-            // Store extra_flags for use with the emulator after assembly
-            emulator_flags.extend(extra_flags);
+            let cmd = mapper.build_command(&result, &rom_path, &emulator_path);
+            let emulator_args: Vec<String> = cmd
+                .get_args()
+                .map(|a| a.to_string_lossy().to_string())
+                .collect();
+            println!("[DEBUG] Emulator command: {:?}", cmd);
+            println!("[DEBUG] Emulator args: {:?}", emulator_args);
+            // Save for use after assembly
+            run_after_assembly = Some(emulator_path.display().to_string());
+            run_after_cwd = Some(rom_dir.clone());
+            args = vec![rom_path.clone()]; // Only pass ROM path to uxntal for assembly
+                                           // Emulator launch will happen after assembly below
         }
     }
     println!("args: {:?}", args);
@@ -568,58 +518,119 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
-    if let Some(cmd) = run_after_assembly {
-        let cmd_name = cmd.clone();
-        let path_to_emu = which::which(&cmd_name)
-            .or_else(|_| {
-                if let Ok(home) = std::env::var("HOME") {
-                    let p = PathBuf::from(format!("{}/.cargo/bin/{}", home, &cmd_name));
-                    if p.exists() {
-                        Ok(p)
+    if let Some(ref cmd) = run_after_assembly {
+        // If protocol URL is present, use protocol handler for argument construction
+        if let Some(raw_url) = std::env::args().nth(1) {
+            if raw_url.starts_with("uxntal:") {
+                use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
+                let result = ProtocolParser::parse(&raw_url);
+                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
+                    // Always use the actual output ROM path for the emulator
+                    let rom_path = rom_path_p.to_string_lossy().to_string();
+                    let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
+                    cmd.current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")));
+                    println!("[DEBUG] Spawning emulator: {:?}", cmd);
+                    let status = cmd.status();
+                    match status {
+                        Ok(s) if s.success() => {
+                            println!(
+                                "Ran post-assembly command: {}",
+                                cmd.get_program().to_string_lossy()
+                            );
+                        }
+                        Ok(s) => {
+                            eprintln!("Post-assembly command exited with status: {}", s);
+                            pause_on_error();
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to run post-assembly command: {}", e);
+                            pause_on_error();
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        }
+        // Fallback: legacy path if not protocol URL
+        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+        {
+            let cmd_name = cmd.clone();
+            let path_to_emu = which::which(&cmd_name)
+                .or_else(|_| {
+                    if let Ok(home) = std::env::var("HOME") {
+                        let p = PathBuf::from(format!("{}/.cargo/bin/{}", home, &cmd_name));
+                        if p.exists() {
+                            Ok(p)
+                        } else {
+                            Err(())
+                        }
                     } else {
                         Err(())
                     }
-                } else {
-                    Err(())
+                })
+                .map_err(|_| {
+                    simple_err(
+                        Path::new("."),
+                        &format!("{cmd_name} not found in PATH or ~/.cargo/bin"),
+                    )
+                })?;
+            println!("Running post-assembly command: {}", cmd);
+            let dir_str = run_after_cwd
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| {
+                    std::env::current_dir()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| ".".to_string())
+                });
+            println!("In directory: {}", dir_str);
+            let mut cmd_args = emulator_flags.clone();
+            cmd_args.push(rom_path.to_string());
+            let status = Command::new(path_to_emu)
+                .args(&cmd_args)
+                .current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")))
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    println!("Ran post-assembly command: {}", cmd);
                 }
-            })
-            .map_err(|_| {
-                simple_err(
-                    Path::new("."),
-                    &format!("{cmd_name} not found in PATH or ~/.cargo/bin"),
-                )
-            })?;
-        println!("Running post-assembly command: {}", cmd);
-        let dir_str = run_after_cwd
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| {
-                std::env::current_dir()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|_| ".".to_string())
-            });
-        println!("In directory: {}", dir_str);
-
-        // Pass emulator_flags to the emulator, not to uxntal
-        let mut cmd_args = Vec::new();
-        cmd_args.extend(emulator_flags);
-        cmd_args.push(rom_path.to_string());
-        let status = Command::new(path_to_emu)
-            .args(&cmd_args)
-            .current_dir(run_after_cwd.unwrap_or_else(|| PathBuf::from(".")))
-            .status();
-
-        match status {
-            Ok(s) if s.success() => {
-                println!("Ran post-assembly command: {}", cmd);
+                Ok(s) => {
+                    eprintln!("Post-assembly command exited with status: {}", s);
+                    pause_on_error();
+                }
+                Err(e) => {
+                    eprintln!("Failed to run post-assembly command: {}", e);
+                    pause_on_error();
+                }
             }
-            Ok(s) => {
-                eprintln!("Post-assembly command exited with status: {}", s);
-                pause_on_error();
-            }
-            Err(e) => {
-                eprintln!("Failed to run post-assembly command: {}", e);
-                pause_on_error();
+        }
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        {
+            eprintln!("which::which and post-assembly command execution are not available in browser WASM");
+        }
+    }
+
+    // After assembly, if run_after_assembly is set, launch the emulator with the correct flags and ROM path
+    if let (Some(_emulator_cmd), Some(run_cwd)) =
+        (run_after_assembly.clone(), run_after_cwd.clone())
+    {
+        if let Some(raw_url) = env::args().nth(1) {
+            if raw_url.starts_with("uxntal:") {
+                use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
+                let result = ProtocolParser::parse(&raw_url);
+                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
+                    let rom_path = args.first().cloned().unwrap_or_default();
+                    let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
+                    cmd.current_dir(run_cwd);
+                    println!("[DEBUG] Spawning emulator: {:?}", cmd);
+                    let status = cmd.status();
+                    match status {
+                        Ok(s) if s.success() => {}
+                        Ok(s) => eprintln!("Emulator exited with status: {}", s),
+                        Err(e) => eprintln!("Failed to launch emulator: {}", e),
+                    }
+                    return Ok(());
+                }
             }
         }
     }
