@@ -25,23 +25,25 @@ glob = "0.3.3"
 tempfile = "3.23.0"
 dirs = "6.0.0"
 wslpath = "0.0.2"
-which = "8.0.0"
 reqwest = { version = "0.12.23", features = ["blocking", "http2", "native-tls-alpn"] }
 percent-encoding = "2.3.2"
 base64 = "0.22.1"
 url = "2.5.7"
 scraper = "0.24.0"
 
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+which = "8.0.0"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["consoleapi"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.0", features = [
+uxn = { package = "cardinal-uxn", version = "0.5.5", features = [
    "native",
 ] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.0" }
+uxn = { package = "cardinal-uxn", version = "0.5.5" }
 
 
 [[bin]]

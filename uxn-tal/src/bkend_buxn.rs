@@ -29,70 +29,77 @@ pub fn buxn_repo_get_path() -> Option<PathBuf> {
 }
 
 pub fn ensure_docker_buxn_image() -> Result<(), AssemblerError> {
-    let docker_path = which::which("docker")
-        .map_err(|_| bkend_err(Path::new("."), "docker not found in PATH"))?;
-
-    let info_output = Command::new(&docker_path)
-        .arg("info")
-        .output()
-        .map_err(|e| bkend_err(Path::new("."), &format!("failed to run 'docker info': {e}")))?;
-
-    if !info_output.status.success() {
-        return Err(bkend_err(
-            Path::new("."),
-            "docker daemon does not appear to be running or accessible",
-        ));
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    {
+        return Err(bkend_err(Path::new("."), "docker not available in browser WASM"));
     }
-    let images_output = Command::new(&docker_path)
-        .arg("images")
-        .arg("-q")
-        .arg("buxn-linux")
-        .output()
-        .map_err(|e| {
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+    {
+        let docker_path = which::which("docker")
+            .map_err(|_| bkend_err(Path::new("."), "docker not found in PATH"))?;
+
+        let info_output = Command::new(&docker_path)
+            .arg("info")
+            .output()
+            .map_err(|e| bkend_err(Path::new("."), &format!("failed to run 'docker info': {e}")))?;
+
+        if !info_output.status.success() {
+            return Err(bkend_err(
+                Path::new("."),
+                "docker daemon does not appear to be running or accessible",
+            ));
+        }
+        let images_output = Command::new(&docker_path)
+            .arg("images")
+            .arg("-q")
+            .arg("buxn-linux")
+            .output()
+            .map_err(|e| {
+                bkend_err(
+                    Path::new("."),
+                    &format!("failed to check docker images: {e}"),
+                )
+            })?;
+
+        if !images_output.stdout.is_empty() {
+            println!("Docker buxn-linux image already exists.");
+            // Image already exists
+            return Ok(());
+        }
+        let buxn_path = buxn_repo_get_path().ok_or_else(|| {
             bkend_err(
                 Path::new("."),
-                &format!("failed to check docker images: {e}"),
+                "buxn repository not found; cannot build docker image",
             )
         })?;
-
-    if !images_output.stdout.is_empty() {
-        println!("Docker buxn-linux image already exists.");
-        // Image already exists
-        return Ok(());
+        println!(
+            "Building Docker buxn-linux image. {}  Be patient this can take some time.",
+            buxn_path.display()
+        );
+        let status = Command::new(&docker_path)
+            .current_dir(buxn_path)
+            .arg("build")
+            .arg("--no-cache")
+            .arg("--progress=plain")
+            .arg("-t")
+            .arg("buxn-linux")
+            .arg(".")
+            .output()
+            .map_err(|e| {
+                bkend_err(
+                    Path::new("."),
+                    &format!("failed to build docker image: {e}"),
+                )
+            })?;
+        if !status.status.success() {
+            println!("output: {}", String::from_utf8_lossy(&status.stdout));
+            println!("error: {}", String::from_utf8_lossy(&status.stderr));
+            eprintln!("Failed to build buxn-linux docker image");
+        } else {
+            println!("Successfully built buxn-linux docker image");
+        }
+        Ok(())
     }
-    let buxn_path = buxn_repo_get_path().ok_or_else(|| {
-        bkend_err(
-            Path::new("."),
-            "buxn repository not found; cannot build docker image",
-        )
-    })?;
-    println!(
-        "Building Docker buxn-linux image. {}  Be patient this can take some time.",
-        buxn_path.display()
-    );
-    let status = Command::new(&docker_path)
-        .current_dir(buxn_path)
-        .arg("build")
-        .arg("--no-cache")
-        .arg("--progress=plain")
-        .arg("-t")
-        .arg("buxn-linux")
-        .arg(".")
-        .output()
-        .map_err(|e| {
-            bkend_err(
-                Path::new("."),
-                &format!("failed to build docker image: {e}"),
-            )
-        })?;
-    if !status.status.success() {
-        println!("output: {}", String::from_utf8_lossy(&status.stdout));
-        println!("error: {}", String::from_utf8_lossy(&status.stderr));
-        eprintln!("Failed to build buxn-linux docker image");
-    } else {
-        println!("Successfully built buxn-linux docker image");
-    }
-    Ok(())
 }
 
 pub fn ensure_buxn_repo() -> Result<Option<PathBuf>, AssemblerError> {
@@ -176,58 +183,65 @@ impl AssemblerBackend for UxnBuxnBackend {
         };
         let tal_file = &input;
         let rom_path = format!("{}_{}.rom", tal_file, self.name());
-        let docker_path = which::which("docker")
-            .map_err(|_| bkend_err(Path::new("."), "docker not found in PATH"))?;
-        let cwd_path = std::env::current_dir()?
-            .display()
-            .to_string()
-            .replace(r"\\?\", "")
-            .replace("\\", "/")
-            .replace("c:", "C:");
-        let tal_file = tal_file.strip_prefix(&cwd_path).unwrap_or(tal_file);
-        let rom_path = rom_path.strip_prefix(&cwd_path).unwrap_or(&rom_path);
-        let tal_file = tal_file.trim_start_matches('/');
-        let rom_path = rom_path.trim_start_matches('/');
-        let docker_cmd = Command::new(docker_path)
-            .arg("run")
-            .arg("--rm")
-            .arg("-v")
-            .arg(format!("{}:/src", &cwd_path))
-            .arg("-w")
-            .arg("/src")
-            .arg("buxn-linux")
-            .arg("/app/bin/Release/linux/buxn-asm")
-            .arg(tal_file)
-            .arg(rom_path)
-            .output()
-            .map_err(|e| AssemblerError::Backend {
-                message: format!("Failed to run docker buxn-asm: {e}"),
-            })?;
-        println!(
-                "buxn: Running docker command: docker run --rm -v {}:/src -w /src buxn-linux /app/bin/Release/linux/buxn-asm {} {}",
-                cwd_path,
-                tal_file,
-                rom_path
-            );
-        println!("buxn: Arguments: {:?}", docker_cmd);
-        if !docker_cmd.status.success() {
-            return Err(bkend_err(
-                std::path::Path::new(&tal_file),
-                &format!(
-                    "docker buxn-asm failed {} {tal_file} {:?} stderr: {} stdout: {}",
-                    std::env::current_dir()?.display(),
-                    docker_cmd.status,
-                    String::from_utf8_lossy(&docker_cmd.stderr),
-                    String::from_utf8_lossy(&docker_cmd.stdout)
-                ),
-            ));
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        {
+            return Err(bkend_err(Path::new("."), "docker not available in browser WASM"));
         }
-        let bytes = fs::read(rom_path).unwrap_or_default();
-        Ok(AssemblyOutput {
-            rom_path: rom_path.to_string(),
-            rom_bytes: bytes.clone(),
-            stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
-            disassembly: run_dis_file(rom_path)?,
-        })
+        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+        {
+            let docker_path = which::which("docker")
+                .map_err(|_| bkend_err(Path::new("."), "docker not found in PATH"))?;
+            let cwd_path = std::env::current_dir()?
+                .display()
+                .to_string()
+                .replace(r"\\?\", "")
+                .replace("\\", "/")
+                .replace("c:", "C:");
+            let tal_file = tal_file.strip_prefix(&cwd_path).unwrap_or(tal_file);
+            let rom_path = rom_path.strip_prefix(&cwd_path).unwrap_or(&rom_path);
+            let tal_file = tal_file.trim_start_matches('/');
+            let rom_path = rom_path.trim_start_matches('/');
+            let docker_cmd = Command::new(docker_path)
+                .arg("run")
+                .arg("--rm")
+                .arg("-v")
+                .arg(format!("{}:/src", &cwd_path))
+                .arg("-w")
+                .arg("/src")
+                .arg("buxn-linux")
+                .arg("/app/bin/Release/linux/buxn-asm")
+                .arg(tal_file)
+                .arg(rom_path)
+                .output()
+                .map_err(|e| AssemblerError::Backend {
+                    message: format!("Failed to run docker buxn-asm: {e}"),
+                })?;
+            println!(
+                    "buxn: Running docker command: docker run --rm -v {}:/src -w /src buxn-linux /app/bin/Release/linux/buxn-asm {} {}",
+                    cwd_path,
+                    tal_file,
+                    rom_path
+                );
+            println!("buxn: Arguments: {:?}", docker_cmd);
+            if !docker_cmd.status.success() {
+                return Err(bkend_err(
+                    std::path::Path::new(&tal_file),
+                    &format!(
+                        "docker buxn-asm failed {} {tal_file} {:?} stderr: {} stdout: {}",
+                        std::env::current_dir()?.display(),
+                        docker_cmd.status,
+                        String::from_utf8_lossy(&docker_cmd.stderr),
+                        String::from_utf8_lossy(&docker_cmd.stdout)
+                    ),
+                ));
+            }
+            let bytes = fs::read(rom_path).unwrap_or_default();
+            Ok(AssemblyOutput {
+                rom_path: rom_path.to_string(),
+                rom_bytes: bytes.clone(),
+                stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
+                disassembly: run_dis_file(rom_path)?,
+            })
+        }
     }
 }
