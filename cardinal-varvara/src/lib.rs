@@ -23,12 +23,7 @@ pub mod controller_gilrs;
 #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
 pub mod controller_usb;
 
-// #[cfg(not(all(feature = "uses_usb", not(target_arch = "wasm32"))))]
-// /// USB controller device stub for the Varvara system (when `uses_usb` is not enabled or on wasm32).
-// #[path = "controller_usb_stub.rs"]
-// pub mod controller_usb;
-#[cfg(all(feature = "uses_usb", target_arch = "wasm32"))]
-/// USB controller device stub for the Varvara system (when `uses_usb` is enabled on wasm32 target).
+#[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
 #[path = "controller_usb_stub.rs"]
 pub mod controller_usb;
 
@@ -267,6 +262,7 @@ impl Varvara {
         Ok(map)
     }
     /// Returns a mutable reference to the USB controller, if it exists.
+    #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn controller_usb_mut(&mut self) -> Option<&mut controller_usb::ControllerUsb> {
         self.controller
             .as_mut()
@@ -285,11 +281,11 @@ impl Varvara {
     /// Builds a new instance of the Varvara peripherals
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn new(uses_usb: bool) -> Self {
-        #[cfg(feature = "uses_gilrs")]
-        {}
-        let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
-            #[cfg(feature = "uses_gilrs")]
+    log::info!("[Varvara::new] (USB) uses_usb={}", uses_usb);
+    let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
+            #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
             {
+                log::info!("[Varvara::new] USB+gilrs: constructing ControllerUsb with gilrs");
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
                         controller_usb::UsbDeviceConfig::default(),
@@ -299,8 +295,9 @@ impl Varvara {
                     gilrs: Some(ControllerGilrs::new(controller::Controller::default())),
                 })
             }
-            #[cfg(not(feature = "uses_gilrs"))]
+            #[cfg(all(not(feature = "uses_gilrs"), not(target_arch = "wasm32")))]
             {
+                log::info!("[Varvara::new] USB: constructing ControllerUsb without gilrs");
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
                         controller_usb::UsbDeviceConfig::default(),
@@ -309,15 +306,21 @@ impl Varvara {
                     controller: controller::Controller::default(),
                 })
             }
-        } else {
-            #[cfg(feature = "uses_gilrs")]
+            #[cfg(target_arch = "wasm32")]
             {
+                log::info!("[Varvara::new] USB: WASM stub controller");
+                Box::new(controller::Controller::default())
+            }
+        } else {
+            #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+            {
+                log::info!("[Varvara::new] non-USB+gilrs: constructing ControllerGilrs");
                 use crate::controller_gilrs::ControllerGilrs;
-
                 Box::new(ControllerGilrs::new(controller::Controller::default()))
             }
-            #[cfg(not(feature = "uses_gilrs"))]
+            #[cfg(any(not(feature = "uses_gilrs"), target_arch = "wasm32"))]
             {
+                log::info!("[Varvara::new] non-USB: WASM stub controller");
                 Box::new(controller::Controller::default())
             }
         };
@@ -341,12 +344,13 @@ impl Varvara {
     /// Builds a new instance of the Varvara peripherals (non-USB/wasm version).
     #[cfg(any(not(feature = "uses_usb"), target_arch = "wasm32"))]
     pub fn new() -> Self {
-        #[cfg(feature = "uses_gilrs")]
-        {
-            #[allow(unused_imports)]
-            use controller_gilrs::ControllerGilrs;
-        }
-        Self {
+        // #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+        // {
+        //     #[allow(unused_imports)]
+        //     use controller_gilrs::ControllerGilrs;
+        // }
+    log::info!("[Varvara::new] (non-USB/wasm) constructing");
+    Self {
             console: console::Console::new(),
             system: system::System::new(),
             datetime: datetime::Datetime,
@@ -355,12 +359,14 @@ impl Varvara {
             mouse: mouse::Mouse::new(),
             file: file::File::new(),
             controller: {
-                #[cfg(feature = "uses_gilrs")]
+                #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
                 {
+                    log::info!("[Varvara::new] (non-USB/wasm) ControllerGilrs");
                     Box::new(ControllerGilrs::new(controller::Controller::default()))
                 }
-                #[cfg(not(feature = "uses_gilrs"))]
+                #[cfg(any(not(feature = "uses_gilrs"), target_arch = "wasm32"))]
                 {
+                    log::info!("[Varvara::new] (non-USB/wasm) WASM stub controller");
                     Box::new(controller::Controller::default())
                 }
             },
@@ -382,7 +388,7 @@ impl Varvara {
         self.file = file::File::new();
 
         self.controller = if self.uses_usb {
-            #[cfg(feature = "uses_gilrs")]
+            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32"), feature = "uses_gilrs"))]
             {
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
@@ -393,7 +399,7 @@ impl Varvara {
                     gilrs: Some(ControllerGilrs::new(controller::Controller::default())),
                 })
             }
-            #[cfg(not(feature = "uses_gilrs"))]
+            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32"), not(feature = "uses_gilrs")))]
             {
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
@@ -403,13 +409,19 @@ impl Varvara {
                     controller: controller::Controller::default(),
                 })
             }
+            #[cfg(target_arch = "wasm32")]
+            {
+                // Always use stub controller for WASM
+                Box::new(controller::Controller::default())
+            }
         } else {
-            #[cfg(feature = "uses_gilrs")]
+            #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
             {
                 Box::new(ControllerGilrs::new(controller::Controller::default()))
             }
-            #[cfg(not(feature = "uses_gilrs"))]
+            #[cfg(any(not(feature = "uses_gilrs"), target_arch = "wasm32"))]
             {
+                // Always use stub controller for WASM
                 Box::new(controller::Controller::default())
             }
         };
