@@ -525,7 +525,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [UXN](https://100r.co/site/uxn.html) - The UXN virtual machine
 - [TAL](https://wiki.xxiivv.com/site/tal.html) - TAL assembly language documentation
 - [uxnasm](https://git.sr.ht/~rabbits/uxn) - Original C implementation
-- [ruxnasm](https://github.com/bellinitte/ruxnasm) - Another Rust implementation
 
 ## Acknowledgments
 

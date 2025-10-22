@@ -1,6 +1,6 @@
 use crate::fetch::html_redirect::extract_linkedin_redirect;
 use std::fmt;
-use std::{fs, io::Write, path::Path, process::Command};
+use std::{fs, io::Write, path::Path};
 
 #[derive(Debug)]
 pub struct DownloaderRedirect {
@@ -15,6 +15,7 @@ impl fmt::Display for DownloaderRedirect {
 
 impl std::error::Error for DownloaderRedirect {}
 
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let resp = reqwest::blocking::get(url)?;
     let final_url = resp.url().to_string();
@@ -74,34 +75,12 @@ pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     if !status.is_success() {
         return Err(format!("HTTP {} for {}", status, final_url).into());
     }
-
-    if final_url != url {
-        eprintln!(
-            "[DEBUG] Redirect detected: {} -> {} (status: {})",
-            url, final_url, status
-        );
-    }
-    if status.as_u16() == 403 {
-        if let Ok(out) = Command::new("curl").args(["-L", "-sS", url]).output() {
-            if out.status.success() {
-                return Ok(out.stdout);
-            } else {
-                return Err(format!(
-                    "curl failed with exit code {} for {}",
-                    out.status.code().unwrap_or(-1),
-                    url
-                )
-                .into());
-            }
-        }
-    }
-    if status.as_u16() == 404 {
-        return Err(format!("HTTP 404 Not Found for {}", final_url).into());
-    }
-    if !status.is_success() {
-        return Err(format!("HTTP {} for {}", status, final_url).into());
-    }
     Ok(body_bytes.to_vec())
+}
+
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+pub fn http_get(_url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Err("http_get is not available in browser WASM".into())
 }
 
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {

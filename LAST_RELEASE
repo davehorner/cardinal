@@ -1,16 +1,16 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/21|8de817b|0.5.4
-## [0.5.4](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.3...cardinal-uxn-v0.5.4) - 2025-10-21
+25/10/22|d11e6b7|0.5.5
+## [0.5.5](https://github.com/davehorner/cardinal/compare/v0.5.4...v0.5.5) - 2025-10-22
 
-### Added
+### Other
 
-- *(linkedin-redirects)* uxntal uxntal:widget://https://lnkd.in/ec8ySaDV redirects to catclock.  I am looking for new work; visit my linkedin if that interests you. https://www.linkedin.com/in/mrdavidhorner/
+- update Cargo.toml dependencies
 
 
 ## cardinal-varvara
-25/10/21|8de817b|0.7.5
+25/10/21|d11e6b7|0.7.5
 ## [0.7.5](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.4...cardinal-varvara-v0.7.5) - 2025-10-21
 
 ### Added
@@ -19,7 +19,7 @@
 
 
 ## cardinal-gui
-25/10/21|8de817b|0.4.7
+25/10/21|d11e6b7|0.4.7
 ## [0.4.7](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.6...cardinal-gui-v0.4.7) - 2025-10-21
 
 ### Added

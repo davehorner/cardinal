@@ -13,7 +13,6 @@ use gilrs::EventType;
 #[cfg(feature = "uses_gilrs")]
 use gilrs::{Axis, Button, Event as GilrsEvent, Gilrs};
 use std::sync::mpsc;
-use std::thread;
 
 #[cfg(feature = "uses_gilrs")]
 /// Message from Gilrs controller thread
@@ -161,8 +160,16 @@ impl ControllerGilrs {
     }
 
     /// Helper to construct a ControllerGilrs with a running gilrs thread.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(controller: Controller) -> Self {
         let rx = spawn_gilrs_controller_thread();
+        ControllerGilrs { rx, controller }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(controller: Controller) -> Self {
+        log::error!("Gilrs controller not supported in WASM");
+        let (_tx, rx) = std::sync::mpsc::channel();
         ControllerGilrs { rx, controller }
     }
 
@@ -172,12 +179,11 @@ impl ControllerGilrs {
     }
 }
 
-/// the thread that spawns the Gilrs controller listener
-/// This function is only available when the `uses_gilrs` feature is enabled
-#[cfg(feature = "uses_gilrs")]
+#[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
 pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage> {
+    log::info!("[NATIVE] spawn_gilrs_controller_thread called");
     let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
+    std::thread::spawn(move || {
         println!("[GILRS] Starting Gilrs thread...");
         let mut gilrs = match Gilrs::new() {
             Ok(g) => g,
@@ -197,5 +203,13 @@ pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage>
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
     });
+    rx
+}
+
+#[cfg(all(feature = "uses_gilrs", target_arch = "wasm32"))]
+pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage> {
+        log::info!("[WASM] spawn_gilrs_controller_thread called");
+        log::error!("[WASM] spawn_gilrs_controller_thread called! This should never spawn a thread.");
+    let (_tx, rx) = std::sync::mpsc::channel();
     rx
 }

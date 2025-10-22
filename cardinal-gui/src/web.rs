@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::Uint8Array;
 
-use crate::stage::{Stage, Event};
+use crate::stage::{Event, Stage};
 use crate::uxn::audio_setup;
 use uxn::{Backend, Uxn, UxnRam};
 use varvara::Varvara;
@@ -36,23 +36,40 @@ pub fn run() -> Result<()> {
         ("piano", include_bytes!("../../roms/piano.rom")),
     ];
 
-    let rom = ROMS
+    let rom = match ROMS
         .iter()
         .find(|(name, _data)| Some(*name) == rom_name)
         .map(|(_name, data)| *data)
-        .unwrap_or(include_bytes!("../../roms/controller.rom"));
+    {
+        Some(data) => data,
+        None => {
+            log::warn!(
+                "ROM not found for hash {:?}, using default controller.rom",
+                rom_name
+            );
+            log::info!("[WASM] After ROM fallback, about to create UxnRam");
+            include_bytes!("../../roms/controller.rom")
+        }
+    };
 
+    log::info!("[WASM] Creating UxnRam");
     let ram = UxnRam::new();
+    log::info!("[WASM] Creating Uxn VM");
     let mut vm = Uxn::new(ram.leak(), Backend::Interpreter);
+    log::info!("[WASM] Creating Varvara");
     let mut dev = Varvara::new();
+    log::info!("[WASM] Resetting VM with ROM");
     let extra = vm.reset(rom);
+    log::info!("[WASM] Resetting Varvara with extra");
     dev.reset(extra);
 
-    // Run the reset vector
+    log::info!("[WASM] Running reset vector");
     vm.run(&mut dev, 0x100);
+    log::info!("[WASM] Checking output");
     dev.output(&vm).check()?;
 
     let size @ (width, height) = dev.output(&vm).size;
+    log::info!("[WASM] Output size: {width}x{height}");
     let options = eframe::WebOptions {
         #[cfg(not(target_arch = "wasm32"))]
         max_size_points: egui::Vec2::new(width as f32, height as f32),
@@ -136,7 +153,13 @@ pub fn run() -> Result<()> {
             error!("could not get target from event");
             return;
         };
-        let t = t.dyn_into::<web_sys::HtmlInputElement>().unwrap();
+        let t = match t.dyn_into::<web_sys::HtmlInputElement>() {
+            Ok(t) => t,
+            Err(e) => {
+                error!("could not cast target to HtmlInputElement: {e:?}");
+                return;
+            }
+        };
         let Some(f) = t.files() else {
             error!("could not get file list");
             return;
@@ -186,13 +209,19 @@ pub fn run() -> Result<()> {
             info!("setting up audio");
             _audio = audio_setup(d);
         }
-        let audio_check = document_for_audio
-            .get_element_by_id("audio-check")
-            .ok_or_else(|| anyhow!("could not find audio-check"))
-            .unwrap()
-            .dyn_into::<web_sys::HtmlInputElement>()
-            .map_err(|e| anyhow!("could not cast to HtmlInputElement: {e:?}"))
-            .unwrap();
+        let audio_check = match document_for_audio.get_element_by_id("audio-check") {
+            Some(el) => match el.dyn_into::<web_sys::HtmlInputElement>() {
+                Ok(html_el) => html_el,
+                Err(e) => {
+                    error!("could not cast audio-check to HtmlInputElement: {e:?}");
+                    return;
+                }
+            },
+            None => {
+                error!("could not find audio-check");
+                return;
+            }
+        };
         if tx.send(Event::SetMuted(!audio_check.checked())).is_err() {
             error!("error setting muted flag");
         }
@@ -212,7 +241,7 @@ pub fn run() -> Result<()> {
         .map_err(|e| anyhow!("could not cast to HtmlCanvasElement: {e:?}"))?;
 
     wasm_bindgen_futures::spawn_local(async move {
-        eframe::WebRunner::new()
+        if let Err(e) = eframe::WebRunner::new()
             .start(
                 canvas,
                 options,
@@ -220,11 +249,27 @@ pub fn run() -> Result<()> {
                     let mut s = Box::new(Stage::new(
                         vm,
                         dev,
-                        size,
-                        1.0,
                         rx,
-                        &cc.egui_ctx,
-                        String::new(),
+                        crate::stage::StageConfig {
+                            size,
+                            scale: 1.0,
+                            rom_title: String::new(),
+                            transparent: None,
+                            color_transform_name: "shift".to_string(),
+                            color_params: vec![],
+                            effects: crate::stage::EffectsConfig {
+                                efxt: 0.0,
+                                effect_mode: 0,
+                                effect_order: (0..crate::effects::EFFECT_COUNT).collect(),
+                                efx: None,
+                                efxmode: Some("optimal".to_string()),
+                                efx_ndx: 0,
+                                last_effect_switch: 0.0,
+                            },
+                            fit_mode: "fit".to_string(),
+                            mouse_mode: crate::stage::MouseDragMode::None,
+                            mouse_resize: crate::stage::MouseResizeMode::None,
+                        },
                         None,
                     ));
                     s.set_resize_callback(resize_closure);
@@ -232,7 +277,9 @@ pub fn run() -> Result<()> {
                 }),
             )
             .await
-            .expect("failed to start eframe")
+        {
+            error!("eframe start failed: {:?}", e);
+        }
     });
 
     Ok(())
