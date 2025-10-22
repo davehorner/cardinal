@@ -1,0 +1,18 @@
+[env]
+RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\""
+
+[tasks.serve-wasm]
+description = "Serve WASM demo with Trunk and correct getrandom backend"
+command = "trunk"
+args = ["serve", "--public-url=/projects/cardinal/demo/"]
+workspace = false
+cwd = "."
+env = { RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\"" }
+
+[tasks.build-wasm]
+description = "Build WASM demo with Trunk and correct getrandom backend"
+command = "trunk"
+args = ["build", "--public-url=/projects/cardinal/demo/"]
+workspace = false
+cwd = "."
+env = { RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\"" }

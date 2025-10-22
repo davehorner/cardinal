@@ -1,6 +1,6 @@
 [package]
 name = "cardinal-uxn"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/davehorner/cardinal"
@@ -11,6 +11,9 @@ readme = "../README.md"
 [dependencies]
 anyhow.workspace = true
 zerocopy.workspace = true
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
 
 [features]
 alloc = []
