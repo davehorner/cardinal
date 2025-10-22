@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.8](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.7...cardinal-varvara-v0.7.8) - 2025-10-22
+
+### Other
+
+- *(wasm)* return issues after adding logging.
+
+## [0.7.7](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.6...cardinal-varvara-v0.7.7) - 2025-10-22
+
+### Fixed
+
+- *(wasm)* return issues after adding logging.
+
+### Other
+
+- *(gui)* A lot of changes to summarize.  Add screen effects and extended window controls. uxntal_protocol.rs attempts to start defining the valid protocol/query parameters across emulators.  wasm cardinal-varvara demo works, uxntal lib now supports wasm.  cargo make serve-wasm in cardinal-gui.  the effects are loose and things are changing rapidly.  `uxntal uxntal:widget::efx^^random://https://wiki.xxiivv.com/etc/catclock.tal.txt`  Introduces a new `effects` module with various screen effects (plasma, rainbow, noise, etc.) and blending modes.  Adds CLI arguments for: - Selecting a screen effect (`--efx`, `--efxmode`, `--efxt`). - Controlling window size, position, and fit mode (`-x`, `-y`, `-w`, `-h`, `--fit`). - Configuring mouse behavior for window drag (`--mouse`) and resize (`--mouse-resize`).  # Multi-crate LAST_RELEASE  # Multi-crate LAST_RELEASE
+
 ## [0.7.6](https://github.com/davehorner/cardinal/compare/v0.7.5...v0.7.6) - 2025-10-22
 
 ### Other

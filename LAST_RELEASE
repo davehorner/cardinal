@@ -1,7 +1,7 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/22|ac3b508|0.5.5
+25/10/22|1343331|0.5.5
 ## [0.5.5](https://github.com/davehorner/cardinal/compare/v0.5.4...v0.5.5) - 2025-10-22
 
 ### Other
@@ -10,19 +10,19 @@
 
 
 ## cardinal-varvara
-25/10/22|ac3b508|0.7.7
-## [0.7.7](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.6...cardinal-varvara-v0.7.7) - 2025-10-22
+25/10/22|1343331|0.7.8
+## [0.7.8](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.7...cardinal-varvara-v0.7.8) - 2025-10-22
 
 ### Other
 
-- *(gui)* A lot of changes to summarize.  Add screen effects and extended window controls. uxntal_protocol.rs attempts to start defining the valid protocol/query parameters across emulators.  wasm cardinal-varvara demo works, uxntal lib now supports wasm.  cargo make serve-wasm in cardinal-gui.  the effects are loose and things are changing rapidly.  `uxntal uxntal:widget::efx^^random://https://wiki.xxiivv.com/etc/catclock.tal.txt`  Introduces a new `effects` module with various screen effects (plasma, rainbow, noise, etc.) and blending modes.  Adds CLI arguments for: - Selecting a screen effect (`--efx`, `--efxmode`, `--efxt`). - Controlling window size, position, and fit mode (`-x`, `-y`, `-w`, `-h`, `--fit`). - Configuring mouse behavior for window drag (`--mouse`) and resize (`--mouse-resize`).  # Multi-crate LAST_RELEASE
+- *(wasm)* return issues after adding logging.
 
 
 ## cardinal-gui
-25/10/22|ac3b508|0.4.8
-## [0.4.8](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.7...cardinal-gui-v0.4.8) - 2025-10-22
+25/10/22|1343331|0.4.9
+## [0.4.9](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.8...cardinal-gui-v0.4.9) - 2025-10-22
 
 ### Other
 
-- *(gui)* A lot of changes to summarize.  Add screen effects and extended window controls. uxntal_protocol.rs attempts to start defining the valid protocol/query parameters across emulators.  wasm cardinal-varvara demo works, uxntal lib now supports wasm.  cargo make serve-wasm in cardinal-gui.  the effects are loose and things are changing rapidly.  `uxntal uxntal:widget::efx^^random://https://wiki.xxiivv.com/etc/catclock.tal.txt`  Introduces a new `effects` module with various screen effects (plasma, rainbow, noise, etc.) and blending modes.  Adds CLI arguments for: - Selecting a screen effect (`--efx`, `--efxmode`, `--efxt`). - Controlling window size, position, and fit mode (`-x`, `-y`, `-w`, `-h`, `--fit`). - Configuring mouse behavior for window drag (`--mouse`) and resize (`--mouse-resize`).  # Multi-crate LAST_RELEASE
+- *(wasm)* return issues after adding logging.
 
