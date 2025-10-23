@@ -877,8 +877,9 @@ impl Lexer {
                     self.advance();
                     return Ok(Token::CharLiteral('"'));
                 }
-                // Check for connected word after '['
-                if !self.current_char().is_whitespace() && self.current_char() != ']' {
+                // Improved EOF handling: only call read_identifier if next char is not whitespace, not ']', and not EOF
+                let next_ch = self.current_char();
+                if !next_ch.is_whitespace() && next_ch != ']' && next_ch != '\0' {
                     let _word = self.read_identifier()?;
                     return Ok(Token::BracketOpen); // we eat the word for now.  Token::BracketOpenWithWord(word));
                 }
@@ -886,8 +887,9 @@ impl Lexer {
             }
             ']' => {
                 self.advance();
-                // Check for connected word after ']'
-                if !self.current_char().is_whitespace() {
+                // Only call read_identifier if next char is not whitespace and not EOF
+                let next_ch = self.current_char();
+                if !next_ch.is_whitespace() && next_ch != '\0' {
                     let _word = self.read_identifier()?;
                     return Ok(Token::BracketClose); // we eat the word for now.  Token::BracketCloseWithWord(word));
                 }
@@ -1001,6 +1003,8 @@ impl Lexer {
                 self.advance();
                 let padding_value = self.read_identifier()?;
 
+                // Always emit PaddingLabel, even if empty, for correct EOF and bracket handling
+
                 // Check if it's a hex value or a label
                 if padding_value.chars().all(|c| c.is_ascii_hexdigit()) {
                     // Parse as hex address
@@ -1103,4 +1107,18 @@ fn is_instruction_name(identifier: &str) -> bool {
             || inst == base_name
             || (inst.ends_with('2') && inst[..inst.len() - 1] == base_name)
     })
+}
+
+/// Extract include filenames from TAL source using the lexer
+pub fn extract_includes_from_lexer(input: &str, path: Option<String>) -> Vec<String> {
+    let mut lexer = Lexer::new(input.to_string(), path);
+    let mut includes = Vec::new();
+    while let Ok(token) = lexer.next_token() {
+        match token {
+            Token::Include(filename) => includes.push(filename),
+            Token::Eof => break,
+            _ => {}
+        }
+    }
+    includes
 }

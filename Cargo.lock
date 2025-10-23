@@ -392,7 +392,7 @@ name = "cardinal-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.5.5",
  "cardinal-varvara 0.7.7",
  "clap",
  "env_logger",
@@ -401,10 +401,10 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.5.5",
  "cardinal-varvara 0.7.7",
  "clap",
  "cpal",
@@ -432,6 +432,8 @@ dependencies = [
 [[package]]
 name = "cardinal-uxn"
 version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "887feffad7bd0489539ff144f74c2eee939ffc156956233b826c501b1f90a845"
 dependencies = [
  "anyhow",
  "getrandom 0.3.3",
@@ -440,9 +442,7 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "887feffad7bd0489539ff144f74c2eee939ffc156956233b826c501b1f90a845"
+version = "0.5.6"
 dependencies = [
  "anyhow",
  "getrandom 0.3.3",
@@ -455,7 +455,7 @@ version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db2ab080cdc8b61ef177eec92ba53563fa4f765601123b2f8fc2c89399f25098"
 dependencies = [
- "cardinal-uxn 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.5.5",
  "chrono",
  "getrandom 0.3.3",
  "gilrs",
@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.7.8"
+version = "0.7.9"
 dependencies = [
- "cardinal-uxn 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.5.5",
  "chrono",
  "getrandom 0.3.3",
  "gilrs",
@@ -5077,11 +5077,11 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cardinal-uxn 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cardinal-uxn 0.5.5",
  "cardinal-varvara 0.7.7",
  "clap",
  "dirs",

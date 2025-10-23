@@ -1,28 +1,28 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/22|1343331|0.5.5
-## [0.5.5](https://github.com/davehorner/cardinal/compare/v0.5.4...v0.5.5) - 2025-10-22
+25/10/23|0f98137|0.5.6
+## [0.5.6](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.5...cardinal-uxn-v0.5.6) - 2025-10-23
 
-### Other
+### Fixed
 
-- update Cargo.toml dependencies
+- correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
 
 ## cardinal-varvara
-25/10/22|1343331|0.7.8
-## [0.7.8](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.7...cardinal-varvara-v0.7.8) - 2025-10-22
+25/10/23|0f98137|0.7.9
+## [0.7.9](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.8...cardinal-varvara-v0.7.9) - 2025-10-23
 
-### Other
+### Fixed
 
-- *(wasm)* return issues after adding logging.
+- correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
 
 ## cardinal-gui
-25/10/22|1343331|0.4.9
-## [0.4.9](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.8...cardinal-gui-v0.4.9) - 2025-10-22
+25/10/23|0f98137|0.4.10
+## [0.4.10](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.4.10) - 2025-10-23
 
-### Other
+### Fixed
 
-- *(wasm)* return issues after adding logging.
+- correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
