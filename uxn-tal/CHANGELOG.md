@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.15...uxn-tal-v0.2.16) - 2025-10-23
+
+### Fixed
+
+- correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
+
 ## [0.2.15](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.14...uxn-tal-v0.2.15) - 2025-10-22
 
 ### Other

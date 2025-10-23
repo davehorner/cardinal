@@ -48,13 +48,15 @@ The repository includes two applications built on these libraries:
 - `cardinal-gui` is a full-fledged GUI, which runs both as a native application and
   [Raven on the web](https://mattkeeter.com/projects/raven/demo)
 
-The web demo is built with [`truck`](https://trunkrs.dev/), e.g.
+The web demo is built with [`trunk`](https://trunkrs.dev/), e.g.
 
 ```console
 cargo install --locked trunk # this only needs to be run once
 cd cardinal-gui
-trunk build --release --public-url=/projects/cardinal/demo/ # edit this path
+cargo make serve-wasm
 ```
+
+Use [cargo make](https://crates.io/crates/cargo-make) to build so that getrandom has the proper RUSTFLAGS.
 
 --------------------------------------------------------------------------------
 **technology from the past come to save the future from itself**
