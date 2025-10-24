@@ -16,7 +16,7 @@ use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
-use uxn_tal::util::pause_on_error;
+use uxn_tal::util::{pause_for_windows, pause_on_error};
 use uxn_tal::{Assembler, AssemblerError};
 
 #[cfg(windows)]
@@ -95,13 +95,13 @@ fn real_main() -> Result<(), AssemblerError> {
     if !args.is_empty() {
         let raw_url = &args[0];
         if raw_url.starts_with("uxntal:") {
-            use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser, ProtocolVarVar};
+            use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
 
             let result = ProtocolParser::parse(raw_url);
             #[cfg(windows)]
             if matches!(
                 result.proto_vars.get("debug"),
-                Some(ProtocolVarVar::Bool(true))
+                Some(uxn_tal::uxntal_protocol::ProtocolVarVar::Bool(true))
             ) {
                 unsafe {
                     show_console();
@@ -147,6 +147,7 @@ fn real_main() -> Result<(), AssemblerError> {
                                            // Emulator launch will happen after assembly below
         }
     }
+    unsafe { show_console() };
     println!("args: {:?}", args);
     if !args.is_empty() && args[0] == "--register" {
         register_protocol_per_user()?;
@@ -168,6 +169,7 @@ fn real_main() -> Result<(), AssemblerError> {
                 eprintln!("Failed to run cargo install: {}", e);
             }
         }
+        pause_on_error();
         return Ok(());
     }
 
@@ -182,6 +184,8 @@ fn real_main() -> Result<(), AssemblerError> {
             want_cmp_pp = true;
         } else if a == "--stdin" {
             want_stdin = true;
+        } else if a == "--debug" {
+            // Accept --debug as a valid flag (no-op here, handled elsewhere)
         } else if a.starts_with("--rust-interface") {
             // Forms:
             //   --rust-interface
@@ -219,6 +223,7 @@ fn real_main() -> Result<(), AssemblerError> {
         } else if a.starts_with('-') {
             eprintln!("unknown flag: {a}");
             print_usage();
+            pause_on_error();
             exit(2);
         } else {
             positional.push(a);
@@ -228,6 +233,7 @@ fn real_main() -> Result<(), AssemblerError> {
         if positional.is_empty() {
             eprintln!("missing input file for --cmp-pp");
             print_usage();
+            pause_on_error();
             exit(2);
         }
         // Use canonical path resolution as in normal mode
@@ -235,15 +241,18 @@ fn real_main() -> Result<(), AssemblerError> {
         let input_path = match resolve_input_path(raw_input) {
             Some(p) => p,
             None => {
-                return Err(simple_err(
-                    std::path::Path::new(raw_input),
-                    "input file not found (tried direct, +.tal, multi-root recursive scan)",
-                ));
+                return Err(AssemblerError::FileReadError {
+                    path: raw_input.to_string(),
+                    message:
+                        "input file not found (tried direct, +.tal, multi-root recursive scan)"
+                            .to_string(),
+                });
             }
         };
         // Call debug::compare_preprocessors and exit
         if let Err(e) = debug::compare_preprocessors(&input_path.display().to_string(), root_dir) {
             eprintln!("compare_preprocessors error: {e}");
+            pause_on_error();
             exit(1);
         }
         exit(0);
@@ -251,6 +260,7 @@ fn real_main() -> Result<(), AssemblerError> {
 
     if want_version {
         println!("uxntal {} (library)", env!("CARGO_PKG_VERSION"));
+        pause_for_windows();
         return Ok(());
     }
 
@@ -262,12 +272,12 @@ fn real_main() -> Result<(), AssemblerError> {
         // Read from stdin
         use std::io::{self, Read};
 
-        io::stdin().read_to_string(&mut source).map_err(|e| {
-            simple_err(
-                Path::new("/dev/stdin"),
-                &format!("failed to read from stdin: {e}"),
-            )
-        })?;
+        io::stdin()
+            .read_to_string(&mut source)
+            .map_err(|e| AssemblerError::FileReadError {
+                path: "/dev/stdin".to_string(),
+                message: format!("failed to read from stdin: {e}"),
+            })?;
         canon_input_p = PathBuf::from("/dev/stdin");
         input_from_stdin = true;
     } else {
@@ -281,10 +291,10 @@ fn real_main() -> Result<(), AssemblerError> {
         let input_path = match resolve_input_path(raw_input) {
             Some(p) => p,
             None => {
-                return Err(simple_err(
-                    std::path::Path::new(raw_input),
-                    "input file not found (tried direct, +.tal, +.rom, multi-root recursive scan)",
-                ));
+                return Err(AssemblerError::FileReadError {
+                    path: raw_input.to_string(),
+                    message: "input file not found (tried direct, +.tal, +.rom, multi-root recursive scan)".to_string(),
+                });
             }
         };
         // Canonical (or absolute fallback) before chdir so later paths remain valid
@@ -319,10 +329,7 @@ fn real_main() -> Result<(), AssemblerError> {
                 eprintln!("Changed working directory to {}", parent.display());
             }
         }
-        if !input_is_rom {
-            source = fs::read_to_string(&canon_input_p)
-                .map_err(|e| simple_err(&canon_input_p, &format!("failed to read: {e}")))?;
-        }
+        // All TAL file reading is handled by the byte-based + UTF-8 validation logic below.
         // Write the source to a sibling file with .src.tal extension
         // let mut src_path = canon_input.clone();
         // src_path.set_extension("src.tal");
@@ -363,26 +370,131 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     let processed_src = if !input_is_rom {
-        if pre {
-            match chocolatal::preprocess(&source, canon_input, root_dir) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Preprocessor error: {:?}", e);
-                    std::process::exit(1);
+        // Read as bytes, check for BOM, then validate as UTF-8
+        let bytes = match std::fs::read(&canon_input_p) {
+            Ok(mut b) => {
+                // Detect and skip UTF-8 BOM (0xEF,0xBB,0xBF) or single-byte BOMs (0xFF, 0xFE)
+                let skip = if b.starts_with(&[0xEF, 0xBB, 0xBF]) {
+                    3
+                } else if b.starts_with(&[0xFF, 0xFE]) || b.starts_with(&[0xFE, 0xFF]) {
+                    2
+                } else if b.starts_with(&[0xFF]) || b.starts_with(&[0xFE]) {
+                    1
+                } else {
+                    0
+                };
+                if skip > 0 {
+                    eprintln!("[debug] Skipping BOM of length {}", skip);
+                }
+                b.drain(0..skip);
+                b
+            }
+            Err(e) => {
+                use std::io::ErrorKind;
+                if e.kind() == ErrorKind::InvalidData {
+                    // Try to read as bytes and report UTF-8 error with diagnostics
+                    match std::fs::read(&canon_input_p) {
+                        Ok(mut bytes) => {
+                            // Detect and skip BOM as above
+                            let skip = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+                                3
+                            } else if bytes.starts_with(&[0xFF, 0xFE])
+                                || bytes.starts_with(&[0xFE, 0xFF])
+                            {
+                                2
+                            } else if bytes.starts_with(&[0xFF]) || bytes.starts_with(&[0xFE]) {
+                                1
+                            } else {
+                                0
+                            };
+                            if skip > 0 {
+                                eprintln!("[debug] Skipping BOM of length {}", skip);
+                            }
+                            bytes.drain(0..skip);
+                            match std::str::from_utf8(&bytes) {
+                                Ok(_) => {
+                                    // Should not happen, but fallback
+                                    return Err(AssemblerError::FileReadError {
+                                        path: canon_input_p.display().to_string(),
+                                        message: format!("failed to read: {e}"),
+                                    });
+                                }
+                                Err(utf8err) => {
+                                    return Err(report_utf8_error_with_context(
+                                        &canon_input_p,
+                                        &bytes,
+                                        utf8err.valid_up_to(),
+                                        &utf8err,
+                                    ));
+                                }
+                            }
+                        }
+                        Err(e2) => {
+                            // Could not read bytes at all
+                            return Err(AssemblerError::FileReadError {
+                                path: canon_input_p.display().to_string(),
+                                message: format!("failed to read: {e2}"),
+                            });
+                        }
+                    }
+                } else {
+                    return Err(AssemblerError::FileReadError {
+                        path: canon_input_p.display().to_string(),
+                        message: format!("failed to read: {e}"),
+                    });
                 }
             }
-        } else {
-            source.clone()
+        };
+        eprintln!("[debug] Attempting to parse as UTF-8");
+        std::io::stderr().flush().ok();
+        match std::str::from_utf8(&bytes) {
+            Ok(tal_source) => {
+                eprintln!("[debug] UTF-8 parse OK");
+                std::io::stderr().flush().ok();
+                use uxn_tal::probe_tal::print_all_tal_heuristics;
+                print_all_tal_heuristics(tal_source);
+                if pre {
+                    match chocolatal::preprocess(tal_source, canon_input, root_dir) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("Preprocessor error: {:?}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    tal_source.to_string()
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[debug] UTF-8 parse failed: valid_up_to={} error={:?}",
+                    e.valid_up_to(),
+                    e
+                );
+                std::io::stderr().flush().ok();
+                use uxn_tal::probe_tal::print_all_tal_heuristics_bytes;
+                print_all_tal_heuristics_bytes(&bytes);
+                return Err(report_utf8_error_with_context(
+                    &canon_input_p,
+                    &bytes,
+                    e.valid_up_to(),
+                    &e,
+                ));
+            }
         }
     } else {
+        eprintln!("[debug] input_is_rom, skipping text read");
+        std::io::stderr().flush().ok();
         String::new()
     };
 
     if preprocess_only && !input_is_rom {
         print!("{}", processed_src);
+        pause_for_windows();
         std::process::exit(0);
     } else if preprocess_only && input_is_rom {
         eprintln!("Cannot preprocess a .rom file");
+        pause_for_windows();
         std::process::exit(1);
     }
 
@@ -638,7 +750,7 @@ fn real_main() -> Result<(), AssemblerError> {
     // if !no_intermediate {
     //     let _ = fs::remove_file(&pre_path);
     // }
-
+    pause_on_error();
     Ok(())
 }
 
@@ -657,6 +769,7 @@ Flags:
     --pre                 Enable preprocessing
     --preprocess          Print preprocessed output and exit
     --drif, --drifblim    Enable drifblim-compatible mode (optimizations, reference resolution)
+    --debug               Enable debug output
     --r, --root[=DIR]     Set root directory for includes (default: current dir)
     --register            Register uxntal as a file handler (Windows only)
     --help, -h            Show this help
@@ -1200,3 +1313,57 @@ NoDisplay=true
 //     // 6) Fallback: as-is
 //     Some(s.to_string())
 // }
+
+/// Scan bytes for UTF-8 error and return AssemblerError::Utf8Error with detailed info
+fn report_utf8_error_with_context(
+    path: &std::path::Path,
+    bytes: &[u8],
+    err_offset: usize,
+    err: &dyn std::fmt::Display,
+) -> AssemblerError {
+    let (mut line, mut col) = (1, 1);
+    let mut last_line_start = 0;
+    for (i, &b) in bytes.iter().enumerate().take(err_offset) {
+        if b == b'\n' {
+            line += 1;
+            last_line_start = i + 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    let bad_byte = bytes.get(err_offset).copied();
+    let source_line = {
+        let start = last_line_start;
+        let end = bytes.len().min(
+            bytes
+                .iter()
+                .skip(start)
+                .position(|&b| b == b'\n')
+                .map(|p| start + p)
+                .unwrap_or(bytes.len()),
+        );
+        String::from_utf8_lossy(&bytes[start..end]).to_string()
+    };
+    let (char_repr, hex_repr) = match bad_byte {
+        Some(b) => {
+            let c = if b.is_ascii_graphic() || b == b' ' {
+                (b as char).to_string()
+            } else {
+                format!("\\x{:02X}", b)
+            };
+            (c, format!("0x{:02X}", b))
+        }
+        None => ("<EOF>".to_string(), "<EOF>".to_string()),
+    };
+    AssemblerError::Utf8Error {
+        path: path.display().to_string(),
+        line,
+        position: col,
+        message: format!(
+            "failed to read: invalid UTF-8 at byte {offset} (line {line}, col {col}): found {char_repr} ({hex_repr}): {err}",
+            offset=err_offset, line=line, col=col, char_repr=char_repr, hex_repr=hex_repr, err=err
+        ),
+        source_line,
+    }
+}
