@@ -843,9 +843,9 @@ impl Lexer {
             }
             // '<' => {
             //     self.advance();
-            //     let macro_name = self.read_macro_call()?;
+            //     let name = self.read_identifier()?;
             //     // NEW: allow immediate "/sublabel" after closing '>' (e.g., <phex>/b)
-            //     let mut full = format!("<{}>", macro_name);
+            //     let mut full = format!("<{}>", name);
             //     if self.current_char() == '/' {
             //         self.advance();
             //         // read sublabel segment (stop at whitespace or rune delimiters)
@@ -1011,7 +1011,9 @@ impl Lexer {
                     {
                         return Ok(Token::Eof);
                     }
-                    return Ok(Token::Word(name));
+                    let rune = Rune::from(' ');
+                    return Ok(Token::LabelRef(rune, name));
+                    //return Ok(Token::Word(name));
                 }
                 Err(self.syntax_error(format!("Unexpected character: '{}'", ch)))
             }
