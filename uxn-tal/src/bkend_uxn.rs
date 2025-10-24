@@ -26,7 +26,10 @@ pub fn uxn_repo_get_path() -> Option<PathBuf> {
 pub fn ensure_docker_uxn_image() -> Result<(), AssemblerError> {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     {
-        return Err(simple_err(Path::new("."), "docker not available in browser WASM"));
+        return Err(simple_err(
+            Path::new("."),
+            "docker not available in browser WASM",
+        ));
     }
     #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     {
@@ -178,12 +181,18 @@ impl crate::bkend::AssemblerBackend for UxnDUxnAsmBackend {
         let rom_path = format!("{}_{}.rom", tal_file, self.name());
         #[cfg(all(target_family = "wasm", target_os = "unknown"))]
         {
-            return Err(bkend_err(Path::new("."), "docker not available in browser WASM"));
+            return Err(bkend_err(
+                Path::new("."),
+                "docker not available in browser WASM",
+            ));
         }
         #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         #[cfg(all(target_family = "wasm", target_os = "unknown"))]
         {
-            return Err(bkend_err(Path::new("."), "docker not available in browser WASM"));
+            return Err(bkend_err(
+                Path::new("."),
+                "docker not available in browser WASM",
+            ));
         }
         #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         {

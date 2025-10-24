@@ -437,11 +437,7 @@ impl Audio {
                 let mut d = match self.streams[i].data.lock() {
                     Ok(guard) => guard,
                     Err(_) => {
-                        #[cfg(target_arch = "wasm32")]
                         log::error!("streams[i].data lock failed");
-                        #[cfg(not(target_arch = "wasm32"))]
-                        panic!("streams[i].data lock failed");
-                        // Return a default StreamData to satisfy type
                         return;
                     }
                 };
@@ -461,10 +457,7 @@ impl Audio {
                 let mut d = match self.streams[i].data.lock() {
                     Ok(guard) => guard,
                     Err(_) => {
-                        #[cfg(target_arch = "wasm32")]
                         log::error!("streams[i].data lock failed");
-                        #[cfg(not(target_arch = "wasm32"))]
-                        panic!("streams[i].data lock failed");
                         return;
                     }
                 };
@@ -528,10 +521,7 @@ impl Audio {
                 let pos = match self.streams[i].data.lock() {
                     Ok(guard) => guard.pos as u16,
                     Err(_) => {
-                        #[cfg(target_arch = "wasm32")]
                         log::error!("streams[i].data lock failed");
-                        #[cfg(not(target_arch = "wasm32"))]
-                        panic!("streams[i].data lock failed");
                         0
                     }
                 };
@@ -544,10 +534,7 @@ impl Audio {
                 let vol = match self.streams[i].data.lock() {
                     Ok(guard) => guard.vol * 255.0,
                     Err(_) => {
-                        #[cfg(target_arch = "wasm32")]
                         log::error!("streams[i].data lock failed");
-                        #[cfg(not(target_arch = "wasm32"))]
-                        panic!("streams[i].data lock failed");
                         0.0
                     }
                 };

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.16...uxn-tal-v0.3.0) - 2025-10-24
+
+### Added
+
+- *(uxn-tal)* [**breaking**] uxntal string lexing passes basic.tal rom strings.  speed improvement via less nth(). UTF-8/BOM-aware source loading, richer errors, probing modules, and CLI polish.
+
 ## [0.2.16](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.15...uxn-tal-v0.2.16) - 2025-10-23
 
 ### Fixed

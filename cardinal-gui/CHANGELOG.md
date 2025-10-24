@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.5.0) - 2025-10-24
+
+### Added
+
+- *(uxn-tal)* [**breaking**] uxntal string lexing passes basic.tal rom strings.  speed improvement via less nth(). UTF-8/BOM-aware source loading, richer errors, probing modules, and CLI polish.
+
+### Other
+
+- correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
+
 ## [0.4.9](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.8...cardinal-gui-v0.4.9) - 2025-10-22
 
 ### Other

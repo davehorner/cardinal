@@ -7,13 +7,13 @@ use which::which;
 
 impl crate::uxntal_protocol::EmulatorPathCheck for CuxnMapper {
     fn is_available_in_path(
-        result: &crate::uxntal_protocol::ProtocolParseResult,
+        _result: &crate::uxntal_protocol::ProtocolParseResult,
     ) -> Option<PathBuf> {
         let bin = {
             #[cfg(windows)]
             {
                 if matches!(
-                    result.proto_vars.get("debug"),
+                    _result.proto_vars.get("debug"),
                     Some(crate::uxntal_protocol::ProtocolVarVar::Bool(true))
                 ) {
                     "cardinal-gui"

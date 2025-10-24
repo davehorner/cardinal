@@ -180,6 +180,7 @@ impl ControllerGilrs {
 }
 
 #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
+/// Spawns a thread to handle Gilrs controller events and returns a receiver for messages.
 pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage> {
     log::info!("[NATIVE] spawn_gilrs_controller_thread called");
     let (tx, rx) = mpsc::channel();
@@ -208,8 +209,8 @@ pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage>
 
 #[cfg(all(feature = "uses_gilrs", target_arch = "wasm32"))]
 pub fn spawn_gilrs_controller_thread() -> mpsc::Receiver<GilrsControllerMessage> {
-        log::info!("[WASM] spawn_gilrs_controller_thread called");
-        log::error!("[WASM] spawn_gilrs_controller_thread called! This should never spawn a thread.");
+    log::info!("[WASM] spawn_gilrs_controller_thread called");
+    log::error!("[WASM] spawn_gilrs_controller_thread called! This should never spawn a thread.");
     let (_tx, rx) = std::sync::mpsc::channel();
     rx
 }

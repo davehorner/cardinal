@@ -64,7 +64,10 @@ pub use fetch::resolver::resolve_entry_from_url;
 pub mod emu_buxn;
 pub mod emu_cuxn;
 pub mod emu_uxn;
+pub mod probe_runtime;
+pub mod probe_tal;
 pub mod uxntal_protocol;
+
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();
     a.assemble(source, None)
@@ -535,4 +538,39 @@ mod tests {
         assert_eq!(data[3], 0x18); // #18
         assert_eq!(data[4], 0x17); // DEO
     }
+}
+
+#[test]
+fn test_tal_strings_error() {
+    use crate::Assembler;
+    // TAL/UXN string equivalence to Python:
+    // guide = "TYPE \"HELP\" FOR INFO \x7f "
+    // bytes_free = " BYTES FREE\n"
+    let source = r#"&guide "TYPE 20 ""HELP" 20 "FOR 20 "INFO 20 7f 20 $1 &bytes-free 20 "BYTES 20 "FREE 0a $1"#;
+
+    // Assemble using Assembler struct to get label offsets
+    let mut assembler = Assembler::new();
+    let _ = assembler
+        .assemble(source, None)
+        .expect("Assembly should succeed");
+
+    // Get label offsets
+    let guide_offset = assembler.symbols["guide"].address as usize - 0x0100;
+    let bytes_free_offset = assembler.symbols["bytes-free"].address as usize - 0x0100;
+
+    // Get ROM bytes
+    let rom = assembler.rom.data();
+
+    // Expected bytes for guide and bytes_free
+    let expected_guide: &[u8] = b"TYPE \"HELP\" FOR INFO \x7f ";
+    let expected_bytes_free: &[u8] = b" BYTES FREE\n";
+
+    assert_eq!(
+        &rom[guide_offset..guide_offset + expected_guide.len()],
+        expected_guide
+    );
+    assert_eq!(
+        &rom[bytes_free_offset..bytes_free_offset + expected_bytes_free.len()],
+        expected_bytes_free
+    );
 }
