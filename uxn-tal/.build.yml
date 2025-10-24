@@ -1,0 +1,24 @@
+image: debian/stable
+packages:
+- xxd
+oauth: pages.sr.ht/PAGES:RW
+environment:
+    SITE: rabbits.srht.site/left
+sources:
+    - https://git.sr.ht/~rabbits/uxnmin
+    - https://git.sr.ht/~rabbits/left
+tasks:
+    - prepare: |
+        xxd -r -p uxnmin/etc/drifloon.rom.txt asm.rom
+        cc -DNDEBUG -O2 -g0 -s uxnmin/src/uxnmin.c -o uxn.bin
+        cat left/src/left.tal left/src/menu.tal left/src/utils.tal left/src/assets.tal > src.tal
+    - assemble: |
+        cat src.tal | ./uxn.bin asm.rom > left.rom
+    - upload: |
+        tar -czf out.tar.gz left.rom
+        acurl() {
+            set +x
+            curl -H "Authorization: Bearer ${OAUTH2_TOKEN}" "${@}"
+            set -x
+        }
+        acurl -fsS "https://pages.sr.ht/publish/${SITE}" -Fcontent=@out.tar.gz

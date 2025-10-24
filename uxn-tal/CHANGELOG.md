@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.3.0...uxn-tal-v0.4.0) - 2025-10-24
+
+### Fixed
+
+- *(regression)* uxntal://https://git.sr.ht/~rabbits/left/tree/main/item/src/left.tal stopped working after removing the obvious < hack.  default arm now returns a LabelRef instead of Word.
+
+### Other
+
+- *(uxn-tal)* [**breaking**] uxntal string lexing passes basic.tal rom strings.  speed improvement via less nth(). UTF-8/BOM-aware source loading, richer errors, probing modules, and CLI polish.  fix(cardinal-varvara): replace panics on poisoned audio stream locks with error logs; align wasm/native controller logs  refactor(lexer): track byte and char positions, tighten string and identifier lexing, improve position reporting, and stabilize token cloning  chore(cardinal-gui): silence unused cc warning in web runner  chore(emu_*): tidy imports and cfg-gated Docker-on-WASM errors  refactor(cardinal-varvara): cfg-gated controller wiring and logging cleanup  feat(uxn-tal): add --debug acceptance, Windows console pause helpers, and early show_console(); upgrade file-read path resolution errors to structured AssemblerError::FileReadError  feat(uxn-tal): introduce probe_tal and probe_runtime modules for heuristics and dry-run analysis  BREAKING CHANGE: Lexer behavior around quoted strings and identifier parsing is stricter and position accounting now uses both byte and char indices; error enum expanded (e.g., Utf8Error, FileReadError, LabelReferenceError) which may affect downstream matches.
+
 ## [0.3.0](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.2.16...uxn-tal-v0.3.0) - 2025-10-24
 
 ### Added
