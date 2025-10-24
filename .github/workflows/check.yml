@@ -84,4 +84,6 @@ jobs:
     - name: Clippy
       run: cargo clippy --target=wasm32-unknown-unknown -pcardinal-gui
     - name: Build
+      env:
+        RUSTFLAGS: "--cfg getrandom_backend=\"wasm_js\""
       run: cargo build --target=wasm32-unknown-unknown -pcardinal-gui

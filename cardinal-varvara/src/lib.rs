@@ -281,8 +281,8 @@ impl Varvara {
     /// Builds a new instance of the Varvara peripherals
     #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32")))]
     pub fn new(uses_usb: bool) -> Self {
-    log::info!("[Varvara::new] (USB) uses_usb={}", uses_usb);
-    let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
+        log::info!("[Varvara::new] (USB) uses_usb={}", uses_usb);
+        let controller: Box<dyn controller::ControllerDevice> = if uses_usb {
             #[cfg(all(feature = "uses_gilrs", not(target_arch = "wasm32")))]
             {
                 log::info!("[Varvara::new] USB+gilrs: constructing ControllerUsb with gilrs");
@@ -349,8 +349,8 @@ impl Varvara {
         //     #[allow(unused_imports)]
         //     use controller_gilrs::ControllerGilrs;
         // }
-    log::info!("[Varvara::new] (non-USB/wasm) constructing");
-    Self {
+        log::info!("[Varvara::new] (non-USB/wasm) constructing");
+        Self {
             console: console::Console::new(),
             system: system::System::new(),
             datetime: datetime::Datetime,
@@ -388,7 +388,11 @@ impl Varvara {
         self.file = file::File::new();
 
         self.controller = if self.uses_usb {
-            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32"), feature = "uses_gilrs"))]
+            #[cfg(all(
+                feature = "uses_usb",
+                not(target_arch = "wasm32"),
+                feature = "uses_gilrs"
+            ))]
             {
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
@@ -399,7 +403,11 @@ impl Varvara {
                     gilrs: Some(ControllerGilrs::new(controller::Controller::default())),
                 })
             }
-            #[cfg(all(feature = "uses_usb", not(target_arch = "wasm32"), not(feature = "uses_gilrs")))]
+            #[cfg(all(
+                feature = "uses_usb",
+                not(target_arch = "wasm32"),
+                not(feature = "uses_gilrs")
+            ))]
             {
                 Box::new(controller_usb::ControllerUsb {
                     rx: controller_usb::spawn_usb_controller_thread(
