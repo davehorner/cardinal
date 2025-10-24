@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.5.0...cardinal-gui-v0.5.1) - 2025-10-24
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.5.0) - 2025-10-24
 
 ### Added
