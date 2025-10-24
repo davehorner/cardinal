@@ -104,7 +104,8 @@ pub struct TokenWithPos {
 /// Lexer for TAL assembly language
 pub struct Lexer {
     input: String,
-    position: usize,
+    position: usize,      // byte position
+    char_position: usize, // character position
     line: usize,
     path: Option<String>,
     position_on_line: usize,
@@ -118,6 +119,7 @@ impl Lexer {
         Self {
             input,
             position: 0,
+            char_position: 0,
             line: 1,
             path,
             position_on_line: 1,
@@ -186,7 +188,7 @@ impl Lexer {
                 let comment = self.read_comment()?;
                 let comment_end_pos = self.position_on_line;
                 tokens.push(TokenWithPos {
-                    token: Token::Comment(comment),
+                    token: Token::Comment(comment.clone()),
                     line: comment_start_line,
                     start_pos: comment_start_pos,
                     end_pos: comment_end_pos,
@@ -241,13 +243,8 @@ impl Lexer {
                         _ => self.current_scope.clone(),
                     };
 
-                    // Debug print for position tracking
-                    // println!(
-                    //     "DEBUG: token={:?} line={} start_pos={} end_pos={} position={} position_on_line={}",
-                    //     token, start_line, start_pos, token_end_pos, self.position, self.position_on_line
-                    // );
                     tokens.push(TokenWithPos {
-                        token,
+                        token: token.clone(),
                         line: start_line,
                         start_pos,
                         end_pos: token_end_pos,
@@ -256,20 +253,24 @@ impl Lexer {
                 }
             }
         }
-
         Ok(tokens)
     }
 
     /// Move to the next character
     fn advance(&mut self) {
         if self.position < self.input.len() {
-            if self.input.chars().nth(self.position) == Some('\n') {
-                self.line += 1;
-                self.position_on_line = 1;
-            } else {
-                self.position_on_line += 1;
+            let mut chars = self.input[self.position..].chars();
+            if let Some(ch) = chars.next() {
+                let ch_len = ch.len_utf8();
+                if ch == '\n' {
+                    self.line += 1;
+                    self.position_on_line = 1;
+                } else {
+                    self.position_on_line += 1;
+                }
+                self.position += ch_len;
+                self.char_position += 1;
             }
-            self.position += 1;
         }
     }
 
@@ -425,56 +426,47 @@ impl Lexer {
     fn read_identifier(&mut self) -> Result<String> {
         let mut result = String::new();
         let mut first = true;
-        // Special handling: if the previous character was '%', read until whitespace or '{' or '}'
-        // This ensures macro names like '\;#' are read as a single name, and allows macros with multiple blocks.
         let mut macro_mode = false;
-        if self.position > 0 && self.input.chars().nth(self.position - 1) == Some('%') {
-            macro_mode = true;
+        if self.char_position > 0 {
+            let prev_byte = self
+                .input
+                .char_indices()
+                .nth(self.char_position - 1)
+                .map(|(i, _)| i);
+            if let Some(prev_byte) = prev_byte {
+                if self.input[prev_byte..].starts_with('%') {
+                    macro_mode = true;
+                }
+            }
         }
         while self.position < self.input.len() {
             let ch = self.current_char();
-            // Skip tab characters entirely (do not include in identifiers)
-            // while ch == '\t' {
-            //     self.advance();
-            //     ch = self.current_char();
-            // }
-            if macro_mode {
-                // Accept any non-whitespace, non-'{' and non-'}' character as part of macro name
-                if ch.is_whitespace() {
-                    break;
-                }
-            } else {
-                // Accept any non-whitespace, non-parenthesis character as part of identifier
-                if ch.is_whitespace() || ch == '(' || ch == ')' {
-                    break;
-                }
+            if (macro_mode && ch.is_whitespace())
+                || (!macro_mode && (ch.is_whitespace() || ch == '(' || ch == ')'))
+            {
+                break;
             }
-            // Special case: treat "" as a CharLiteral('"')
-            if first && ch == '"' && self.input.chars().nth(self.position + 1) == Some('"') {
-                self.advance();
-                self.advance();
-                return Ok(String::from("\""));
+            if first && ch == '"' {
+                let mut chars = self.input[self.position..].chars();
+                chars.next();
+                if chars.next() == Some('"') {
+                    self.advance();
+                    self.advance();
+                    return Ok(String::from("\""));
+                }
             }
             result.push(ch);
             self.advance();
             first = false;
         }
-        // If the identifier is just "_", skip it and try to read the next identifier
-        // if result == "_" {
-        //     self.advance();
-        //     self.advance();
-        //     return self.read_identifier();
-        // }
-        // Debug: print what we read to see if it's being truncated
-        // eprintln!("DEBUG: read_identifier result: '{}'", result);
-        // If we returned "" above, result will be empty, so skip error
         if result.is_empty() {
-            // If we just parsed "", treat as CharLiteral('"')
-            if self.position > 1
-                && self.input.chars().nth(self.position - 2) == Some('"')
-                && self.input.chars().nth(self.position - 1) == Some('"')
-            {
-                return Ok(String::from("\""));
+            if self.char_position > 1 {
+                let prev_chars: Vec<char> = self.input.chars().take(self.char_position).collect();
+                if prev_chars[self.char_position - 2] == '"'
+                    && prev_chars[self.char_position - 1] == '"'
+                {
+                    return Ok(String::from("\""));
+                }
             }
             if self.position >= self.input.len() - 1 && self.current_char() == '\n' {
                 return Ok(String::new());
@@ -483,32 +475,18 @@ impl Lexer {
                 path: self.path.clone().unwrap_or_default(),
                 line: self.line,
                 position: self.position_on_line,
-                message: format!("Expected identifier @ position {}", self.position_on_line),
+                message: format!(
+                    "Expected identifier @ position {} (found '{}')",
+                    self.position_on_line,
+                    if self.position < self.input.len() {
+                        self.input[self.position..].chars().next().unwrap_or('␀')
+                    } else {
+                        '␀'
+                    }
+                ),
                 source_line: self.get_current_line(),
             });
         }
-        Ok(result)
-    }
-
-    /// Read a string literal, handling both quoted and unquoted TAL strings
-    /// Quoted strings end at the closing quote, unquoted strings end at whitespace
-    fn read_string(&mut self) -> Result<String> {
-        let mut result = String::new();
-
-        while self.position < self.input.len() {
-            let ch = self.current_char();
-            if ch == '"' {
-                self.advance(); // Skip closing quote
-                break;
-            } else if ch.is_whitespace() {
-                // In TAL, unclosed strings end at whitespace
-                break;
-            } else {
-                result.push(ch);
-                self.advance();
-            }
-        }
-
         Ok(result)
     }
 
@@ -544,49 +522,13 @@ impl Lexer {
         Ok(path)
     }
 
-    /// Read macro call name between < and >
-    fn read_macro_call(&mut self) -> Result<String> {
-        let mut name = String::new();
-
-        while self.position < self.input.len() {
-            let ch = self.current_char();
-
-            if ch == '>' {
-                self.advance(); // consume closing >
-                break;
-            }
-
-            // Allow alphanumeric, hyphens, underscores, slashes, and '?' in macro names
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '/' || ch == '?' {
-                name.push(ch);
-                self.advance();
-            } else {
-                return Err(AssemblerError::SyntaxError {
-                    path: self.path.clone().unwrap_or_default(),
-                    line: self.line,
-                    position: self.position_on_line,
-                    message: format!("Invalid character in macro call: {}", ch),
-                    source_line: self.get_current_line(),
-                });
-            }
-        }
-
-        if name.is_empty() {
-            return Err(AssemblerError::SyntaxError {
-                path: self.path.clone().unwrap_or_default(),
-                line: self.line,
-                position: self.position_on_line,
-                message: "Empty macro call".to_string(),
-                source_line: self.get_current_line(),
-            });
-        }
-
-        Ok(name)
-    }
-
     /// Get the current character at the position
     fn current_char(&self) -> char {
-        self.input.chars().nth(self.position).unwrap_or('\0')
+        if self.position < self.input.len() {
+            self.input[self.position..].chars().next().unwrap_or('\0')
+        } else {
+            '\0'
+        }
     }
 
     /// Get the next token from the input
@@ -663,35 +605,28 @@ impl Lexer {
                 Ok(Token::Comment(comment))
             }
             '"' => {
-                self.advance();
-                if self.current_char() == '"' {
-                    self.advance();
-                    // "" represents the double-quote character itself (0x22)
-                    return Ok(Token::CharLiteral('"'));
-                }
-                let ch = self.current_char();
-                if ch != '\0' && !ch.is_whitespace() {
-                    let next_pos = self.position + 1;
-                    let next_ch = if next_pos < self.input.len() {
-                        self.input.chars().nth(next_pos).unwrap_or('\0')
-                    } else {
-                        '\0'
-                    };
-                    if next_ch.is_whitespace()
-                        || next_ch == '\0'
-                        || next_ch == ']'
-                        || next_ch == ')'
+                self.advance(); // consume opening quote
+                let mut string_content = String::new();
+                while self.position < self.input.len() {
+                    let ch = self.current_char();
+                    // Double quote: emit a quote and skip both
+                    if ch == '"'
+                        && self.position + 1 < self.input.len()
+                        && self.input.as_bytes()[self.position + 1] as char == '"'
                     {
-                        self.advance();
-                        Ok(Token::CharLiteral(ch))
-                    } else {
-                        let string = self.read_string()?;
-                        Ok(Token::RawString(string))
+                        string_content.push('"');
+                        self.advance(); // skip first quote
+                        self.advance(); // skip second quote
+                        continue;
                     }
-                } else {
-                    let string = self.read_string()?;
-                    Ok(Token::RawString(string))
+                    // End string at any byte <= 0x20 (space, tab, newline, etc.)
+                    if ch as u8 <= 0x20 {
+                        break;
+                    }
+                    string_content.push(ch);
+                    self.advance();
                 }
+                Ok(Token::RawString(string_content))
             }
             '\'' => {
                 self.advance();
@@ -742,7 +677,10 @@ impl Lexer {
                 if self.current_char() == '[' {
                     self.advance();
                     let ch = self.current_char();
-                    if ch != '\0' && self.input.chars().nth(self.position + 1) == Some(']') {
+                    if ch != '\0'
+                        && self.position + 1 < self.input.len()
+                        && self.input.as_bytes()[self.position + 1] as char == ']'
+                    {
                         self.advance();
                         self.advance();
                         return Ok(Token::CharLiteral(ch));
@@ -871,7 +809,8 @@ impl Lexer {
             '[' => {
                 self.advance();
                 if self.current_char() == '"'
-                    && self.input.chars().nth(self.position + 1) == Some('"')
+                    && self.position + 1 < self.input.len()
+                    && self.input.as_bytes()[self.position + 1] as char == '"'
                 {
                     self.advance();
                     self.advance();
@@ -902,39 +841,43 @@ impl Lexer {
                 println!("LEXER DEBUG: Parsed include filename: ~{}", filename);
                 Ok(Token::Include(filename))
             }
-            '<' => {
-                self.advance();
-                let macro_name = self.read_macro_call()?;
-                // NEW: allow immediate "/sublabel" after closing '>' (e.g., <phex>/b)
-                let mut full = format!("<{}>", macro_name);
-                if self.current_char() == '/' {
-                    self.advance();
-                    // read sublabel segment (stop at whitespace or rune delimiters)
-                    let mut sub = String::new();
-                    while self.position < self.input.len() {
-                        let ch = self.current_char();
-                        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                            sub.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    if !sub.is_empty() {
-                        full.push('/');
-                        full.push_str(&sub);
-                    }
-                }
-                let rune = Rune::from(' ');
-                Ok(Token::LabelRef(rune, full))
-                // Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
-            }
+            // '<' => {
+            //     self.advance();
+            //     let macro_name = self.read_macro_call()?;
+            //     // NEW: allow immediate "/sublabel" after closing '>' (e.g., <phex>/b)
+            //     let mut full = format!("<{}>", macro_name);
+            //     if self.current_char() == '/' {
+            //         self.advance();
+            //         // read sublabel segment (stop at whitespace or rune delimiters)
+            //         let mut sub = String::new();
+            //         while self.position < self.input.len() {
+            //             let ch = self.current_char();
+            //             if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            //                 sub.push(ch);
+            //                 self.advance();
+            //             } else {
+            //                 break;
+            //             }
+            //         }
+            //         if !sub.is_empty() {
+            //             full.push('/');
+            //             full.push_str(&sub);
+            //         }
+            //     }
+            //     let rune = Rune::from(' ');
+            //     Ok(Token::LabelRef(rune, full))
+            //     // Ok(Token::LabelRef(full)) // Always treat <name> (and optional /sub) as LabelRef
+            // }
             _ if ch.is_ascii_digit() => {
                 // PATCH: If the digit is followed by +, -, or any valid identifier char, read as identifier
                 let mut lookahead = self.position + 1;
                 let mut is_complex = false;
                 while lookahead < self.input.len() {
-                    let next = self.input.chars().nth(lookahead).unwrap_or('\0');
+                    let next = if lookahead < self.input.len() {
+                        self.input.as_bytes()[lookahead] as char
+                    } else {
+                        '\0'
+                    };
                     if !next.is_whitespace() && next != '(' && next != ')' {
                         is_complex = true;
                         break;
@@ -1002,8 +945,6 @@ impl Lexer {
             '|' => {
                 self.advance();
                 let padding_value = self.read_identifier()?;
-
-                // Always emit PaddingLabel, even if empty, for correct EOF and bracket handling
 
                 // Check if it's a hex value or a label
                 if padding_value.chars().all(|c| c.is_ascii_hexdigit()) {
