@@ -245,7 +245,7 @@ pub fn run() -> Result<()> {
             .start(
                 canvas,
                 options,
-                Box::new(move |cc| {
+                Box::new(move |_cc| {
                     let mut s = Box::new(Stage::new(
                         vm,
                         dev,

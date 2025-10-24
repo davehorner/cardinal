@@ -1,8 +1,8 @@
 //! emu_buxn.rs
 //! Argument mapping for buxn emulator
 
-use crate::uxntal_protocol::EmulatorLauncher;
 use crate::uxntal_protocol::EmulatorArgMapper;
+use crate::uxntal_protocol::EmulatorLauncher;
 use std::path::PathBuf;
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]

@@ -97,7 +97,10 @@ pub fn ensure_uxn38_repo() -> Result<Option<PathBuf>, AssemblerError> {
 pub fn ensure_docker_uxn38_image() -> Result<(), AssemblerError> {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     {
-        return Err(simple_err(Path::new("."), "docker not available in browser WASM"));
+        return Err(simple_err(
+            Path::new("."),
+            "docker not available in browser WASM",
+        ));
     }
     #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     {
@@ -170,7 +173,10 @@ impl AssemblerBackend for UxnUxn38Backend {
     fn assemble(&self, tal_file: &str, _src: &str) -> Result<AssemblyOutput, AssemblerError> {
         #[cfg(all(target_family = "wasm", target_os = "unknown"))]
         {
-            return Err(bkend_err(Path::new("."), "docker not available in browser WASM"));
+            return Err(bkend_err(
+                Path::new("."),
+                "docker not available in browser WASM",
+            ));
         }
         #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         {

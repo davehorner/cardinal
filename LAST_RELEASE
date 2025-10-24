@@ -1,28 +1,36 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/23|0f98137|0.5.6
-## [0.5.6](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.5...cardinal-uxn-v0.5.6) - 2025-10-23
+25/10/24|ac6b60b|0.5.6
+## [0.5.6](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.5...cardinal-uxn-v0.5.6) - 2025-10-24
 
-### Fixed
+### Other
 
 - correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
 
 ## cardinal-varvara
-25/10/23|0f98137|0.7.9
-## [0.7.9](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.8...cardinal-varvara-v0.7.9) - 2025-10-23
+25/10/24|ac6b60b|0.8.0
+## [0.8.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.7.8...cardinal-varvara-v0.8.0) - 2025-10-24
 
-### Fixed
+### Added
+
+- *(uxn-tal)* [**breaking**] uxntal string lexing passes basic.tal rom strings.  speed improvement via less nth(). UTF-8/BOM-aware source loading, richer errors, probing modules, and CLI polish.
+
+### Other
 
 - correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
 
 ## cardinal-gui
-25/10/23|0f98137|0.4.10
-## [0.4.10](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.4.10) - 2025-10-23
+25/10/24|ac6b60b|0.5.0
+## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.5.0) - 2025-10-24
 
-### Fixed
+### Added
+
+- *(uxn-tal)* [**breaking**] uxntal string lexing passes basic.tal rom strings.  speed improvement via less nth(). UTF-8/BOM-aware source loading, richer errors, probing modules, and CLI polish.
+
+### Other
 
 - correct README instructions and refactor TAL include parsing with lexer extraction.  this fixes an issue with identifers being expected at EOF.  this also fixed uxntal://https://github.com/davehorner/uxn-cats/blob/main/catclock.tal which was resolving includes via regex.  the actual lexer is used to resolve includes now. :-)
 
