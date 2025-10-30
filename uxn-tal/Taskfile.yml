@@ -1,4 +1,3 @@
-
 version: "3"
 
 vars:
@@ -56,3 +55,24 @@ tasks:
       CGO_ENABLED: "0"
     cmds:
       - cmd: go build -ldflags "-s -w" -o combee.exe
+
+  build:buxn-asm:
+    platforms: [windows]
+    desc: Build buxn-asm using msvc.bat and copy all bin to dotalias after build
+    dir: "${USERPROFILE}/.uxntal/.buxn"
+    #dir: "./.buxn"
+    cmds:
+      - cmd: cmd /c "call msvc.bat && msbuild buxn.sln /p:Configuration=Release /m"
+      - cmd: powershell -NoProfile -Command 'Copy-Item -Path ..\\.buxn\\bin\\Release\\*.exe -Destination $env:USERPROFILE\\dotalias -Recurse -Force'
+
+  buxn-pull:
+    desc: Clone or update buxn to .buxn
+    cmds:
+      - cmd: powershell -NoProfile -Command 'if (Test-Path .buxn) { git -C .buxn pull --rebase } else { git clone https://github.com/bullno1/buxn.git .buxn }'
+
+
+  build:drifblim-debug:
+    desc: Assemble drifblim-debug.tal to drifblim-debug.rom from .drifblim/src
+    dir: .drifblim/src
+    cmds:
+      - cmd: buxn-asm drifblim-debug.tal ../../drifblim-debug.rom

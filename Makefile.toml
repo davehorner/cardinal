@@ -1,0 +1,7 @@
+
+[tasks.docgen]
+description = "Generate README.md using docgen binary"
+command = "cargo"
+args = ["run", "--manifest-path", "uxn-tal-defined/docgen/Cargo.toml"]
+workspace = false
+cwd = "."

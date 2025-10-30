@@ -63,6 +63,9 @@ fn main() -> Result<()> {
     dev.output(&vm).check()?;
     dev.send_args(&mut vm, &args.args).check()?;
 
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return Ok(());
+    }
     // Blocking loop, listening to the stdin reader thread
     let (tx, rx) = std::sync::mpsc::channel();
     varvara::spawn_console_worker(move |e| tx.send(e));

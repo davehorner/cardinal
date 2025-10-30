@@ -72,11 +72,10 @@ impl Provider for SourceHut {
             });
         }
 
-        match segs[2] {
-            // Accept blob/tree/blame; normalize tree/.../item/... (UI-only)
-            "blob" | "tree" | "blame" | "log" if segs.len() >= 4 => {
+        // Accept /tree/ and /blob/ and normalize to branch/path
+        let (branch, path, is_tree_or_blob) = match segs.get(2) {
+            Some(&("blob" | "tree" | "blame" | "log")) if segs.len() >= 4 => {
                 let branch = segs[3].to_string();
-                // compute start of repo path
                 let mut path_start = 4;
                 if (segs[2] == "tree" || segs[2] == "log") && segs.get(4) == Some(&"item") {
                     path_start = 5;
@@ -86,29 +85,32 @@ impl Provider for SourceHut {
                 } else {
                     None
                 };
-                Some(RepoRef {
-                    host: "git.sr.ht".into(),
-                    owner,
-                    repo,
-                    branch,
-                    path,
-                })
+                (branch, path, true)
             }
-            _ => {
-                let path = if segs.len() > 2 {
+            _ => (
+                "HEAD".to_string(),
+                if segs.len() > 2 {
                     Some(segs[2..].join("/"))
                 } else {
                     None
-                };
-                Some(RepoRef {
-                    host: "git.sr.ht".into(),
-                    owner,
-                    repo,
-                    branch: "HEAD".into(),
-                    path,
-                })
-            }
-        }
+                },
+                false,
+            ),
+        };
+
+        // Debug print for matching
+        eprintln!(
+            "[SourceHut::parse_url] url: {} branch: {} path: {:?} is_tree_or_blob: {}",
+            url, branch, path, is_tree_or_blob
+        );
+
+        Some(RepoRef {
+            host: "git.sr.ht".into(),
+            owner,
+            repo,
+            branch,
+            path,
+        })
     }
 
     fn fetch_tal_tree(
@@ -116,20 +118,21 @@ impl Provider for SourceHut {
         r: &RepoRef,
         out_root: &Path,
     ) -> Result<FetchResult, Box<dyn std::error::Error>> {
-        // Strict: must point to a file
-        let entry_rel = match &r.path {
-            Some(p)
-                if p.to_ascii_lowercase().ends_with(".tal")
-                    || p.to_ascii_lowercase().ends_with(".rom") =>
-            {
-                p.replace('\\', "/")
-            }
-            _ => {
-                return Err(
-                    "sr.ht: URL must point to a .tal or .rom file; not guessing entries".into(),
-                )
-            }
-        };
+        // Allow .tal, .rom, .rom.txt files for direct fetch
+        let entry_rel =
+            match &r.path {
+                Some(p)
+                    if p.to_ascii_lowercase().ends_with(".tal")
+                        || p.to_ascii_lowercase().ends_with(".rom")
+                        || p.to_ascii_lowercase().ends_with(".rom.txt") =>
+                {
+                    p.replace('\\', "/")
+                }
+                _ => return Err(
+                    "sr.ht: URL must point to a .tal, .rom, or .rom.txt file; not guessing entries"
+                        .into(),
+                ),
+            };
 
         // Fetch entry and walk includes
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;

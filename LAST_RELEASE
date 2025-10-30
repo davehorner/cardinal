@@ -1,7 +1,7 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/24|0f293f2|0.5.6
+25/10/24|b35c3a9|0.5.6
 ## [0.5.6](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.5...cardinal-uxn-v0.5.6) - 2025-10-24
 
 ### Other
@@ -10,8 +10,8 @@
 
 
 ## cardinal-varvara
-25/10/24|0f293f2|0.9.0
-## [0.9.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.8.0...cardinal-varvara-v0.9.0) - 2025-10-24
+25/10/30|b35c3a9|0.9.0
+## [0.9.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.8.0...cardinal-varvara-v0.9.0) - 2025-10-30
 
 ### Other
 
@@ -19,10 +19,10 @@
 
 
 ## cardinal-gui
-25/10/24|0f293f2|0.5.1
-## [0.5.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.5.0...cardinal-gui-v0.5.1) - 2025-10-24
+25/10/30|b35c3a9|0.6.0
+## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.5.0...cardinal-gui-v0.6.0) - 2025-10-30
 
-### Other
+### Added
 
-- update Cargo.lock dependencies
+- *(rom.txt)* [**breaking**] rom.txt extensions. break out protocol into sep. crate. tests demonstrating and issue in Raven's interaction with drifblim arguments.
 
