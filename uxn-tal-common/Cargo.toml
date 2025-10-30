@@ -1,0 +1,10 @@
+
+[package]
+name = "uxn-tal-common"
+version = "0.1.0"
+edition = "2021"
+description = "uxn-tal-common library"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+which = "8"

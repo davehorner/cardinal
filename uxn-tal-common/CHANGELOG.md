@@ -7,14 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0](https://github.com/davehorner/cardinal/compare/uxn-tal-defined-v0.1.0...uxn-tal-defined-v0.2.0) - 2025-10-30
+## [0.1.0](https://github.com/davehorner/cardinal/releases/tag/uxn-tal-common-v0.1.0) - 2025-10-30
 
 ### Added
 
 - *(.orca)* [**breaking**] add ORCA mode, shared common crate, cache-aware emulator launchers; add PatchStorage provider; bump deps; improve caching and CLI UX
-
-## [0.1.0](https://github.com/davehorner/cardinal/releases/tag/uxn-tal-defined-v0.1.0) - 2025-10-30
-
-### Added
-
-- *(rom.txt)* [**breaking**] rom.txt extensions. break out protocol into sep. crate. tests demonstrating and issue in Raven's interaction with drifblim arguments.

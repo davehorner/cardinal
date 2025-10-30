@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli","uxn-tal","uxn-tal-defined"]
+#members = ["cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli","uxn-tal","uxn-tal-defined","uxn-tal-common"]
+members = ["uxn-tal-defined"]
 #members = ["cardinal-varvara"]
 #members = ["cardinal-uxn"]
 exclude = ["fuzz"]
@@ -10,17 +11,17 @@ debug = true
 overflow-checks = true
 
 [workspace.dependencies]
-anyhow = "1.0.83"
-chrono = "0.4.38"
-clap = { version = "4.5.4", features = ["derive"] }
+anyhow = "1.0.100"
+chrono = "0.4.42"
+clap = { version = "4.5.51", features = ["derive"] }
 cpal = "0.16.0"
-env_logger = "0.11.3"
-image = { version = "0.25.5", default-features = false, features = ["png"] }
-log = "0.4.21"
+env_logger = "0.11.8"
+image = { version = "0.25.8", default-features = false, features = ["png"] }
+log = "0.4.28"
 static_assertions = "1.1.0"
 wasm-bindgen-futures = "0.4"
-zerocopy = { version = "0.8.26", features = ["derive"] }
-web-sys = { version = "0.3.77", features = [
+zerocopy = { version = "0.8.27", features = ["derive"] }
+web-sys = { version = "0.3.82", features = [
     "HtmlSelectElement",
     "HtmlOptionElement",
 ] }
@@ -29,3 +30,5 @@ web-sys = { version = "0.3.77", features = [
 #[patch.crates-io]
 #varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
 #uxn = { path = "cardinal-uxn", package = "cardinal-uxn" }             #, features = ["native"]
+#uxn-tal-defined = { path ="uxn-tal-defined", package="uxn-tal-defined" }
+#uxn-tal-common = { path ="uxn-tal-common", package="uxn-tal-common" }
