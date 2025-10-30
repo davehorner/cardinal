@@ -44,7 +44,6 @@ pub mod chocolatal;
 pub mod debug;
 pub mod devicemap;
 pub mod dis_uxndis;
-pub mod emu_uxncli;
 pub mod error;
 pub mod hexrev;
 pub mod lexer;
@@ -58,15 +57,12 @@ pub use assembler::Assembler;
 pub use error::AssemblerError;
 pub mod fetch;
 pub mod paths;
-pub mod urlutil;
 pub mod util;
 pub use fetch::resolver::resolve_entry_from_url;
-pub mod emu_buxn;
-pub mod emu_cuxn;
-pub mod emu_uxn;
 pub mod probe_runtime;
 pub mod probe_tal;
-pub mod uxntal_protocol;
+
+pub use uxn_tal_defined::*;
 
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();

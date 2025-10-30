@@ -241,7 +241,7 @@ impl crate::bkend::AssemblerBackend for UxnDUxnAsmBackend {
             Ok(crate::bkend::AssemblyOutput {
                 rom_path: rom_path.to_string(),
                 rom_bytes: bytes.clone(),
-                stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
+                stdout: crate::debug::run_uxncli_get_stdout(rom_path)?,
                 disassembly: crate::dis_uxndis::run_dis_file(rom_path)?,
             })
         }

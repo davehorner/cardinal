@@ -83,6 +83,16 @@ On macOS, `--register` creates a minimal GUI `.app` bundle in your `~/Applicatio
 - You must have the `uxntal` binary installed (e.g., via `cargo install uxn-tal`).
 - You must have Xcode command line tools installed (`xcode-select --install`).
 
+### Supported File Extensions
+
+The protocol handler supports the following file extensions for remote and local files:
+
+- `.tal` — TAL source files (assembled to .rom on the fly)
+- `.rom` — Binary UXN ROM files (used as-is)
+- `.rom.txt` — Hex-encoded ROM files (automatically converted to binary .rom before use)
+
+When you provide a URL or file ending in `.rom.txt`, the handler will automatically fetch and convert the hex text to a binary `.rom` file using the same logic as `xxd -r -p`. This allows you to share ROMs as plain text for easy inspection, versioning, and diffing, while still running them directly via the protocol.
+
 ## `uxntal:variables:key^^value://` Protocol Handler Variable Support 
 
 The protocol handler supports passing variables and flags directly in the protocol portion of URL using key-value pairs. These are used to select emulator or pass options.
@@ -112,7 +122,11 @@ You might create multiple bookmarklets to launch urls in the emulator and with t
 
 ## Warning
 
-A single click protocol handler that assembles and runs arbitrary code is considered a dangerous activity. uxntal protocol handler 0.1.18 and earlier had a shell exploit that could allow someone to craft a url/website which could run arbitrary code on your machine.  This security concern has been addressed, in 0.2.0.  This disclaimer is here to educate users on the security concerns involved, to request additional eyes for security, and to remind the user to apply upgrades as they become available so that any new security concerns found can be patched.  
+A single click protocol handler that assembles and runs arbitrary code is a **dangerous activity**. uxntal protocol handler 0.1.18 and earlier had a shell exploit that could allow someone to craft a url/website which could run arbitrary code on your machine.  This specific shell exploit concern has been addressed in 0.2.0 but similiar issues may develop or be uncovered.
+
+uxntal protocol is for recreational development and might represent a risk to your data if abused by others.  Consider `--register` at the start of your activities and then `--unregister` when you are done;  or you can assume others aren't crafting uxntal urls to do bad things and enjoy the protocol.  I hope it is used for good fun.
+
+This disclaimer is here to educate users on the security concerns involved, to request additional eyes for security, and to remind the user to apply upgrades as they become available so that any new security concerns found can be patched.  
 
 ## cuxn Assembler Features
 

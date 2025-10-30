@@ -92,19 +92,27 @@ fn real_main() -> Result<(), AssemblerError> {
 
     // Store emulator flags for use after assembly
     let emulator_flags: Vec<String> = Vec::new();
+    #[allow(unused_mut)]
+    let mut should_show_console = false;
     if !args.is_empty() {
         let raw_url = &args[0];
         if raw_url.starts_with("uxntal:") {
-            use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
+            use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
 
             let result = ProtocolParser::parse(raw_url);
             #[cfg(windows)]
-            if matches!(
-                result.proto_vars.get("debug"),
-                Some(uxn_tal::uxntal_protocol::ProtocolVarVar::Bool(true))
-            ) {
-                unsafe {
-                    show_console();
+            {
+                use uxn_tal_defined::ProtocolVarVar;
+                if matches!(
+                    result.proto_vars.get("debug"),
+                    Some(ProtocolVarVar::Bool(true))
+                ) {
+                    should_show_console = true;
+                    unsafe {
+                        show_console();
+                    }
+                } else {
+                    should_show_console = false;
                 }
             }
             println!("uxntal {}", raw_url);
@@ -147,7 +155,9 @@ fn real_main() -> Result<(), AssemblerError> {
                                            // Emulator launch will happen after assembly below
         }
     }
-    unsafe { show_console() };
+    if should_show_console {
+        unsafe { show_console() };
+    }
     println!("args: {:?}", args);
     if !args.is_empty() && args[0] == "--register" {
         register_protocol_per_user()?;
@@ -169,6 +179,12 @@ fn real_main() -> Result<(), AssemblerError> {
                 eprintln!("Failed to run cargo install: {}", e);
             }
         }
+        pause_on_error();
+        return Ok(());
+    }
+    if !args.is_empty() && args[0] == "--unregister" {
+        unregister_protocol_per_user()?;
+        println!("Unregistered uxntal:// protocol handler for current user.");
         pause_on_error();
         return Ok(());
     }
@@ -634,7 +650,7 @@ fn real_main() -> Result<(), AssemblerError> {
         // If protocol URL is present, use protocol handler for argument construction
         if let Some(raw_url) = std::env::args().nth(1) {
             if raw_url.starts_with("uxntal:") {
-                use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
+                use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
                 let result = ProtocolParser::parse(&raw_url);
                 if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
                     // Always use the actual output ROM path for the emulator
@@ -728,7 +744,7 @@ fn real_main() -> Result<(), AssemblerError> {
     {
         if let Some(raw_url) = env::args().nth(1) {
             if raw_url.starts_with("uxntal:") {
-                use uxn_tal::uxntal_protocol::{get_emulator_launcher, ProtocolParser};
+                use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
                 let result = ProtocolParser::parse(&raw_url);
                 if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
                     let rom_path = args.first().cloned().unwrap_or_default();
@@ -772,6 +788,7 @@ Flags:
     --debug               Enable debug output
     --r, --root[=DIR]     Set root directory for includes (default: current dir)
     --register            Register uxntal as a file handler (Windows only)
+    --unregister          Unregister uxntal as a file handler (Windows only)
     --help, -h            Show this help
 
 Behavior:
@@ -1213,6 +1230,74 @@ NoDisplay=true
         Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Protocol registration is only supported on Windows and Unix-like systems (e.g., Ubuntu)",
+        ))
+    }
+}
+
+#[allow(dead_code)]
+fn unregister_protocol_per_user() -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        // Remove registry keys for uxntal protocol
+        let status1 = Command::new("reg")
+            .args(["delete", r"HKCU\Software\Classes\uxntal", "/f"])
+            .status()?;
+        if status1.success() {
+            println!("Removed registry keys for uxntal protocol.");
+        } else {
+            eprintln!("Failed to remove registry keys for uxntal protocol.");
+        }
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::env;
+        use std::fs;
+        use std::process::Command;
+        let home = env::var("HOME").unwrap();
+        let temp_dir = format!("{}/.uxntal_swift_launcher", home);
+        let app_bundle = format!("{}/uxntal-launcher.app", temp_dir);
+        let user_app = format!("{}/Applications/uxntal.app", home);
+        // Remove both the temp .app bundle and the user Applications .app
+        let _ = fs::remove_dir_all(&app_bundle);
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::remove_dir_all(&user_app);
+        // Unregister with lsregister
+        let _ = Command::new("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+            .args(["-u", &user_app])
+            .status();
+        println!("Removed uxntal.app from ~/Applications, uxntal-launcher.app, and temp files. Ran lsregister to unregister protocol handler.");
+        Ok(())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Remove .desktop and MIME files, update desktop database
+        use std::env;
+        use std::fs;
+        let home_dir = env::var("HOME").map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("HOME environment variable not found: {}", e),
+            )
+        })?;
+        let desktop_file_path = format!("{}/.local/share/applications/uxntal.desktop", home_dir);
+        let mime_file_path = format!(
+            "{}/.local/share/mime/packages/x-scheme-handler-uxntal.xml",
+            home_dir
+        );
+        let _ = fs::remove_file(&desktop_file_path);
+        let _ = fs::remove_file(&mime_file_path);
+        let _ = Command::new("update-desktop-database")
+            .arg(format!("{}/.local/share/applications", home_dir))
+            .status();
+        println!("Removed uxntal.desktop and MIME handler files.");
+        Ok(())
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Protocol unregistration is only supported on Windows, macOS, and Unix-like systems",
         ))
     }
 }

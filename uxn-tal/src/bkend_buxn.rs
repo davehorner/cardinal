@@ -245,9 +245,34 @@ impl AssemblerBackend for UxnBuxnBackend {
             Ok(AssemblyOutput {
                 rom_path: rom_path.to_string(),
                 rom_bytes: bytes.clone(),
-                stdout: crate::emu_uxncli::run_uxncli_get_stdout(rom_path)?,
+                stdout: run_buxn_get_stdout(rom_path)?,
                 disassembly: run_dis_file(rom_path)?,
             })
         }
+    }
+}
+
+pub fn run_buxn_get_stdout(rom_path: &str) -> Result<String, AssemblerError> {
+    if cfg!(windows) {
+        let in_wsl = crate::wsl::detect_wsl();
+        let output = if in_wsl {
+            Command::new("buxn-cli").arg(rom_path).output()
+        } else {
+            Command::new("wsl").arg("buxn-cli").arg(rom_path).output()
+        }
+        .map_err(|e| rom_err(rom_path, &format!("buxn-cli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let output = Command::new("buxn-cli")
+            .arg(rom_path)
+            .output()
+            .map_err(|e| rom_err(rom_path, &format!("buxn-cli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
+fn rom_err(path: &str, msg: &str) -> AssemblerError {
+    AssemblerError::Backend {
+        message: format!("{}: {}", path, msg),
     }
 }

@@ -1,0 +1,134 @@
+version: "3"
+
+vars:
+  REPO_URL: https://git.sr.ht/~angelwood/combee
+  REPO_DIR: combee
+  UXN_LOG: "info"
+
+tasks:
+  default:
+    deps: [build]
+
+  # Cross-platform wrapper
+  build:
+    desc: Clone/update and build combee
+    deps: [clone]
+    cmds:
+      - task: build:posix
+      - task: build:win
+
+  # --- Clone/update ---
+  clone:
+    desc: Clone or update the repository
+    cmds:
+      - task: clone:posix
+      - task: clone:win
+
+  clone:posix:
+    platforms: [linux, darwin]
+    desc: Clone/update on macOS/Linux
+    cmds:
+      - >
+        [ -d "{{.REPO_DIR}}" ]
+        && git -C "{{.REPO_DIR}}" pull --rebase
+        || git clone "{{.REPO_URL}}" "{{.REPO_DIR}}"
+
+  clone:win:
+    platforms: [windows]
+    desc: Clone/update on Windows
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.REPO_DIR}}') { git -C '{{.REPO_DIR}}' pull --rebase } else { git clone '{{.REPO_URL}}' '{{.REPO_DIR}}' }" 
+
+  # --- Build ---
+  build:posix:
+    platforms: [linux, darwin]
+    desc: Build on macOS/Linux using build-smol.sh
+    dir: "{{.REPO_DIR}}"
+    cmds:
+      - chmod +x build-smol.sh
+      - ./build-smol.sh
+
+  build:win:
+    platforms: [windows]
+    desc: Build on Windows (no strip needed)
+    dir: "{{.REPO_DIR}}"
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - cmd: go build -ldflags "-s -w" -o combee.exe
+
+  build:buxn-asm:
+    platforms: [windows]
+    desc: Build buxn-asm using msvc.bat and copy all bin to dotalias after build
+    # dir: "${USERPROFILE}/.uxntal/.buxn"
+    dir: ".buxn"
+    cmds:
+      - cmd: cmd /c "call msvc.bat && msbuild buxn.sln /p:Configuration=Release /m"
+      - cmd: powershell -NoProfile -Command 'Copy-Item -Path ..\\.buxn\\bin\\Release\\*.exe -Destination $env:USERPROFILE\\dotalias -Recurse -Force'
+
+  buxn-pull:
+    desc: Clone or update buxn to .buxn
+    cmds:
+      - cmd: powershell -NoProfile -Command 'if (Test-Path .buxn) { git -C .buxn pull } else { git clone https://github.com/bullno1/buxn.git .buxn }'
+
+  pull-uxn:
+    desc: Clone or update uxn to .uxn
+    cmds:
+      - task: pull-uxn:posix
+      - task: pull-uxn:win
+
+  pull-uxn:posix:
+    platforms: [linux, darwin]
+    desc: Clone/update uxn into .uxn on macOS/Linux
+    cmds:
+      - >
+        [ -d ".uxn" ] \
+        && git -C ".uxn" pull --rebase \
+        || git clone "https://git.sr.ht/~rabbits/uxn" ".uxn"
+
+  pull-uxn:win:
+    platforms: [windows]
+    desc: Clone/update uxn into .uxn on Windows
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '.uxn') { git -C '.uxn' pull } else { git clone 'https://git.sr.ht/~rabbits/uxn' '.uxn' }"
+
+  build:drifblim-debug:
+    desc: Assemble drifblim-debug.tal to drifblim-debug.rom from .drifblim/src
+    dir: .drifblim/
+    cmds:
+    - cmd: buxn-asm src/drifblim-debug.tal drifblim-debug.rom
+    - cmd: powershell -NoProfile -Command "Move-Item -Path drifblim-debug.rom -Destination ..\..\drifblim-debug.rom -Force"
+
+  # --- Debug run tasks with UXN_Log enabled ---
+  run:buxn-debug:
+    desc: Run buxn-cli against drifblim-debug.rom with UXN_LOG enabled
+    env:
+      UXN_LOG: "info"
+    cmds:
+      - cmd: powershell -NoProfile -Command "& { buxn-cli drifblim-debug.rom helloworld.tal ho.rom ; if (Test-Path 'ho.rom') { Write-Host 'Assembled ho.rom' } else { Write-Host 'No output file produced'; exit 1 } }"
+
+  run:cardinal-debug:
+    desc: Run cardinal-cli against drifblim-debug.rom with UXN_LOG enabled
+    env:
+      UXN_LOG: "info"
+    cmds:
+      - cmd: powershell -NoProfile -Command "& { cargo run --package cardinal-cli -- drifblim-debug.rom -- helloworld.tal ho.rom ; if (Test-Path 'ho.rom') { $len=(Get-Item 'ho.rom').Length; Write-Host \"Assembled ho.rom in $len bytes\" } else { Write-Host 'No output file produced'; exit 1 } }"
+
+  run:buxn-seed:
+    desc: Run buxn-cli against drifblim-seed.rom with UXN_LOG enabled
+    env:
+      UXN_LOG: "info"
+    cmds:
+      - cmd: buxn-cli drifblim-seed.rom helloworld.tal ho.rom
+
+  run:cardinal-seed:
+    desc: Run cardinal-cli against drifblim-seed.rom with UXN_LOG enabled
+    env:
+      UXN_LOG: "info"
+    cmds:
+      - cmd: powershell -NoProfile -Command "& { cargo run --package cardinal-cli -- drifblim-seed.rom -- helloworld.tal ho.rom ; if (Test-Path 'ho.rom') { $len=(Get-Item 'ho.rom').Length; Write-Host \"Assembled ho.rom in $len bytes\" } else { Write-Host 'No output file produced'; exit 1 } }"
+
+  test-rustlog:
+    desc: Run cargo test with RUST_LOG=info to show all info-level logs from all modules
+    cmds:
+      - cmd: powershell -NoProfile -Command "$env:RUST_LOG='info'; cargo test"
