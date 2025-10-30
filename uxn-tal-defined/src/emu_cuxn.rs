@@ -5,10 +5,11 @@ use crate::{
 };
 use std::path::PathBuf;
 use std::process::Command;
+use uxn_tal_common::cache::RomCache;
 #[cfg(not(target_arch = "wasm32"))]
 use which::which;
 
-impl EmulatorPathCheck for CuxnMapper {
+impl<'a> EmulatorPathCheck for CuxnMapper<'a> {
     fn is_available_in_path(_result: &ProtocolParseResult) -> Option<PathBuf> {
         let bin = {
             #[cfg(windows)]
@@ -52,15 +53,45 @@ impl EmulatorPathCheck for CuxnMapper {
     }
 }
 
-pub struct CuxnMapper;
+pub struct CuxnMapper<'a> {
+    pub rom_cache: &'a dyn RomCache,
+}
 
-impl EmulatorLauncher for CuxnMapper {
+impl<'a> EmulatorLauncher<'a> for CuxnMapper<'a> {
     fn build_command(
         &self,
         result: &ProtocolParseResult,
         rom_path: &str,
         emulator_path: &std::path::Path,
     ) -> Command {
+        if let Some(crate::ProtocolVarVar::Bool(true)) = result.proto_vars.get("orca") {
+            use crate::consts::CANONICAL_ORCA;
+            use std::fs;
+            use std::path::Path;
+            let canonical_rom_path = match self
+                .rom_cache
+                .get_or_write_cached_rom(CANONICAL_ORCA, Path::new("orca.rom"))
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[CuxnMapper] Failed to cache/fetch canonical orca ROM: {e}");
+                    Path::new("orca.rom").to_path_buf()
+                }
+            };
+            let orca_file = Path::new(rom_path);
+            let orca_rom = orca_file.with_file_name("orca.rom");
+            if canonical_rom_path != orca_rom {
+                if let Err(e) = fs::copy(&canonical_rom_path, &orca_rom) {
+                    eprintln!("[CuxnMapper] Failed to copy canonical orca ROM to working dir: {e}");
+                }
+            }
+            let mut cmd = Command::new(emulator_path);
+            let mut args = self.map_args(result);
+            args.insert(0, orca_file.to_string_lossy().to_string());
+            args.insert(0, orca_rom.to_string_lossy().to_string());
+            cmd.args(&args);
+            return cmd;
+        }
         let mut cmd = Command::new(emulator_path);
         let mut args = self.map_args(result);
         args.push(rom_path.to_string());
@@ -69,7 +100,7 @@ impl EmulatorLauncher for CuxnMapper {
     }
 }
 
-impl EmulatorArgMapper for CuxnMapper {
+impl<'a> EmulatorArgMapper for CuxnMapper<'a> {
     fn map_args(&self, result: &ProtocolParseResult) -> Vec<String> {
         let mut args = vec![];
 

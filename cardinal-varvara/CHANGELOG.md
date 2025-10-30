@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.9.0...cardinal-varvara-v0.10.0) - 2025-10-30
+
+### Added
+
+- *(.orca)* [**breaking**] add ORCA mode, shared common crate, cache-aware emulator launchers; add PatchStorage provider; bump deps; improve caching and CLI UX
+
+### Other
+
+- *(rom.txt)* [**breaking**] rom.txt extensions. break out protocol into sep. crate. tests demonstrating and issue in Raven's interaction with drifblim arguments.
+
 ## [0.9.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.8.0...cardinal-varvara-v0.9.0) - 2025-10-30
 
 ### Other

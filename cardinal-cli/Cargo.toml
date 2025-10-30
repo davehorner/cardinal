@@ -13,20 +13,20 @@ anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
-uxn-tal = { version = "0.5.0", path = "../uxn-tal" }
+uxn-tal = { version = "0.6.0", path = "../uxn-tal" }
 
 varvara = { package = "cardinal-varvara", version = "0.8.0" }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.5", features = [
+uxn = { package = "cardinal-uxn", version = "0.5.6", features = [
    "native",
 ] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.5" }
+uxn = { package = "cardinal-uxn", version = "0.5.6" }
 
 [dev-dependencies]
-assert_cmd = "2.0.17"
+assert_cmd = "2.1.1"
 regex = "1.12.2"
 tempfile = "3.23.0"
 

@@ -1,3 +1,5 @@
+pub mod patchstorage;
+use patchstorage::PatchStorage;
 pub mod codeberg;
 pub mod downloader;
 pub mod github;
@@ -13,8 +15,12 @@ use provider::{FetchResult, Provider, RepoRef};
 use srht::SourceHut;
 
 pub fn parse_repo(url: &str) -> Option<(Box<dyn Provider>, RepoRef)> {
-    let provs: Vec<Box<dyn Provider>> =
-        vec![Box::new(SourceHut), Box::new(GitHub), Box::new(Codeberg)];
+    let provs: Vec<Box<dyn Provider>> = vec![
+        Box::new(SourceHut),
+        Box::new(GitHub),
+        Box::new(Codeberg),
+        Box::new(PatchStorage),
+    ];
     for p in provs.into_iter() {
         let res = p.parse_url(url);
         eprintln!(

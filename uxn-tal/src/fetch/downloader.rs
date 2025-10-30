@@ -23,28 +23,43 @@ pub fn resolve_and_fetch_entry(
     raw: &str,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dyn std::error::Error>> {
     // 1. Parse protocol, extract real URL if needed (prefer uxntal_protocol)
-    let url = if raw.starts_with("uxntal:") {
-        let parsed = ProtocolParser::parse(raw);
-        if !parsed.url.is_empty() {
-            parsed.url.clone()
-        } else {
-            raw.to_string()
-        }
+    let parsed = if raw.starts_with("uxntal:") {
+        ProtocolParser::parse(raw)
+    } else {
+        ProtocolParser::parse(&format!("uxntal://{}", raw))
+    };
+    let url = if !parsed.url.is_empty() {
+        parsed.url.clone()
     } else {
         raw.to_string()
     };
     // 2. Use fetch_repo_tree if it's a repo, else download single file
-    if fetch::parse_repo(&url).is_some() {
+    let (entry_path, cache_dir) = if fetch::parse_repo(&url).is_some() {
         let roms_dir =
             crate::paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
-        let rom_dir = roms_dir.join(format!("{}", crate::util::hash_url(&url)));
+        use uxn_tal_common::hash_url;
+        let rom_dir = roms_dir.join(format!("{}", hash_url(&url)));
         std::fs::create_dir_all(&rom_dir)?;
         let res = fetch::fetch_repo_tree(&url, &rom_dir)?;
-        Ok((res.entry_local, rom_dir))
+        (res.entry_local, rom_dir)
     } else {
         // fallback to resolve_entry_from_url for single files
-        resolve_entry_from_url(raw)
+        resolve_entry_from_url(raw)?
+    };
+
+    // ORCA MODE: If orca mode is set, always copy canonical orca.rom into the cache dir and return that as the ROM path
+    if let Some(orca_mode) = parsed.get("orca") {
+        if orca_mode.as_bool() == Some(true) {
+            // Find canonical orca.rom (try workspace roms/orca.rom)
+            let workspace_orca_rom = std::path::Path::new("roms/orca.rom");
+            let target_orca_rom = cache_dir.join("orca.rom");
+            if workspace_orca_rom.exists() {
+                std::fs::copy(workspace_orca_rom, &target_orca_rom)?;
+                return Ok((target_orca_rom, cache_dir));
+            }
+        }
     }
+    Ok((entry_path, cache_dir))
 }
 
 #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]

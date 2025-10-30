@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.6...cardinal-uxn-v0.6.0) - 2025-10-30
+
+### Added
+
+- *(.orca)* [**breaking**] add ORCA mode, shared common crate, cache-aware emulator launchers; add PatchStorage provider; bump deps; improve caching and CLI UX
+
 ## [0.5.6](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.5...cardinal-uxn-v0.5.6) - 2025-10-24
 
 ### Other

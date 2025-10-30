@@ -164,16 +164,26 @@ impl Provider for Codeberg {
             Some(p)
                 if p.to_ascii_lowercase().ends_with(".tal")
                     || p.to_ascii_lowercase().ends_with(".rom")
-                    || p.to_ascii_lowercase().ends_with(".rom.txt") =>
+                    || p.to_ascii_lowercase().ends_with(".rom.txt")
+                    || p.to_ascii_lowercase().ends_with(".orca") =>
             {
                 p.replace('\\', "/")
             }
             _ => return Err(
-                "codeberg: URL must point to a .tal, .rom, or .rom.txt file; not guessing entries"
+                "codeberg: URL must point to a .tal, .rom, .rom.txt, or .orca file; not guessing entries"
                     .into(),
             ),
         };
 
+        // Check cache for entry file first
+        let entry_local = out_root.join(&entry_rel);
+        if entry_local.exists() {
+            eprintln!("[Codeberg] Using cached file: {}", entry_local.display());
+            return Ok(FetchResult {
+                entry_local: entry_local.clone(),
+                all_files: vec![entry_local],
+            });
+        }
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
         let mut all = vec![entry_local.clone()];
         // Recursively fetch includes for .tal files

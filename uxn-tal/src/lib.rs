@@ -33,7 +33,9 @@ type AssembleDirectoryResult = (
     Option<std::path::PathBuf>,
     usize,
 );
-
+pub use util::{RealRomCache, RealRomEntryResolver};
+// Re-export get_or_write_cached_rom and hash_url for downstream crates
+pub use uxn_tal_common::{get_or_write_cached_rom, hash_url};
 pub mod assembler;
 pub mod bkend;
 pub mod bkend_buxn;
