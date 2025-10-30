@@ -93,9 +93,11 @@ fn build_orca_inject_queue(file_path: &str) -> std::collections::VecDeque<Inject
     // Build rectangle with '/' border
     let mut grid = vec![vec![' '; cols + 2]; rows + 2];
     // Fill top and bottom borders
-    for c in 0..cols + 2 {
-        grid[0][c] = '/';
-        grid[rows + 1][c] = '/';
+    for cell in grid[0].iter_mut().take(cols + 2) {
+        *cell = '/';
+    }
+    for cell in grid[rows + 1].iter_mut().take(cols + 2) {
+        *cell = '/';
     }
     // Fill left and right borders with '/' (actual border logic handled in event queue below)
     // Fill file contents
@@ -111,9 +113,9 @@ fn build_orca_inject_queue(file_path: &str) -> std::collections::VecDeque<Inject
     queue.push_back(InjectEvent::KeyRelease(CTRL_H));
     // Visit all non '.' cells efficiently
     let mut visited = vec![vec![false; cols + 2]; rows + 2];
-    for r in 0..rows + 2 {
-        for c in 0..cols + 2 {
-            if grid[r][c] != '.' && !visited[r][c] {
+    for (r, row) in grid.iter().enumerate().take(rows + 2) {
+        for (c, cell) in row.iter().enumerate().take(cols + 2) {
+            if *cell != '.' && !visited[r][c] {
                 // Move to (r,c)
                 let dr = r as isize - cur_row as isize;
                 let dc = c as isize - cur_col as isize;

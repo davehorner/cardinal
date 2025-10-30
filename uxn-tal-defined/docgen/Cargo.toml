@@ -1,0 +1,11 @@
+[package]
+name = "docgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+uxn-tal-defined = { path = ".." }
+which = "8.0.0"
+
+[workspace]

@@ -7,11 +7,13 @@ use crate::{
     util::{hash_url, pause_on_error},
 };
 use std::path::PathBuf;
+use uxn_tal_defined::ProtocolParser;
 
 pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     // Accept plain URLs and uxntal://… forms
-    let url = if raw.starts_with("uxntal:") {
-        crate::urlutil::extract_target_from_uxntal(raw).unwrap_or_else(|| raw.to_string())
+    let parsed = ProtocolParser::parse(raw);
+    let url = if !parsed.url.is_empty() {
+        parsed.url.clone()
     } else {
         raw.to_string()
     };

@@ -123,7 +123,7 @@ impl AssemblerBackend for UxnasmBackend {
         Ok(AssemblyOutput {
             rom_path: rom_path.clone(),
             rom_bytes: bytes.clone(),
-            stdout: crate::emu_uxncli::run_uxncli_get_stdout(&rom_path)?,
+            stdout: run_uxncli_get_stdout(&rom_path)?,
             disassembly: run_dis_file(&rom_path)?,
         })
     }
@@ -530,12 +530,37 @@ fn spawn_cmd(cmd: &str, args: &[&str]) -> Command {
     }
 }
 
+fn emu_err(path: &str, msg: &str) -> AssemblerError {
+    AssemblerError::Backend {
+        message: format!("{path}: {msg}"),
+    }
+}
+
 fn run_vm_last(bytes: &[u8]) -> Result<String, AssemblerError> {
     let tmp = ".__temp_uxntal_exec.rom";
     fs::write(tmp, bytes).map_err(|e| io_err(tmp, e))?;
-    let out = crate::emu_uxncli::run_uxncli_get_stdout(tmp)?;
+    let out = run_uxncli_get_stdout(tmp)?;
     let _ = fs::remove_file(tmp);
     Ok(out)
+}
+
+pub fn run_uxncli_get_stdout(rom_path: &str) -> Result<String, AssemblerError> {
+    if cfg!(windows) {
+        let in_wsl = crate::wsl::detect_wsl();
+        let output = if in_wsl {
+            Command::new("uxncli").arg(rom_path).output()
+        } else {
+            Command::new("wsl").arg("uxncli").arg(rom_path).output()
+        }
+        .map_err(|e| emu_err(rom_path, &format!("uxncli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let output = Command::new("uxncli")
+            .arg(rom_path)
+            .output()
+            .map_err(|e| emu_err(rom_path, &format!("uxncli failed: {e}")))?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
 }
 
 fn syntax_err(path: &str, msg: &str) -> AssemblerError {

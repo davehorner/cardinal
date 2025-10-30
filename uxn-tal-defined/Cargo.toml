@@ -1,0 +1,18 @@
+
+[package]
+name = "uxn-tal-defined"
+version = "0.1.0"
+edition = "2021"
+description = "Shared protocol definitions for uxntal://"
+license = "MIT OR Apache-2.0"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+which = "8"
+
+[dev-dependencies]
+tempfile = "3.23.0"
+tiny_http = "0.12.0"
+which = "8"

@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["David Horner"]
 description = "uxntal:// protocol | a Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
@@ -30,6 +30,9 @@ percent-encoding = "2.3.2"
 base64 = "0.22.1"
 url = "2.5.7"
 scraper = "0.24.0"
+
+uxn-tal-defined = "0.1.0"
+#uxn-tal-defined = { path = "../uxn-tal-defined" }
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
 which = "8.0.0"

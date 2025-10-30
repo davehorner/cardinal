@@ -16,10 +16,18 @@ pub fn parse_repo(url: &str) -> Option<(Box<dyn Provider>, RepoRef)> {
     let provs: Vec<Box<dyn Provider>> =
         vec![Box::new(SourceHut), Box::new(GitHub), Box::new(Codeberg)];
     for p in provs.into_iter() {
-        if let Some(r) = p.parse_url(url) {
+        let res = p.parse_url(url);
+        eprintln!(
+            "[parse_repo] provider: {} url: {} match: {}",
+            std::any::type_name::<Box<dyn Provider>>(),
+            url,
+            res.is_some()
+        );
+        if let Some(r) = res {
             return Some((p, r));
         }
     }
+    eprintln!("[parse_repo] no provider matched for url: {}", url);
     None
 }
 
