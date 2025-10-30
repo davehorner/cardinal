@@ -118,22 +118,32 @@ impl Provider for SourceHut {
         r: &RepoRef,
         out_root: &Path,
     ) -> Result<FetchResult, Box<dyn std::error::Error>> {
-        // Allow .tal, .rom, .rom.txt files for direct fetch
+        // Allow .tal, .rom, .rom.txt, .orca files for direct fetch
         let entry_rel =
             match &r.path {
                 Some(p)
                     if p.to_ascii_lowercase().ends_with(".tal")
                         || p.to_ascii_lowercase().ends_with(".rom")
-                        || p.to_ascii_lowercase().ends_with(".rom.txt") =>
+                        || p.to_ascii_lowercase().ends_with(".rom.txt")
+                        || p.to_ascii_lowercase().ends_with(".orca") =>
                 {
                     p.replace('\\', "/")
                 }
                 _ => return Err(
-                    "sr.ht: URL must point to a .tal, .rom, or .rom.txt file; not guessing entries"
+                    "sr.ht: URL must point to a .tal, .rom, .rom.txt, or .orca file; not guessing entries"
                         .into(),
                 ),
             };
 
+        // Check cache for entry file first
+        let entry_local = out_root.join(&entry_rel);
+        if entry_local.exists() {
+            eprintln!("[SourceHut] Using cached file: {}", entry_local.display());
+            return Ok(FetchResult {
+                entry_local: entry_local.clone(),
+                all_files: vec![entry_local],
+            });
+        }
         // Fetch entry and walk includes
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
         let mut all = vec![entry_local.clone()];

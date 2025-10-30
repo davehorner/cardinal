@@ -21,11 +21,28 @@ The above will run a catclock from cmd.exe/pwsh.
 
 The protocol handler supports the following file extensions for remote and local files:
 
-- `.tal` — TAL source files (assembled to .rom on the fly)
+- `.tal`/`.tal.txt` — TAL source files (assembled to .rom on the fly)
 - `.rom` — Binary UXN ROM files (used as-is)
 - `.rom.txt` — Hex-encoded ROM files (automatically converted to binary .rom before use)
+- `.orca` — Orca pattern files (run with canonical orca ROM, not assembled as TAL)
 
 When you provide a URL or file ending in `.rom.txt`, the handler will automatically fetch and convert the hex text to a binary `.rom` file using the same logic as `xxd -r -p`. This allows you to share ROMs as plain text for easy inspection, versioning, and diffing, while still running them directly via the protocol.
+
+## Orca Mode (`.orca` files)
+
+The protocol handler supports `.orca` files, which are not assembled as TAL but instead are run directly with the canonical orca ROM. When you provide a URL or file ending in `.orca`, the handler will:
+
+- Download and cache the `.orca` file if remote.
+- Launch the emulator with the canonical orca ROM and the `.orca` file as arguments.
+- Never assemble `.orca` files as TAL or treat them as source code.
+
+This ensures `.orca` files are always run in the correct environment, matching the canonical orca UXN experience.
+
+**Example:**
+```
+uxntal:widget://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/u.orca
+```
+This will launch the canonical orca ROM with the specified `.orca` file in widget mode.  You can always change the emu to run it in your preferred emulator.
 
 ### Bookmarklets
 You can prepend the uxntal:// to any valid tal url, or you can create a bookmarklet on your bookmark toolbar to launch the protocol on click of the bookmarklet.
