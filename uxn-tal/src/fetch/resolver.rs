@@ -2,11 +2,10 @@
 use super::downloader;
 use super::downloader::DownloaderRedirect;
 use crate::fetch::html_redirect::extract_linkedin_redirect;
-use crate::{
-    paths,
-    util::{hash_url, pause_on_error},
-};
+use crate::paths;
+use crate::util::pause_on_error;
 use std::path::PathBuf;
+use uxn_tal_common::hash_url;
 use uxn_tal_defined::ProtocolParser;
 
 pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
@@ -17,24 +16,23 @@ pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn s
     } else {
         raw.to_string()
     };
-    println!("raw URL: {}", raw);
-    println!("Fetching from URL: {}", url);
     let roms_dir = paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
     let rom_dir = roms_dir.join(format!("{}", hash_url(&url)));
     std::fs::create_dir_all(&rom_dir)?;
 
     if super::parse_repo(&url).is_some() {
+        // For repos, always fetch (repo tree may change)
         println!("Fetching repo tree for URL: {}", url);
         let res = super::fetch_repo_tree(&url, &rom_dir)?;
         Ok((res.entry_local, rom_dir))
     } else {
-        println!("Fetching single file for URL: {}", url);
         let name = url
             .rsplit('/')
             .find(|s| !s.is_empty())
             .unwrap_or("downloaded.tal");
         let out = rom_dir.join(name);
         if !out.exists() {
+            println!("Fetching single file for URL: {}", url);
             match downloader::http_get(&url) {
                 Ok(bytes) => {
                     downloader::write_bytes(&out, &bytes)?;
@@ -89,6 +87,7 @@ pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn s
                 }
             }
         } else {
+            println!("Using cached file: {}", out.display());
             // If cached file is HTML, check for LinkedIn-style redirect and re-exec if found
             let content = std::fs::read_to_string(&out).unwrap_or_default();
             let legacy_prefix = "HTML redirect detected: ";

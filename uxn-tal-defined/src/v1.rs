@@ -1,4 +1,5 @@
 use std::{borrow::Cow, fmt};
+use uxn_tal_common::cache::RomCache;
 // This module is intended to be extended with per-emulator mapping modules (see emu_cuxn.rs, emu_uxn.rs, emu_buxn.rs)
 use std::collections::HashMap;
 
@@ -206,6 +207,12 @@ pub static PROTOCOL_VARS: &[ProtocolVar] = &[
         description: "Effect mode for emulator (string)",
         example: "efxmode^blend",
         var_type: ProtocolVarType::String,
+    },
+    ProtocolVar {
+        name: "orca",
+        description: "Orca mode: run the orca ROM with the given .orca file. Automatically set if the URL ends with .orca.",
+        example: "orca",
+        var_type: ProtocolVarType::Bool,
     },
 ];
 
@@ -541,6 +548,11 @@ impl ProtocolParser {
         } else {
             url_for_normalization.to_string()
         };
+
+        // If the url ends with .orca, set orca=true in proto_vars_map
+        if url.trim().to_ascii_lowercase().ends_with(".orca") {
+            proto_vars_map.insert("orca".to_string(), ProtocolVarVar::Bool(true));
+        }
         ProtocolParseResult {
             raw: raw_map,
             proto_vars: proto_vars_map,
@@ -636,27 +648,40 @@ pub trait EmulatorPathCheck {
 }
 
 /// EmulatorMapperFactory: returns the correct EmulatorArgMapper and path for a ProtocolParseResult
-pub fn get_emulator_launcher(
+pub fn get_emulator_launcher<'a>(
     result: &ProtocolParseResult,
-) -> Option<(Box<dyn EmulatorLauncher>, std::path::PathBuf)> {
+    rom_cache: &'a dyn RomCache,
+) -> Option<(Box<dyn EmulatorLauncher<'a> + 'a>, std::path::PathBuf)> {
     match result.proto_vars.get("emu") {
         Some(ProtocolVarVar::Enum("buxn")) => {
             if let Some(path) = emu_buxn::BuxnMapper::is_available_in_path() {
-                Some((Box::new(emu_buxn::BuxnMapper), path))
+                Some((
+                    Box::new(emu_buxn::BuxnMapper { rom_cache })
+                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    path,
+                ))
             } else {
                 None
             }
         }
         Some(ProtocolVarVar::Enum("uxn")) => {
             if let Some(path) = emu_uxn::UxnMapper::is_available_in_path() {
-                Some((Box::new(emu_uxn::UxnMapper), path))
+                Some((
+                    Box::new(emu_uxn::UxnMapper { rom_cache })
+                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    path,
+                ))
             } else {
                 None
             }
         }
         _ => {
             if let Some(path) = emu_cuxn::CuxnMapper::is_available_in_path(result) {
-                Some((Box::new(emu_cuxn::CuxnMapper), path))
+                Some((
+                    Box::new(emu_cuxn::CuxnMapper { rom_cache })
+                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    path,
+                ))
             } else {
                 None
             }
@@ -665,24 +690,28 @@ pub fn get_emulator_launcher(
 }
 
 /// EmulatorMapperFactory: returns the correct EmulatorArgMapper for a ProtocolParseResult
-pub fn get_emulator_mapper(
+pub fn get_emulator_mapper<'a>(
     result: &ProtocolParseResult,
-) -> Option<(Box<dyn EmulatorArgMapper>, Option<std::path::PathBuf>)> {
+    rom_cache: &'a dyn RomCache,
+) -> Option<(Box<dyn EmulatorArgMapper + 'a>, Option<std::path::PathBuf>)> {
     match result.proto_vars.get("emu") {
-        Some(ProtocolVarVar::Enum("buxn")) => {
-            Some((Box::new(emu_buxn::BuxnMapper), emu_buxn::BuxnMapper::is_available_in_path()))
-        }
-        Some(ProtocolVarVar::Enum("uxn")) => {
-            Some((Box::new(emu_uxn::UxnMapper), emu_uxn::UxnMapper::is_available_in_path()))
-        }
-        _ => {
-            Some((Box::new(emu_cuxn::CuxnMapper), emu_cuxn::CuxnMapper::is_available_in_path(result)))
-        }
+        Some(ProtocolVarVar::Enum("buxn")) => Some((
+            Box::new(emu_buxn::BuxnMapper { rom_cache }),
+            emu_buxn::BuxnMapper::is_available_in_path(),
+        )),
+        Some(ProtocolVarVar::Enum("uxn")) => Some((
+            Box::new(emu_uxn::UxnMapper { rom_cache }),
+            emu_uxn::UxnMapper::is_available_in_path(),
+        )),
+        _ => Some((
+            Box::new(emu_cuxn::CuxnMapper { rom_cache }),
+            emu_cuxn::CuxnMapper::is_available_in_path(result),
+        )),
     }
 }
 
 /// Trait for launching an emulator with the correct command and arguments
-pub trait EmulatorLauncher {
+pub trait EmulatorLauncher<'a> {
     /// Build a std::process::Command for this emulator, given the protocol parse result and ROM path
     fn build_command(
         &self,
