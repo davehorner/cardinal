@@ -4,18 +4,22 @@ mod tests {
 
     #[test]
     fn timeout_protocol_var_maps_to_arg() {
+        use uxn_tal_common::cache::DefaultRomCache;
         use uxn_tal_defined::v1::{get_emulator_mapper, ProtocolParser};
+        let rom_cache = DefaultRomCache;
         // t^2 should map to --timeout=2
         let url = "uxntal:t^2//https://example.com/rom.tal";
         let result = ProtocolParser::parse(url);
-        let (mapper, _path) = get_emulator_mapper(&result).expect("should get emulator mapper");
+        let (mapper, _path) =
+            get_emulator_mapper(&result, &rom_cache).expect("should get emulator mapper");
         let args = mapper.map_args(&result);
         assert!(args.iter().any(|a| a == "--timeout=2"), "args: {:?}", args);
 
         // timeout^2 should map to --timeout=2
         let url2 = "uxntal:timeout^2//https://example.com/rom.tal";
         let result2 = ProtocolParser::parse(url2);
-        let (mapper2, _path2) = get_emulator_mapper(&result2).expect("should get emulator mapper");
+        let (mapper2, _path2) =
+            get_emulator_mapper(&result2, &rom_cache).expect("should get emulator mapper");
         let args2 = mapper2.map_args(&result2);
         assert!(
             args2.iter().any(|a| a == "--timeout=2"),
