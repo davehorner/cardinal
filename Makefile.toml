@@ -1,4 +1,13 @@
 
+
+[tasks.release]
+description = "Run docgen and then support/release.cmd (Windows)"
+script = [
+    "cargo make docgen",
+    "cmd /C support\\release.cmd"
+]
+workspace = false
+
 [tasks.docgen]
 description = "Generate README.md using docgen binary"
 command = "cargo"

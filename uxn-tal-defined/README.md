@@ -138,6 +138,7 @@ uxntal:var1:var2^val2:var3^^val3://actual_url
 | `debug` | Bool | Enable debug console (Windows only) | `debug` |
 | `efx` | String | Effect name or identifier for emulator (string) | `efx^invert` |
 | `efxmode` | String | Effect mode for emulator (string) | `efxmode^blend` |
+| `orca` | Bool | Orca mode: run the orca ROM with the given .orca file. Automatically set if the URL ends with .orca. | `orca` |
 
 ## Bang Query Variables
 

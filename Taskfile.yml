@@ -132,3 +132,10 @@ tasks:
     desc: Run cargo test with RUST_LOG=info to show all info-level logs from all modules
     cmds:
       - cmd: powershell -NoProfile -Command "$env:RUST_LOG='info'; cargo test"
+
+release:
+    desc: Run docgen and then support/release.cmd (Windows)
+    platforms: [windows]
+    cmds:
+      - cmd: cargo make docgen
+      - cmd: support\release.cmd

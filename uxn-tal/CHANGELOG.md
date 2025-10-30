@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.6.0...uxn-tal-v0.6.1) - 2025-10-30
+
+### Fixed
+
+- *(orca)* fix to bootstrap orca.rom properly.
+
 ## [0.6.0](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.5.0...uxn-tal-v0.6.0) - 2025-10-30
 
 ### Added
