@@ -5220,7 +5220,7 @@ dependencies = [
  "thiserror 2.0.17",
  "url",
  "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "uxn-tal-defined 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uxn-tal-defined 0.2.0",
  "walkdir",
  "which 8.0.0",
  "winapi",
@@ -5246,19 +5246,19 @@ dependencies = [
 [[package]]
 name = "uxn-tal-defined"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da052aaa1cb26bb3bbc21d5cfa7abfd28ee7c58c2a7e6a0453ac94077927bcd4"
 dependencies = [
- "tempfile",
- "tiny_http",
  "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "which 8.0.0",
 ]
 
 [[package]]
 name = "uxn-tal-defined"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da052aaa1cb26bb3bbc21d5cfa7abfd28ee7c58c2a7e6a0453ac94077927bcd4"
+version = "0.2.1"
 dependencies = [
+ "tempfile",
+ "tiny_http",
  "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "which 8.0.0",
 ]
