@@ -120,15 +120,15 @@ impl Provider for GitHub {
         let entry_rel = match &r.path {
             Some(p)
                 if p.to_ascii_lowercase().ends_with(".tal")
-                    || p.to_ascii_lowercase().ends_with(".rom") =>
+                    || p.to_ascii_lowercase().ends_with(".rom")
+                    || p.to_ascii_lowercase().ends_with(".rom.txt") =>
             {
                 p.replace('\\', "/")
             }
-            _ => {
-                return Err(
-                    "github: URL must point to a .tal or .rom file; not guessing entries".into(),
-                )
-            }
+            _ => return Err(
+                "github: URL must point to a .tal, .rom, or .rom.txt file; not guessing entries"
+                    .into(),
+            ),
         };
 
         let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;

@@ -1,6 +1,8 @@
 use crate::fetch::html_redirect::extract_linkedin_redirect;
+use crate::{fetch, resolve_entry_from_url};
 use std::fmt;
 use std::{fs, io::Write, path::Path};
+use uxn_tal_defined::ProtocolParser;
 
 #[derive(Debug)]
 pub struct DownloaderRedirect {
@@ -15,8 +17,60 @@ impl fmt::Display for DownloaderRedirect {
 
 impl std::error::Error for DownloaderRedirect {}
 
+/// Resolves a URL (including uxntal: protocol) and fetches the main file and all includes into the cache directory.
+/// Returns (entry_path, cache_dir). This is a unified interface for protocol parsing, downloading, and include resolution.
+pub fn resolve_and_fetch_entry(
+    raw: &str,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dyn std::error::Error>> {
+    // 1. Parse protocol, extract real URL if needed (prefer uxntal_protocol)
+    let url = if raw.starts_with("uxntal:") {
+        let parsed = ProtocolParser::parse(raw);
+        if !parsed.url.is_empty() {
+            parsed.url.clone()
+        } else {
+            raw.to_string()
+        }
+    } else {
+        raw.to_string()
+    };
+    // 2. Use fetch_repo_tree if it's a repo, else download single file
+    if fetch::parse_repo(&url).is_some() {
+        let roms_dir =
+            crate::paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
+        let rom_dir = roms_dir.join(format!("{}", crate::util::hash_url(&url)));
+        std::fs::create_dir_all(&rom_dir)?;
+        let res = fetch::fetch_repo_tree(&url, &rom_dir)?;
+        Ok((res.entry_local, rom_dir))
+    } else {
+        // fallback to resolve_entry_from_url for single files
+        resolve_entry_from_url(raw)
+    }
+}
+
 #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 pub fn http_get(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Always use curl for git.sr.ht URLs
+    if url.contains("git.sr.ht") {
+        if let Ok(out) = std::process::Command::new("curl")
+            .args(["-L", "-sS", url])
+            .output()
+        {
+            if out.status.success() {
+                return Ok(out.stdout);
+            } else {
+                return Err(format!(
+                    "curl failed with exit code {} for {}",
+                    out.status.code().unwrap_or(-1),
+                    url
+                )
+                .into());
+            }
+        } else {
+            return Err("Failed to spawn curl process".into());
+        }
+    }
+
+    // Default: use reqwest for other URLs
     let resp = reqwest::blocking::get(url)?;
     let final_url = resp.url().to_string();
     let status = resp.status();

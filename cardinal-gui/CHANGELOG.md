@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.5.0...cardinal-gui-v0.6.0) - 2025-10-30
+
+### Added
+
+- *(rom.txt)* [**breaking**] rom.txt extensions. break out protocol into sep. crate. tests demonstrating and issue in Raven's interaction with drifblim arguments.
+
 ## [0.5.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.4.9...cardinal-gui-v0.5.0) - 2025-10-24
 
 ### Added

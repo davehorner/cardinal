@@ -1,3 +1,66 @@
+/// Fetches a .rom/.rom.txt via uxntal:// or direct URL using resolve_and_fetch_entry, returning the raw ROM bytes.
+pub fn get_rom_bytes_resolved(url: &str) -> Result<Vec<u8>, AssemblerError> {
+    // Only allow .rom.txt URLs
+    if !url.ends_with(".rom.txt") {
+        return Err(simple_err(
+            Path::new(url),
+            "Only .rom.txt URLs are supported by get_rom_bytes_resolved",
+        ));
+    }
+    let (entry_path, _cache_dir) = crate::resolve_entry_from_url(url).map_err(|e| {
+        simple_err(
+            Path::new(url),
+            &format!("resolve_and_fetch_entry failed: {e}"),
+        )
+    })?;
+    // Perform hexrev conversion: read as file, write to Vec<u8>
+    let file = std::fs::File::open(&entry_path)
+        .map_err(|e| simple_err(&entry_path, &format!("failed to open rom.txt: {e}")))?;
+    let mut buf = Vec::new();
+    crate::hexrev::HexRev::hex_to_bin(std::io::BufReader::new(file), &mut buf)
+        .map_err(|e| simple_err(&entry_path, &format!("failed to convert hex to bin: {e}")))?;
+    Ok(buf)
+}
+
+/// Fetches a .rom/.rom.txt via uxntal:// or direct URL and writes it to the given path.
+pub fn write_rom_resolved(url: &str, out_path: &std::path::Path) -> Result<(), AssemblerError> {
+    let bytes = get_rom_bytes_resolved(url)?;
+    std::fs::write(out_path, &bytes)
+        .map_err(|e| simple_err(out_path, &format!("failed to write rom: {e}")))
+}
+/// Fetches a .rom or .rom.txt via uxntal:// URL, returning the raw ROM bytes.
+#[allow(rustdoc::bare_urls)]
+/// Example: get_rom_bytes_via_uxntal("uxntal://https://git.sr.ht/~rabbits/drifblim/tree/main/item/etc/drifblim.rom.txt")
+pub fn get_rom_bytes_via_uxntal(url: &str) -> Result<Vec<u8>, AssemblerError> {
+    // Only allow .rom.txt URLs
+    if !url.ends_with(".rom.txt") {
+        return Err(simple_err(
+            Path::new(url),
+            "Only .rom.txt URLs are supported by get_rom_bytes_via_uxntal",
+        ));
+    }
+    let parsed = ProtocolParser::parse(url);
+    let rom_path = if parsed.url.starts_with("file://") {
+        std::path::PathBuf::from(&parsed.url[7..])
+    } else {
+        std::path::PathBuf::from(&parsed.url)
+    };
+    // Perform hexrev conversion: read as file, write to Vec<u8>
+    let file = std::fs::File::open(&rom_path)
+        .map_err(|e| simple_err(&rom_path, &format!("failed to open rom.txt: {e}")))?;
+    let mut buf = Vec::new();
+    crate::hexrev::HexRev::hex_to_bin(std::io::BufReader::new(file), &mut buf)
+        .map_err(|e| simple_err(&rom_path, &format!("failed to convert hex to bin: {e}")))?;
+    Ok(buf)
+}
+
+/// Fetches a .rom or .rom.txt via uxntal:// URL and writes it to the given path.
+pub fn write_rom_via_uxntal(url: &str, out_path: &std::path::Path) -> Result<(), AssemblerError> {
+    let bytes = get_rom_bytes_via_uxntal(url)?;
+    std::fs::write(out_path, &bytes)
+        .map_err(|e| simple_err(out_path, &format!("failed to write rom: {e}")))
+}
+
 /// Returns the path to drifloon.rom in the user's home directory, or just "drifloon.rom" if not found.
 pub fn drifblim_repo_get_drifloon() -> PathBuf {
     let home_dir = dirs::home_dir();
@@ -50,6 +113,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+
+use uxn_tal_defined::ProtocolParser;
 
 use crate::{hexrev::HexRev, Assembler, AssemblerError};
 

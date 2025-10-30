@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli","uxn-tal"]
+members = ["cardinal-uxn", "cardinal-varvara", "cardinal-gui", "cardinal-cli","uxn-tal","uxn-tal-defined"]
 #members = ["cardinal-varvara"]
 #members = ["cardinal-uxn"]
 exclude = ["fuzz"]
