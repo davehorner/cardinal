@@ -16,6 +16,7 @@ use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
+use uxn_tal::util::RealRomCache;
 use uxn_tal::util::{pause_for_windows, pause_on_error};
 use uxn_tal::{Assembler, AssemblerError};
 
@@ -66,6 +67,7 @@ fn main() {
 }
 
 fn real_main() -> Result<(), AssemblerError> {
+    let rom_cache = RealRomCache;
     let mut args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
         unsafe { show_console() };
@@ -118,7 +120,7 @@ fn real_main() -> Result<(), AssemblerError> {
             println!("uxntal {}", raw_url);
             println!("[DEBUG] parsed uxntal protocol result: {:?}", result);
             // Select emulator and get path
-            let (mapper, emulator_path) = match get_emulator_launcher(&result) {
+            let (mapper, emulator_path) = match get_emulator_launcher(&result, &rom_cache) {
                 Some(pair) => pair,
                 None => {
                     eprintln!("No suitable emulator found in PATH.");
@@ -284,6 +286,7 @@ fn real_main() -> Result<(), AssemblerError> {
     let canon_input_p;
     let mut input_from_stdin = false;
     let mut input_is_rom = false;
+    let mut input_is_orca = false;
     if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
         // Read from stdin
         use std::io::{self, Read};
@@ -318,10 +321,12 @@ fn real_main() -> Result<(), AssemblerError> {
             .canonicalize()
             .unwrap_or_else(|_| input_path.clone());
 
-        // Detect .rom extension
+        // Detect .rom or .orca extension
         if let Some(ext) = canon_input_p.extension() {
             if ext == "rom" {
                 input_is_rom = true;
+            } else if ext == "orca" {
+                input_is_orca = true;
             }
         }
 
@@ -385,7 +390,7 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
-    let processed_src = if !input_is_rom {
+    let processed_src = if !input_is_rom && !input_is_orca {
         // Read as bytes, check for BOM, then validate as UTF-8
         let bytes = match std::fs::read(&canon_input_p) {
             Ok(mut b) => {
@@ -504,7 +509,7 @@ fn real_main() -> Result<(), AssemblerError> {
         String::new()
     };
 
-    if preprocess_only && !input_is_rom {
+    if preprocess_only && !input_is_rom && !input_is_orca {
         print!("{}", processed_src);
         pause_for_windows();
         std::process::exit(0);
@@ -572,7 +577,69 @@ fn real_main() -> Result<(), AssemblerError> {
         return res.map(|_| ());
     }
 
-    if input_is_rom {
+    if input_is_orca {
+        // For .orca files, launch emulator with canonical orca ROM resolved via util (cache-aware)
+        if let Some(ref _cmd) = run_after_assembly {
+            if let Some(raw_url) = std::env::args().nth(1) {
+                if raw_url.starts_with("uxntal:") {
+                    use uxn_tal::util::resolve_canonical_orca_rom;
+                    use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
+                    let result = ProtocolParser::parse(&raw_url);
+                    if let Some((mapper, emulator_path)) =
+                        get_emulator_launcher(&result, &rom_cache)
+                    {
+                        // Always use the canonical orca ROM path, not the per-file cache
+                        let (canonical_orca_rom, _canonical_cache_dir) =
+                            match resolve_canonical_orca_rom() {
+                                Ok(pair) => pair,
+                                Err(e) => {
+                                    eprintln!("Failed to resolve canonical orca.rom: {e}");
+                                    pause_on_error();
+                                    return Ok(());
+                                }
+                            };
+                        // Set working directory to the directory containing the .orca file
+                        let orca_dir = canon_input_p.parent().unwrap_or_else(|| Path::new("."));
+                        // Compute relative path for canonical ROM from this directory
+                        let rel_rom = match canonical_orca_rom.strip_prefix(orca_dir) {
+                            Ok(rel) => rel.display().to_string(),
+                            Err(_) => canonical_orca_rom.display().to_string(),
+                        };
+                        let rel_orca = match canon_input_p.strip_prefix(orca_dir) {
+                            Ok(rel) => rel.display().to_string(),
+                            Err(_) => canon_input_p.display().to_string(),
+                        };
+                        let mut cmd = mapper.build_command(&result, &rel_rom, &emulator_path);
+                        // Insert the .orca file as the second argument (relative path)
+                        cmd.arg(&rel_orca);
+                        cmd.current_dir(orca_dir);
+                        println!("[DEBUG] Spawning emulator (orca): {:?}", cmd);
+                        let status = cmd.status();
+                        match status {
+                            Ok(s) if s.success() => {
+                                println!(
+                                    "Ran post-assembly command: {}",
+                                    cmd.get_program().to_string_lossy()
+                                );
+                            }
+                            Ok(s) => {
+                                eprintln!("Post-assembly command exited with status: {}", s);
+                                pause_on_error();
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run post-assembly command: {}", e);
+                                pause_on_error();
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        // Fallback: just print info if not protocol
+        println!("[INFO] .orca file detected: {}", canon_input_p.display());
+        return Ok(());
+    } else if input_is_rom {
         // If input is .rom, just copy to output if needed
         if rom_path_p.exists() {
             println!("ROM already exists at {}", rom_path);
@@ -652,7 +719,7 @@ fn real_main() -> Result<(), AssemblerError> {
             if raw_url.starts_with("uxntal:") {
                 use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
                 let result = ProtocolParser::parse(&raw_url);
-                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
+                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
                     // Always use the actual output ROM path for the emulator
                     let rom_path = rom_path_p.to_string_lossy().to_string();
                     let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
@@ -746,7 +813,7 @@ fn real_main() -> Result<(), AssemblerError> {
             if raw_url.starts_with("uxntal:") {
                 use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
                 let result = ProtocolParser::parse(&raw_url);
-                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result) {
+                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
                     let rom_path = args.first().cloned().unwrap_or_default();
                     let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
                     cmd.current_dir(run_cwd);
