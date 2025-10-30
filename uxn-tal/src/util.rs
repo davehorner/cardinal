@@ -58,15 +58,30 @@ pub fn resolve_canonical_orca_rom() -> Result<(std::path::PathBuf, std::path::Pa
     use uxn_tal_common::cache::RomEntryResolver;
     use uxn_tal_defined::consts::CANONICAL_ORCA;
     let entry_resolver = crate::util::RealRomEntryResolver;
-    let (_tal_path, cache_dir) = entry_resolver
+    let (tal_path, cache_dir) = entry_resolver
         .resolve_entry_and_cache_dir(CANONICAL_ORCA)
         .map_err(|e| format!("Failed to resolve canonical orca: {e}"))?;
     let orca_rom = cache_dir.join("orca.rom");
+    // If orca.rom is missing, but we have the TAL, assemble and cache it
     if !orca_rom.exists() {
-        return Err(format!(
-            "orca.rom not found in cache dir: {}",
-            orca_rom.display()
-        ));
+        // Assemble the canonical orca TAL to orca.rom, setting CWD to cache_dir for include resolution
+        let prev_dir =
+            std::env::current_dir().map_err(|e| format!("Failed to get current dir: {e}"))?;
+        let set_dir = std::env::set_current_dir(&cache_dir);
+        let rom_bytes = match set_dir {
+            Ok(_) => {
+                let result = crate::assemble_file(&tal_path)
+                    .map_err(|e| format!("Failed to assemble canonical orca.tal: {e}"));
+                // Restore previous dir
+                let _ = std::env::set_current_dir(&prev_dir);
+                result?
+            }
+            Err(e) => {
+                return Err(format!("Failed to set current dir to cache dir: {e}"));
+            }
+        };
+        std::fs::write(&orca_rom, &rom_bytes)
+            .map_err(|e| format!("Failed to write canonical orca.rom: {e}"))?;
     }
     let metadata =
         std::fs::metadata(&orca_rom).map_err(|e| format!("orca.rom metadata error: {e}"))?;
