@@ -58,9 +58,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "uxn-tal-defined"
+name = "uxn-tal-common"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e769cb54dfcf80de060a353c9c0ce0fe2e625560e4c23ae56d37a3fe8c0ad7d"
 dependencies = [
+ "which",
+]
+
+[[package]]
+name = "uxn-tal-defined"
+version = "0.2.0"
+dependencies = [
+ "uxn-tal-common",
  "which",
 ]
 

@@ -214,6 +214,31 @@ pub static PROTOCOL_VARS: &[ProtocolVar] = &[
         example: "orca",
         var_type: ProtocolVarType::Bool,
     },
+    // Added to match bang vars for compatibility matrix
+    ProtocolVar {
+        name: "x",
+        description: "Window X position (pixels or percent or complex)",
+        example: "x^100",
+        var_type: ProtocolVarType::String,
+    },
+    ProtocolVar {
+        name: "y",
+        description: "Window Y position (pixels or percent or complex)",
+        example: "y^100",
+        var_type: ProtocolVarType::String,
+    },
+    ProtocolVar {
+        name: "w",
+        description: "Window width (pixels or percent or complex)",
+        example: "w^800",
+        var_type: ProtocolVarType::String,
+    },
+    ProtocolVar {
+        name: "h",
+        description: "Window height (pixels or percent or complex)",
+        example: "h^600",
+        var_type: ProtocolVarType::String,
+    },
 ];
 
 #[derive(Debug, Clone)]
@@ -719,4 +744,27 @@ pub trait EmulatorLauncher<'a> {
         rom_path: &str,
         emulator_path: &std::path::Path,
     ) -> std::process::Command;
+}
+
+/// Enum of all supported emulator mappers for docgen/compatibility table
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EmulatorKind {
+    Buxn,
+    Uxn,
+    Cuxn,
+}
+
+/// Returns all supported emulator kinds (for docgen compatibility table)
+pub fn all_emulator_kinds() -> &'static [EmulatorKind] {
+    use EmulatorKind::*;
+    &[Buxn, Uxn, Cuxn]
+}
+
+/// Returns the display name for an emulator kind
+pub fn emulator_kind_name(kind: EmulatorKind) -> &'static str {
+    match kind {
+        EmulatorKind::Buxn => "buxn",
+        EmulatorKind::Uxn => "uxn",
+        EmulatorKind::Cuxn => "cuxn",
+    }
 }
