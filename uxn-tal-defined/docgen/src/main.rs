@@ -1,3 +1,4 @@
+use uxn_tal_defined::v1::{all_emulator_kinds, emulator_kind_name, EmulatorKind};
 use std::fs;
 use std::path::Path;
 use uxn_tal_defined::ProtocolQueryType;
@@ -40,8 +41,27 @@ fn main() {
         &bang_table,
     );
 
-    fs::write(&readme_path, readme).expect("write README.md");
+        // Insert emulator compatibility matrix
+    let matrix_intro = "This table shows which protocol/bang variables affect the command-line arguments for each supported emulator. An `X` means the variable is mapped to CLI args for that emulator.\n\n";
+    let compat_matrix = generate_emu_compat_matrix();
+    println!("\n---\n[docgen] Generated Emulator Compatibility Matrix:\n{}{}\n---\n", matrix_intro, compat_matrix);
+    let override_note = "**Note:** If both a protocol variable (e.g. `x`) and a bang variable (e.g. `!x`) are provided, the protocol variable typically takes precedence and overrides the bang variable.";
+    let matrix_section = if compat_matrix.trim().is_empty() {
+        format!("{}(No compatibility data available)\n", matrix_intro)
+    } else {
+        format!("{}{}\n\n{}\n", matrix_intro, compat_matrix, override_note)
+    };
+    readme = replace_section(
+        &readme,
+        "## Emulator Compatibility Matrix",
+        &matrix_section,
+    );
+
+    fs::write(&readme_path, &readme).expect("write README.md");
     println!("README.md updated at {}", readme_path.display());
+    // Debug: print first 20 lines of the README after writing
+    let debug_lines: Vec<_> = readme.lines().take(20).collect();
+    println!("[docgen] First 20 lines of written README.md:\n{}\n---", debug_lines.join("\n"));
 }
 
 /// Replace the section in `text` that starts with `section_header` and ends at the next '##', with `replacement`.
@@ -62,11 +82,13 @@ fn replace_section(text: &str, section_header: &str, replacement: &str) -> Strin
                 out.push('\n');
             }
             out.push('\n');
-            // Skip lines until next section or EOF
+            // Skip lines until next section or EOF, skipping blank/whitespace lines
             in_section = true;
             replaced = true;
-            // Skip lines until next '##' or EOF
             while let Some(next_line) = lines.next() {
+                if next_line.trim().is_empty() {
+                    continue;
+                }
                 if next_line.trim_start().starts_with("##") && next_line.trim() != section_header {
                     out.push_str(next_line);
                     out.push('\n');
@@ -184,4 +206,82 @@ pub fn table_for_bang_vars() -> String {
         out.push_str(&format!("| `{}` | {} | {} | `{}` |\n", var.name, typ, var.description, var.example));
     }
     out
+}
+
+/// Generate a compatibility matrix for protocol/bang vars vs emulators
+fn generate_emu_compat_matrix() -> String {
+    use uxn_tal_defined::{PROTOCOL_VARS, BANG_VARS};
+    let emus = all_emulator_kinds();
+    let mut out = String::new();
+    // Header
+    out.push_str("| Variable | ");
+    for &emu in emus {
+        out.push_str(emulator_kind_name(emu));
+        out.push_str(" | ");
+    }
+    out.push_str("Example | Type ");
+    out.push_str("\n|---|");
+    for _ in emus { out.push_str("---|"); }
+    out.push_str("---|---|\n");
+    use std::collections::HashSet;
+    let proto_names: HashSet<_> = PROTOCOL_VARS.iter().map(|v| v.name).collect();
+    let bang_names: HashSet<_> = BANG_VARS.iter().map(|v| v.name.as_ref()).collect();
+    // Protocol vars
+    for var in PROTOCOL_VARS {
+        let is_both = bang_names.contains(var.name);
+        let type_str = if is_both { "both" } else { "proto" };
+        let var_col = if is_both {
+            format!("`{}`/`!{}`", var.name, var.name)
+        } else {
+            format!("`{}`", var.name)
+        };
+        out.push_str(&format!("| {} |", var_col));
+        for &emu in emus {
+            let (affects, _) = emu_var_affects_cli(emu, &var.name);
+            if affects {
+                out.push_str(" X | ");
+            } else {
+                out.push_str("   | ");
+            }
+        }
+        out.push_str(&format!(" {} | {} |\n", var.example, type_str));
+    }
+    // Bang vars
+    for var in BANG_VARS {
+        let is_both = proto_names.contains(var.name.as_ref());
+        // Only print bang-only rows (proto rows already printed above)
+        if is_both { continue; }
+        let type_str = "bang";
+        out.push_str(&format!("| `!{}` |", var.name));
+        for &emu in emus {
+            let (affects, _) = emu_var_affects_cli(emu, &var.name);
+            if affects {
+                out.push_str(" X | ");
+            } else {
+                out.push_str("   | ");
+            }
+        }
+        out.push_str(&format!(" {} | {} |\n", var.example, type_str));
+    }
+    out
+}
+
+/// Returns (affects_cli, example) for a given emulator and variable name
+fn emu_var_affects_cli(emu: EmulatorKind, var: &str) -> (bool, &'static str) {
+    match emu {
+        EmulatorKind::Buxn => match var {
+            // Buxn only affected by 'orca' and 'emu'
+            "orca" | "emu" => (true, ""),
+            _ => (false, ""),
+        },
+        EmulatorKind::Uxn => match var {
+            "orca" | "emu" => (true, ""),
+            _ => (false, ""),
+        },
+        EmulatorKind::Cuxn => match var {
+            // Cuxn supports many protocol/bang vars as CLI args
+            "widget" | "ontop" | "debug" | "emu" | "orca" | "transparent" | "timeout" | "t" | "efx" | "efxmode" | "x" | "y" | "w" | "h" | "fit" | "theme" | "scale" | "opacity" | "borderless" | "fullscreen" | "vsync" | "keep_focus" | "screenshot" | "openwindow" | "close" | "refresh" | "monitor" | "id" => (true, ""),
+            _ => (false, ""),
+        },
+    }
 }
