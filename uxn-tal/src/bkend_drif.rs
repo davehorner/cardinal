@@ -114,7 +114,24 @@ use std::{
     process::Command,
 };
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use crate::{hexrev::HexRev, Assembler, AssemblerError};
+
+/// Create a git command with console window hidden on Windows
+fn create_git_command() -> Command {
+    #[cfg(windows)]
+    let mut cmd = Command::new("git");
+    #[cfg(not(windows))]
+    let cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        // Hide console window on Windows (CREATE_NO_WINDOW = 0x08000000)
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
 
 fn simple_err(path: &std::path::Path, msg: &str) -> AssemblerError {
     AssemblerError::SyntaxError {
@@ -156,7 +173,7 @@ pub fn ensure_drifblim_repo() -> Result<Option<PathBuf>, AssemblerError> {
     let uxntal_path = home_dir.join(".uxntal");
     let drifblim_path = uxntal_path.join(".drifblim");
     if !drifblim_path.exists() {
-        let status = Command::new("git")
+        let status = create_git_command()
             .arg("clone")
             .arg("https://git.sr.ht/~rabbits/drifblim")
             .arg(&drifblim_path)
@@ -170,7 +187,7 @@ pub fn ensure_drifblim_repo() -> Result<Option<PathBuf>, AssemblerError> {
         }
     } else {
         // If already exists, do a git pull
-        let status = Command::new("git")
+        let status = create_git_command()
             .arg("-C")
             .arg(&drifblim_path)
             .arg("pull")

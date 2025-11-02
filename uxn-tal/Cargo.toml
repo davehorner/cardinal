@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 authors = ["David Horner"]
 description = "uxntal:// protocol | a Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"

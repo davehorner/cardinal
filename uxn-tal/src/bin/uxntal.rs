@@ -645,20 +645,15 @@ fn real_main() -> Result<(), AssemblerError> {
                         cmd.arg(&rel_orca);
                         cmd.current_dir(orca_dir);
                         println!("[DEBUG] Spawning emulator (orca): {:?}", cmd);
-                        let status = cmd.status();
-                        match status {
-                            Ok(s) if s.success() => {
+                        match cmd.spawn() {
+                            Ok(_) => {
                                 println!(
-                                    "Ran post-assembly command: {}",
+                                    "Launched emulator: {}",
                                     cmd.get_program().to_string_lossy()
                                 );
                             }
-                            Ok(s) => {
-                                eprintln!("Post-assembly command exited with status: {}", s);
-                                pause_on_error();
-                            }
                             Err(e) => {
-                                eprintln!("Failed to run post-assembly command: {}", e);
+                                eprintln!("Failed to spawn emulator: {}", e);
                                 pause_on_error();
                             }
                         }
@@ -757,20 +752,12 @@ fn real_main() -> Result<(), AssemblerError> {
                     let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
                     cmd.current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")));
                     println!("[DEBUG] Spawning emulator: {:?}", cmd);
-                    let status = cmd.status();
-                    match status {
-                        Ok(s) if s.success() => {
-                            println!(
-                                "Ran post-assembly command: {}",
-                                cmd.get_program().to_string_lossy()
-                            );
-                        }
-                        Ok(s) => {
-                            eprintln!("Post-assembly command exited with status: {}", s);
-                            pause_on_error();
+                    match cmd.spawn() {
+                        Ok(_) => {
+                            println!("Launched emulator: {}", cmd.get_program().to_string_lossy());
                         }
                         Err(e) => {
-                            eprintln!("Failed to run post-assembly command: {}", e);
+                            eprintln!("Failed to spawn emulator: {}", e);
                             pause_on_error();
                         }
                     }
@@ -813,20 +800,16 @@ fn real_main() -> Result<(), AssemblerError> {
             println!("In directory: {}", dir_str);
             let mut cmd_args = emulator_flags.clone();
             cmd_args.push(rom_path.to_string());
-            let status = Command::new(path_to_emu)
+            match Command::new(path_to_emu)
                 .args(&cmd_args)
                 .current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")))
-                .status();
-            match status {
-                Ok(s) if s.success() => {
-                    println!("Ran post-assembly command: {}", cmd);
-                }
-                Ok(s) => {
-                    eprintln!("Post-assembly command exited with status: {}", s);
-                    pause_on_error();
+                .spawn()
+            {
+                Ok(_) => {
+                    println!("Launched emulator: {}", cmd);
                 }
                 Err(e) => {
-                    eprintln!("Failed to run post-assembly command: {}", e);
+                    eprintln!("Failed to spawn emulator: {}", e);
                     pause_on_error();
                 }
             }
@@ -851,10 +834,10 @@ fn real_main() -> Result<(), AssemblerError> {
                     let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
                     cmd.current_dir(run_cwd);
                     println!("[DEBUG] Spawning emulator: {:?}", cmd);
-                    let status = cmd.status();
-                    match status {
-                        Ok(s) if s.success() => {}
-                        Ok(s) => eprintln!("Emulator exited with status: {}", s),
+                    match cmd.spawn() {
+                        Ok(_) => {
+                            println!("Launched emulator: {}", cmd.get_program().to_string_lossy());
+                        }
                         Err(e) => eprintln!("Failed to launch emulator: {}", e),
                     }
                     return Ok(());

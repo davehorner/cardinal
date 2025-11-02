@@ -3,6 +3,9 @@ use crate::{fetch, resolve_entry_from_url};
 use std::fmt;
 use std::{fs, io::Write, path::Path, process::Command};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug)]
 pub struct DownloaderRedirect {
     pub url: String,
@@ -15,6 +18,20 @@ impl fmt::Display for DownloaderRedirect {
 }
 
 impl std::error::Error for DownloaderRedirect {}
+
+/// Create a git command with console window hidden on Windows
+fn create_git_command() -> Command {
+    #[cfg(windows)]
+    let mut cmd = Command::new("git");
+    #[cfg(not(windows))]
+    let cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        // Hide console window on Windows (CREATE_NO_WINDOW = 0x08000000)
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
 
 /// Resolves a URL (including uxntal: protocol) and fetches the main file and all includes into the cache directory.
 /// Returns (entry_path, cache_dir). This is a unified interface for protocol parsing, downloading, and include resolution.
@@ -225,7 +242,7 @@ fn clone_git_repo(
     }
 
     // Clone with specific branch
-    let output = Command::new("git")
+    let output = create_git_command()
         .args(["clone", "--branch", branch, "--single-branch", url_git])
         .arg(target_dir)
         .output()?;
@@ -262,7 +279,7 @@ fn clone_git_repo(
 /// Update an existing git repository
 fn update_git_repo(repo_dir: &Path, branch: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Change to repo directory and fetch
-    let output = Command::new("git")
+    let output = create_git_command()
         .args(["fetch", "origin"])
         .current_dir(repo_dir)
         .output()?;
@@ -273,7 +290,7 @@ fn update_git_repo(repo_dir: &Path, branch: &str) -> Result<(), Box<dyn std::err
     }
 
     // Checkout the specified branch
-    let output = Command::new("git")
+    let output = create_git_command()
         .args(["checkout", branch])
         .current_dir(repo_dir)
         .output()?;
@@ -293,7 +310,7 @@ fn update_git_repo(repo_dir: &Path, branch: &str) -> Result<(), Box<dyn std::err
     }
 
     // Pull latest changes
-    let output = Command::new("git")
+    let output = create_git_command()
         .args(["pull", "origin", branch])
         .current_dir(repo_dir)
         .output()?;
