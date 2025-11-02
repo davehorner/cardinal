@@ -34,16 +34,34 @@ pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn s
                         provider_repo_ref
                     );
                     // Convert provider::RepoRef to uxn_tal_defined::RepoRef
+                    // Preserve original protocol (http/https) for git@http(s):// URLs
+                    let url_git = if url.starts_with("git@https://") {
+                        // For git@https:// URLs, use HTTPS format
+                        format!(
+                            "https://{}/{}/{}",
+                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
+                        )
+                    } else if url.starts_with("git@http://") {
+                        // For git@http:// URLs, use HTTP format
+                        format!(
+                            "http://{}/{}/{}",
+                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
+                        )
+                    } else {
+                        // For regular git@ URLs, use SSH format
+                        format!(
+                            "git@{}:{}/{}",
+                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
+                        )
+                    };
+
                     uxn_tal_defined::RepoRef {
                         provider: provider_repo_ref.host.clone(),
                         owner: provider_repo_ref.owner.clone(),
                         repo: provider_repo_ref.repo.clone(),
                         branch: provider_repo_ref.branch.clone(),
                         path: provider_repo_ref.path.clone().unwrap_or_default(),
-                        url_git: format!(
-                            "git@{}:{}/{}",
-                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
-                        ),
+                        url_git,
                     }
                 }
                 None => {
