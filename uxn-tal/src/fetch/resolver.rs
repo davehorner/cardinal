@@ -6,24 +6,95 @@ use crate::paths;
 use crate::util::pause_on_error;
 use std::path::PathBuf;
 use uxn_tal_common::hash_url;
-use uxn_tal_defined::ProtocolParser;
 
 pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
-    // Accept plain URLs and uxntal://… forms
-    let parsed = ProtocolParser::parse(raw);
+    // Accept plain URLs and uxntal://… forms with automatic git parsing enhancement
+    let parsed = crate::parse_uxntal_url(raw);
     let url = if !parsed.url.is_empty() {
         parsed.url.clone()
     } else {
         raw.to_string()
     };
+
+    // Check if this is a git@ URL that we can handle with git operations
+    if url.starts_with("git@") {
+        // Try to parse with git provider integration
+        let repo_ref = if let Some(repo_ref) = &parsed.repo_ref {
+            repo_ref.clone()
+        } else {
+            // If parsed.repo_ref is None, try parsing the git URL directly
+            println!(
+                "[GIT] No repo_ref in parsed result, trying direct git parsing for: {}",
+                url
+            );
+            match super::parse_git_url_direct(&url) {
+                Some(provider_repo_ref) => {
+                    println!(
+                        "[GIT] Direct git parsing succeeded: {:?}",
+                        provider_repo_ref
+                    );
+                    // Convert provider::RepoRef to uxn_tal_defined::RepoRef
+                    uxn_tal_defined::RepoRef {
+                        provider: provider_repo_ref.host.clone(),
+                        owner: provider_repo_ref.owner.clone(),
+                        repo: provider_repo_ref.repo.clone(),
+                        branch: provider_repo_ref.branch.clone(),
+                        path: provider_repo_ref.path.clone().unwrap_or_default(),
+                        url_git: format!(
+                            "git@{}:{}/{}",
+                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
+                        ),
+                    }
+                }
+                None => {
+                    println!("[GIT] Direct git parsing failed, falling back to regular handling");
+                    return resolve_non_git_url(&url);
+                }
+            }
+        };
+
+        println!("[GIT] Using git operations for: {}", url);
+        println!("[GIT] RepoRef: {:?}", repo_ref);
+
+        let roms_dir =
+            paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
+        let cache_dir = roms_dir.join(format!("{}", hash_url(&repo_ref.url_git)));
+        std::fs::create_dir_all(&cache_dir)?;
+
+        match super::downloader::resolve_and_fetch_git_entry(
+            &repo_ref.url_git,
+            &repo_ref.branch,
+            &repo_ref.path,
+            &cache_dir,
+        ) {
+            Ok((entry_path, cache_dir)) => {
+                println!(
+                    "[GIT] Successfully resolved: entry_path={}, cache_dir={}",
+                    entry_path.display(),
+                    cache_dir.display()
+                );
+                return Ok((entry_path, cache_dir));
+            }
+            Err(e) => {
+                // If git operations fail, fall through to regular handling
+                eprintln!("[GIT] Git operations failed: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    resolve_non_git_url(&url)
+}
+
+fn resolve_non_git_url(url: &str) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     let roms_dir = paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
-    let rom_dir = roms_dir.join(format!("{}", hash_url(&url)));
+    let rom_dir = roms_dir.join(format!("{}", hash_url(url)));
     std::fs::create_dir_all(&rom_dir)?;
 
-    if super::parse_repo(&url).is_some() {
+    if super::parse_repo(url).is_some() {
         // For repos, always fetch (repo tree may change)
         println!("Fetching repo tree for URL: {}", url);
-        let res = super::fetch_repo_tree(&url, &rom_dir)?;
+        let res = super::fetch_repo_tree(url, &rom_dir)?;
         Ok((res.entry_local, rom_dir))
     } else {
         let name = url
@@ -33,7 +104,7 @@ pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn s
         let out = rom_dir.join(name);
         if !out.exists() {
             println!("Fetching single file for URL: {}", url);
-            match downloader::http_get(&url) {
+            match downloader::http_get(url) {
                 Ok(bytes) => {
                     downloader::write_bytes(&out, &bytes)?;
                     let _ = std::fs::write(

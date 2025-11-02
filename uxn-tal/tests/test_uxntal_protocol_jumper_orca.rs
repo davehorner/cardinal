@@ -5,6 +5,7 @@ use uxn_tal_common::cache::RomEntryResolver;
 use uxn_tal_defined::ProtocolParser;
 
 #[test]
+#[ignore = "requires network access to git.sr.ht, not available on GitHub CI"]
 fn test_uxntal_protocol_jumper_orca_content() {
     // Protocol URL for the .orca file
     let proto_url =

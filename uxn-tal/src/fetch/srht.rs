@@ -73,7 +73,7 @@ impl Provider for SourceHut {
         }
 
         // Accept /tree/ and /blob/ and normalize to branch/path
-        let (branch, path, is_tree_or_blob) = match segs.get(2) {
+        let (branch, path) = match segs.get(2) {
             Some(&("blob" | "tree" | "blame" | "log")) if segs.len() >= 4 => {
                 let branch = segs[3].to_string();
                 let mut path_start = 4;
@@ -85,24 +85,23 @@ impl Provider for SourceHut {
                 } else {
                     None
                 };
-                (branch, path, true)
+                (branch, path)
             }
-            _ => (
-                "HEAD".to_string(),
+            _ => {
+                // If we have segments beyond owner/repo, assume the first is branch
                 if segs.len() > 2 {
-                    Some(segs[2..].join("/"))
+                    let branch = segs[2].to_string();
+                    let path = if segs.len() > 3 {
+                        Some(segs[3..].join("/"))
+                    } else {
+                        None
+                    };
+                    (branch, path)
                 } else {
-                    None
-                },
-                false,
-            ),
+                    ("HEAD".to_string(), None)
+                }
+            }
         };
-
-        // Debug print for matching
-        eprintln!(
-            "[SourceHut::parse_url] url: {} branch: {} path: {:?} is_tree_or_blob: {}",
-            url, branch, path, is_tree_or_blob
-        );
 
         Some(RepoRef {
             host: "git.sr.ht".into(),
@@ -322,6 +321,48 @@ impl Provider for SourceHut {
         //     }
         // }
         // Ok(FetchResult { entry_local: all[0].clone(), all_files: all })
+    }
+
+    fn parse_git_url(&self, url: &str) -> Option<(RepoRef, String)> {
+        // Handle git@git.sr.ht:~owner/repo/branch/path/file.tal (SSH format)
+        if let Some(path_part) = url.strip_prefix("git@git.sr.ht:") {
+            // Remove "git@git.sr.ht"
+            let segments: Vec<&str> = path_part.split('/').collect();
+
+            if segments.len() < 3 || !segments[0].starts_with('~') {
+                return None;
+            }
+
+            let owner = segments[0].to_string();
+            let repo = segments[1].to_string();
+            let branch = segments[2].to_string();
+            let path = if segments.len() > 3 {
+                Some(segments[3..].join("/"))
+            } else {
+                None
+            };
+
+            let repo_ref = RepoRef {
+                host: "git.sr.ht".to_string(),
+                owner,
+                repo,
+                branch,
+                path,
+            };
+
+            let url_git = format!("git@git.sr.ht:{}/{}", repo_ref.owner, repo_ref.repo);
+            return Some((repo_ref, url_git));
+        }
+        // Handle git@https://... or git@http://... (strip git@ prefix and parse as HTTPS)
+        else if url.starts_with("git@https://") || url.starts_with("git@http://") {
+            let stripped_url = &url[4..]; // Remove "git@" prefix
+            if let Some(repo_ref) = self.parse_url(stripped_url) {
+                let url_git = format!("https://git.sr.ht/{}/{}", repo_ref.owner, repo_ref.repo);
+                return Some((repo_ref, url_git));
+            }
+        }
+
+        None
     }
 }
 

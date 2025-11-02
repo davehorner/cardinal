@@ -7,6 +7,7 @@ use uxn_tal_defined::v1::{ProtocolParseResult, ProtocolVarVar};
 use uxn_tal_defined::EmulatorLauncher;
 
 #[test]
+#[ignore = "requires cardinal-gui executable in PATH, not available on GitHub CI"]
 fn test_cuxn_runs_cardinal_gui_with_orca_rom_and_orca_file() {
     // Use a file:// URL for the .orca file and resolve its cache dir
     let temp_dir = tempfile::tempdir().expect("create temp dir");
@@ -27,6 +28,7 @@ fn test_cuxn_runs_cardinal_gui_with_orca_rom_and_orca_file() {
 
     // Simulate protocol parse result with orca mode
     let mut result = ProtocolParseResult {
+        url_raw: orca_url.clone(),
         raw: Default::default(),
         proto_vars: Default::default(),
         query_vars: Default::default(),
@@ -34,6 +36,7 @@ fn test_cuxn_runs_cardinal_gui_with_orca_rom_and_orca_file() {
         url: orca_url.clone(),
         protocol: String::new(),
         query_string: String::new(),
+        repo_ref: None,
     };
     result
         .proto_vars
@@ -49,7 +52,7 @@ fn test_cuxn_runs_cardinal_gui_with_orca_rom_and_orca_file() {
         which::which("cardinal-gui").expect("cardinal-gui must be in PATH for this test");
 
     // Save current working directory
-    let orig_cwd = std::env::current_dir().expect("get cwd");
+    // let orig_cwd = std::env::current_dir().expect("get cwd");
     std::env::set_current_dir(&cache_dir).expect("set cwd to cache dir");
     // The build_command should resolve and cache the canonical orca ROM and build the correct command
     // Use only the filename (relative path) for the .orca file

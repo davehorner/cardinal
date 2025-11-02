@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.6.1...uxn-tal-v0.7.0) - 2025-11-02
+
+### Added
+
+- *(git@)* [**breaking**] add git@ URL support + enhanced protocol parsing; wire into resolver/CLI; expand tests and README
+
+### Other
+
+- *(compatibility_matrix)* README updates and compatibility matrix.
+
 ## [0.6.1](https://github.com/davehorner/cardinal/compare/uxn-tal-v0.6.0...uxn-tal-v0.6.1) - 2025-10-30
 
 ### Fixed

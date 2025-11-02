@@ -115,4 +115,31 @@ mod tests {
             Some(&ProtocolVarVar::Enum("uxn"))
         );
     }
+
+    #[test]
+    fn parses_open_url_format() {
+        // Test uxntal://open?url=ENC format
+        let encoded_url = "https%3A//wiki.xxiivv.com/etc/catclock.tal.txt";
+        let url = format!("uxntal://open?url={}", encoded_url);
+        let result = ProtocolParser::parse(&url);
+        assert_eq!(result.url, "https://wiki.xxiivv.com/etc/catclock.tal.txt");
+
+        // Test uxntal://open/?url=ENC format (with trailing slash)
+        let url_with_slash = format!("uxntal://open/?url={}", encoded_url);
+        let result_with_slash = ProtocolParser::parse(&url_with_slash);
+        assert_eq!(result_with_slash.url, "https://wiki.xxiivv.com/etc/catclock.tal.txt");
+
+        // Test with protocol variables
+        let url_with_vars = format!("uxntal:widget:debug://open?url={}", encoded_url);
+        let result_with_vars = ProtocolParser::parse(&url_with_vars);
+        assert_eq!(result_with_vars.url, "https://wiki.xxiivv.com/etc/catclock.tal.txt");
+        assert_eq!(
+            result_with_vars.proto_vars.get("widget"),
+            Some(&ProtocolVarVar::Bool(true))
+        );
+        assert_eq!(
+            result_with_vars.proto_vars.get("debug"),
+            Some(&ProtocolVarVar::Bool(true))
+        );
+    }
 }

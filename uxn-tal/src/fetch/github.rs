@@ -312,4 +312,89 @@ impl Provider for GitHub {
         // }
         // Err("Could not find an entry .tal in GitHub repo across tried branches".into())
     }
+
+    fn parse_git_url(&self, url: &str) -> Option<(RepoRef, String)> {
+        // Normalize double git@ to single git@
+        let normalized_url = if url.starts_with("git@git@") {
+            &url[4..] // Remove one "git@" prefix
+        } else {
+            url
+        };
+
+        // Handle .git/ format: git@github.com:owner/repo.git/path/file.tal
+        if let Some(git_pos) = normalized_url.find(".git/") {
+            let repo_part = &normalized_url[..git_pos + 4]; // Include ".git"
+            let file_part = &normalized_url[git_pos + 5..]; // Skip ".git/"
+
+            if repo_part.starts_with("git@github.com:") {
+                let path_part = &repo_part[15..repo_part.len() - 4]; // Remove "git@github.com:" and ".git"
+                let segments: Vec<&str> = path_part.split('/').collect();
+
+                if segments.len() >= 2 {
+                    let owner = segments[0].to_string();
+                    let repo = segments[1].to_string();
+
+                    let repo_ref = RepoRef {
+                        host: "github.com".to_string(),
+                        owner: owner.clone(),
+                        repo: repo.clone(),
+                        branch: "main".to_string(), // Default to main for .git format
+                        path: Some(file_part.to_string()),
+                    };
+
+                    let url_git = format!("git@github.com:{}/{}", owner, repo);
+                    return Some((repo_ref, url_git));
+                }
+            }
+        }
+
+        // Handle git@github.com:owner/repo/branch/path/file.tal (SSH format)
+        if let Some(path_part) = normalized_url.strip_prefix("git@github.com:") {
+            // Remove "git@github.com:"
+            let segments: Vec<&str> = path_part.split('/').collect();
+
+            if segments.len() < 4 {
+                return None;
+            }
+
+            let owner = segments[0].to_string();
+            let repo = segments[1].to_string();
+
+            // Skip "tree" segment if present
+            let (branch, path_start) = if segments[2] == "tree" {
+                (segments[3].to_string(), 4)
+            } else {
+                (segments[2].to_string(), 3)
+            };
+
+            let path = if segments.len() > path_start {
+                Some(segments[path_start..].join("/"))
+            } else {
+                None
+            };
+
+            let repo_ref = RepoRef {
+                host: "github.com".to_string(),
+                owner,
+                repo,
+                branch,
+                path,
+            };
+
+            let url_git = format!("git@github.com:{}/{}", repo_ref.owner, repo_ref.repo);
+            return Some((repo_ref, url_git));
+        }
+        // Handle git@https://... or git@http://... (strip git@ prefix and parse as HTTPS)
+        else if normalized_url.starts_with("git@https://")
+            || normalized_url.starts_with("git@http://")
+        {
+            let stripped_url = &normalized_url[4..]; // Remove "git@" prefix
+            if let Some(repo_ref) = self.parse_url(stripped_url) {
+                let url_git = format!("https://github.com/{}/{}", repo_ref.owner, repo_ref.repo);
+                return Some((repo_ref, url_git));
+            }
+        }
+
+        None
+    }
 }

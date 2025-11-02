@@ -191,7 +191,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
  "x11rb",
 ]
 
@@ -1439,7 +1439,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4251,7 +4251,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4776,7 +4776,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5199,7 +5199,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5219,8 +5219,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "url",
- "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "uxn-tal-defined 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uxn-tal-common",
+ "uxn-tal-defined",
  "walkdir",
  "which 8.0.0",
  "winapi",
@@ -5235,31 +5235,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "uxn-tal-common"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e769cb54dfcf80de060a353c9c0ce0fe2e625560e4c23ae56d37a3fe8c0ad7d"
-dependencies = [
- "which 8.0.0",
-]
-
-[[package]]
 name = "uxn-tal-defined"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "tempfile",
  "tiny_http",
- "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "which 8.0.0",
-]
-
-[[package]]
-name = "uxn-tal-defined"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da052aaa1cb26bb3bbc21d5cfa7abfd28ee7c58c2a7e6a0453ac94077927bcd4"
-dependencies = [
- "uxn-tal-common 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uxn-tal-common",
  "which 8.0.0",
 ]
 
@@ -5718,7 +5699,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

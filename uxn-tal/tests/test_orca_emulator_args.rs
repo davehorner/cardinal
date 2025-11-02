@@ -1,12 +1,12 @@
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use uxn_tal::util::RealRomCache;
 use uxn_tal_defined::consts::CANONICAL_ORCA;
-use uxn_tal_defined::emu_uxn::UxnMapper;
 use uxn_tal_defined::v1::{ProtocolParseResult, ProtocolVarVar};
 use uxn_tal_defined::EmulatorLauncher;
 
 #[test]
+#[ignore = "requires network access to git.sr.ht for canonical orca download, not available on GitHub CI"]
 fn test_orca_url_runs_with_cached_canonical_rom() {
     // Create a temp .orca file in a temp dir
     let temp_dir = tempfile::tempdir().expect("create temp dir");
@@ -16,6 +16,7 @@ fn test_orca_url_runs_with_cached_canonical_rom() {
 
     // Simulate protocol parse result with orca mode
     let mut result = ProtocolParseResult {
+        url_raw: CANONICAL_ORCA.to_string(),
         raw: Default::default(),
         proto_vars: Default::default(),
         query_vars: Default::default(),
@@ -23,12 +24,14 @@ fn test_orca_url_runs_with_cached_canonical_rom() {
         url: CANONICAL_ORCA.to_string(),
         protocol: String::new(),
         query_string: String::new(),
+        repo_ref: None,
     };
     result
         .proto_vars
         .insert("orca".to_string(), ProtocolVarVar::Bool(true));
-    // NOTE: Use DefaultRomCache as a stub. The real implementation must be injected by the application/test harness.
-    let rom_cache = uxn_tal_common::cache::DefaultRomCache;
+
+    // Use the real RomCache implementation from uxn-tal
+    let rom_cache = RealRomCache;
     let mapper = uxn_tal_defined::emu_uxn::UxnMapper {
         rom_cache: &rom_cache,
     };

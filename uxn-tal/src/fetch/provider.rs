@@ -22,4 +22,9 @@ pub trait Provider: Send + Sync {
         rf: &RepoRef,
         out_root: &Path,
     ) -> Result<FetchResult, Box<dyn std::error::Error>>;
+
+    /// Parse a git@ URL and return a RepoRef with url_git populated if this provider can handle it
+    fn parse_git_url(&self, _url: &str) -> Option<(RepoRef, String)> {
+        None // Default implementation returns None for providers that don't support git@ URLs
+    }
 }

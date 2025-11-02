@@ -374,4 +374,53 @@ impl Provider for Codeberg {
 
         // Err("Could not find an entry .tal in Codeberg repo across tried branches".into())
     }
+
+    fn parse_git_url(&self, url: &str) -> Option<(RepoRef, String)> {
+        // Handle git@codeberg.org:owner/repo/branch/path/file.tal (SSH format)
+        if let Some(path_part) = url.strip_prefix("git@codeberg.org:") {
+            // Remove "git@codeberg.org:"
+            let segments: Vec<&str> = path_part.split('/').collect();
+
+            if segments.len() < 4 {
+                return None;
+            }
+
+            let owner = segments[0].to_string();
+            let repo = segments[1].to_string();
+
+            // Skip "tree" segment if present
+            let (branch, path_start) = if segments[2] == "tree" {
+                (segments[3].to_string(), 4)
+            } else {
+                (segments[2].to_string(), 3)
+            };
+
+            let path = if segments.len() > path_start {
+                Some(segments[path_start..].join("/"))
+            } else {
+                None
+            };
+
+            let repo_ref = RepoRef {
+                host: "codeberg.org".to_string(),
+                owner,
+                repo,
+                branch,
+                path,
+            };
+
+            let url_git = format!("git@codeberg.org:{}/{}", repo_ref.owner, repo_ref.repo);
+            return Some((repo_ref, url_git));
+        }
+        // Handle git@https://... or git@http://... (strip git@ prefix and parse as HTTPS)
+        else if url.starts_with("git@https://") || url.starts_with("git@http://") {
+            let stripped_url = &url[4..]; // Remove "git@" prefix
+            if let Some(repo_ref) = self.parse_url(stripped_url) {
+                let url_git = format!("https://codeberg.org/{}/{}", repo_ref.owner, repo_ref.repo);
+                return Some((repo_ref, url_git));
+            }
+        }
+
+        None
+    }
 }

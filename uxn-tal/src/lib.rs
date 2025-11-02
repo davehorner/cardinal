@@ -5,7 +5,7 @@
 /// This library provides functionality to parse TAL source code and generate bytecode
 /// compatible with the UXN virtual machine.
 ///
-/// ## Example
+/// ## Basic Assembly Example
 ///
 /// ```rust
 /// use uxn_tal::{Assembler, AssemblerError};
@@ -25,6 +25,27 @@
 ///     std::fs::write("hello.rom", rom)?;
 ///     
 ///     Ok(())
+/// }
+/// ```
+///
+/// ## Protocol URL Parsing with Git Support
+///
+/// The library provides enhanced URL parsing that automatically handles git repository URLs.
+/// You can use either the familiar `ProtocolParser::parse` or the explicit `parse_uxntal_url` function:
+///
+/// ```rust
+/// use uxn_tal::{ProtocolParser, parse_uxntal_url};
+///
+/// // Option 1: Standard API with automatic git support
+/// let result = ProtocolParser::parse("uxntal://git@github.com:user/repo/tree/main/file.tal");
+///
+/// // Option 2: Explicit enhanced parsing (same result)
+/// let result = parse_uxntal_url("uxntal://git@github.com:user/repo/tree/main/file.tal");
+///
+/// if let Some(repo_ref) = &result.repo_ref {
+///     println!("Repository: {}/{}", repo_ref.owner, repo_ref.repo);
+///     println!("Branch: {}", repo_ref.branch);
+///     println!("File: {}", repo_ref.path);
 /// }
 /// ```
 type AssembleDirectoryResult = (
@@ -60,11 +81,15 @@ pub use error::AssemblerError;
 pub mod fetch;
 pub mod paths;
 pub mod util;
+pub use fetch::parse_uxntal_url;
 pub use fetch::resolver::resolve_entry_from_url;
 pub mod probe_runtime;
 pub mod probe_tal;
+pub mod protocol_parser;
 
 pub use uxn_tal_defined::*;
+// Shadow the base ProtocolParser with our enhanced version that includes git support
+pub use protocol_parser::ProtocolParser;
 
 pub fn assemble(source: &str) -> Result<Vec<u8>, AssemblerError> {
     let mut a = Assembler::new();

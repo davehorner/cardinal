@@ -6,6 +6,7 @@ use uxn_tal::util::RealRomEntryResolver;
 use uxn_tal_common::cache::RomEntryResolver;
 
 #[test]
+#[ignore = "requires network access to git.sr.ht, not available on GitHub CI"]
 fn test_srht_jumper_orca_content() {
     // URL for the .orca file
     let url = "https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/j.orca";
