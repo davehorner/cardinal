@@ -312,10 +312,20 @@ pub static BANG_VARS: &[ProtocolQueryVar] = &[
         value: ProtocolQueryVarVar::String(String::new()),
     },
 ];
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoRef {
+    pub provider: String,
+    pub owner: String,
+    pub repo: String,
+    pub branch: String,
+    pub path: String,
+    pub url_git: String,
+}
 
 /// Result of protocol parsing
 #[derive(Debug, Clone)]
 pub struct ProtocolParseResult {
+    pub url_raw: String,
     pub raw: HashMap<String, String>,
     pub proto_vars: HashMap<String, ProtocolVarVar>,
     pub query_vars: HashMap<String, ProtocolQueryVar>,
@@ -323,6 +333,7 @@ pub struct ProtocolParseResult {
     pub url: String,
     pub protocol: String,     // the uxntal protocol portion (before //url)
     pub query_string: String, // the full query string, including '?' if present
+    pub repo_ref: Option<RepoRef>,
 }
 
 impl ProtocolParseResult {
@@ -344,6 +355,7 @@ impl ProtocolParser {
         let mut bang_vars_map: HashMap<String, ProtocolQueryVar> = HashMap::new();
         if !raw_url.starts_with("uxntal:") {
             return ProtocolParseResult {
+                url_raw: raw_url.to_string(),
                 raw: raw_map,
                 proto_vars: HashMap::new(),
                 query_vars: HashMap::new(),
@@ -351,6 +363,7 @@ impl ProtocolParser {
                 url: String::new(),
                 protocol: String::new(),
                 query_string: String::new(),
+                repo_ref: None,
             };
         }
         let s = raw_url.trim_start_matches("uxntal:");
@@ -570,6 +583,18 @@ impl ProtocolParser {
             format!("http://{}", stripped)
         } else if let Some(stripped) = url_for_normalization.strip_prefix("//file//") {
             format!("file://{}", stripped)
+        } else if let Some(stripped) = url_for_normalization.strip_prefix("//git@") {
+            // Handle git@ URLs by removing the // prefix
+            format!("git@{}", stripped)
+        } else if let Some(stripped) = url_for_normalization.strip_prefix("//open") {
+            // Handle uxntal://open?url=ENC and uxntal://open/?url=ENC formats
+            // Need to reconstruct the full open URL with query string for extract_target
+            let full_open_url = format!("open{}{}", stripped, &query_string);
+            if let Some(extracted) = Self::extract_target(&full_open_url) {
+                extracted
+            } else {
+                url_for_normalization.to_string()
+            }
         } else {
             url_for_normalization.to_string()
         };
@@ -578,7 +603,10 @@ impl ProtocolParser {
         if url.trim().to_ascii_lowercase().ends_with(".orca") {
             proto_vars_map.insert("orca".to_string(), ProtocolVarVar::Bool(true));
         }
+
+        let repo_ref = None;
         ProtocolParseResult {
+            url_raw: raw_url.to_string(),
             raw: raw_map,
             proto_vars: proto_vars_map,
             query_vars: query_vars_map,
@@ -586,6 +614,7 @@ impl ProtocolParser {
             url,
             protocol,
             query_string,
+            repo_ref,
         }
     }
 

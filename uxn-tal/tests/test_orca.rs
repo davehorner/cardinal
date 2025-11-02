@@ -1,5 +1,6 @@
 use uxn_tal::fetch::downloader::resolve_and_fetch_entry;
 #[test]
+#[ignore = "requires network access to git.sr.ht, not available on GitHub CI"]
 fn test_srht_orca_download_and_cache() {
     let url = "uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/a.orca";
     let result = resolve_and_fetch_entry(url);
@@ -40,6 +41,7 @@ fn test_srht_orca_download_and_cache() {
 }
 
 #[test]
+#[ignore = "requires network access to GitHub, not available on GitHub CI"]
 fn test_github_orca_download_and_cache() {
     let url = "uxntal://https://github.com/hundredrabbits/Orca-c/blob/master/examples/misc/chromatic.orca";
     let result = resolve_and_fetch_entry(url);

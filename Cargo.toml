@@ -27,8 +27,8 @@ web-sys = { version = "0.3.82", features = [
 ] }
 
 
-#[patch.crates-io]
-#varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
-#uxn = { path = "cardinal-uxn", package = "cardinal-uxn" }             #, features = ["native"]
-#uxn-tal-defined = { path ="uxn-tal-defined", package="uxn-tal-defined" }
-#uxn-tal-common = { path ="uxn-tal-common", package="uxn-tal-common" }
+[patch.crates-io]
+varvara = { path = "cardinal-varvara", package = "cardinal-varvara" }
+uxn = { path = "cardinal-uxn", package = "cardinal-uxn" }             #, features = ["native"]
+uxn-tal-defined = { path ="uxn-tal-defined", package="uxn-tal-defined" }
+uxn-tal-common = { path ="uxn-tal-common", package="uxn-tal-common" }

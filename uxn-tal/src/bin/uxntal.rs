@@ -97,9 +97,12 @@ fn real_main() -> Result<(), AssemblerError> {
     #[allow(unused_mut)]
     let mut should_show_console = false;
     if !args.is_empty() {
-        let raw_url = &args[0];
-        if raw_url.starts_with("uxntal:") {
-            use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
+        // Look for uxntal:// URL in any of the arguments
+        let uxntal_url_pos = args.iter().position(|arg| arg.starts_with("uxntal:"));
+        if let Some(pos) = uxntal_url_pos {
+            let raw_url = &args[pos];
+            use uxn_tal::ProtocolParser;
+            use uxn_tal_defined::get_emulator_launcher;
 
             let result = ProtocolParser::parse(raw_url);
             #[cfg(windows)]
@@ -131,7 +134,14 @@ fn real_main() -> Result<(), AssemblerError> {
             // Resolve ROM path and working directory
             let actual_url = &result.url;
             let (entry_local, rom_dir) = match uxn_tal::resolve_entry_from_url(actual_url) {
-                Ok(v) => v,
+                Ok(v) => {
+                    println!(
+                        "[DEBUG] resolve_entry_from_url succeeded: entry_local={}, rom_dir={}",
+                        v.0.display(),
+                        v.1.display()
+                    );
+                    v
+                }
                 Err(e) => {
                     eprintln!("Failed to resolve uxntal URL: {}", e);
                     pause_on_error();
@@ -143,6 +153,7 @@ fn real_main() -> Result<(), AssemblerError> {
                 .unwrap_or(&entry_local)
                 .display()
                 .to_string();
+            println!("[DEBUG] rom_path after processing: {}", rom_path);
             let cmd = mapper.build_command(&result, &rom_path, &emulator_path);
             let emulator_args: Vec<String> = cmd
                 .get_args()
@@ -153,8 +164,27 @@ fn real_main() -> Result<(), AssemblerError> {
             // Save for use after assembly
             run_after_assembly = Some(emulator_path.display().to_string());
             run_after_cwd = Some(rom_dir.clone());
-            args = vec![rom_path.clone()]; // Only pass ROM path to uxntal for assembly
-                                           // Emulator launch will happen after assembly below
+
+            // Remove the uxntal URL from args and replace with rom_path
+            args.remove(pos);
+            // Insert rom_path at the beginning (after any flags)
+            let mut new_args = Vec::new();
+            let mut added_rom_path = false;
+            for arg in args.iter() {
+                if arg.starts_with('-') {
+                    new_args.push(arg.clone());
+                } else if !added_rom_path {
+                    new_args.push(rom_path.clone());
+                    added_rom_path = true;
+                    break;
+                } else {
+                    new_args.push(arg.clone());
+                }
+            }
+            if !added_rom_path {
+                new_args.push(rom_path.clone());
+            }
+            args = new_args;
         }
     }
     if should_show_console {
@@ -583,7 +613,8 @@ fn real_main() -> Result<(), AssemblerError> {
             if let Some(raw_url) = std::env::args().nth(1) {
                 if raw_url.starts_with("uxntal:") {
                     use uxn_tal::util::resolve_canonical_orca_rom;
-                    use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
+                    use uxn_tal::ProtocolParser;
+                    use uxn_tal_defined::get_emulator_launcher;
                     let result = ProtocolParser::parse(&raw_url);
                     if let Some((mapper, emulator_path)) =
                         get_emulator_launcher(&result, &rom_cache)
@@ -717,7 +748,8 @@ fn real_main() -> Result<(), AssemblerError> {
         // If protocol URL is present, use protocol handler for argument construction
         if let Some(raw_url) = std::env::args().nth(1) {
             if raw_url.starts_with("uxntal:") {
-                use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
+                use uxn_tal::ProtocolParser;
+                use uxn_tal_defined::get_emulator_launcher;
                 let result = ProtocolParser::parse(&raw_url);
                 if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
                     // Always use the actual output ROM path for the emulator
@@ -811,7 +843,8 @@ fn real_main() -> Result<(), AssemblerError> {
     {
         if let Some(raw_url) = env::args().nth(1) {
             if raw_url.starts_with("uxntal:") {
-                use uxn_tal_defined::{get_emulator_launcher, ProtocolParser};
+                use uxn_tal::ProtocolParser;
+                use uxn_tal_defined::get_emulator_launcher;
                 let result = ProtocolParser::parse(&raw_url);
                 if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
                     let rom_path = args.first().cloned().unwrap_or_default();

@@ -33,8 +33,8 @@ mod tests {
         println!("Fetched ROM size: {} bytes", data.len());
         println!("Seed ROM path: {}", out_path.display());
         // Run cardinal-cli with no args to check for usage output
-        let exe = assert_cmd::cargo::cargo_bin("cardinal-cli");
-        let mut cmd = std::process::Command::new(&exe);
+        let exe = assert_cmd::cargo::cargo_bin!("cardinal-cli");
+        let mut cmd = std::process::Command::new(exe);
         // Only pass the ROM path, no other args, should trigger usage
         cmd.arg(&out_path);
         let output = cmd.output().expect("failed to run cardinal-cli");
@@ -74,8 +74,8 @@ mod tests {
         }
         println!("helloworld.rom exists before run: {}", dst_rom.exists());
         // Run cardinal-cli and check output
-        let exe = assert_cmd::cargo::cargo_bin("cardinal-cli");
-        let mut cmd = std::process::Command::new(&exe);
+        let exe = assert_cmd::cargo::cargo_bin!("cardinal-cli");
+        let mut cmd = std::process::Command::new(exe);
         println!("ROM path: {}", seed_rom.display());
         println!("ROM exists before run: {}", seed_rom.exists());
         assert!(

@@ -39,7 +39,7 @@ pub fn get_rom_bytes_via_uxntal(url: &str) -> Result<Vec<u8>, AssemblerError> {
             "Only .rom.txt URLs are supported by get_rom_bytes_via_uxntal",
         ));
     }
-    let parsed = ProtocolParser::parse(url);
+    let parsed = crate::ProtocolParser::parse(url);
     let rom_path = if parsed.url.starts_with("file://") {
         std::path::PathBuf::from(&parsed.url[7..])
     } else {
@@ -113,8 +113,6 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-
-use uxn_tal_defined::ProtocolParser;
 
 use crate::{hexrev::HexRev, Assembler, AssemblerError};
 

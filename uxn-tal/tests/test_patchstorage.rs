@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use uxn_tal::fetch::fetch_repo_tree;
 
 #[test]
+#[ignore = "requires network access to patchstorage.com, not available on GitHub CI"]
 fn fetch_patchstorage_orca() {
     let url = "https://patchstorage.com/phase-sequencer/";
     let out_dir = PathBuf::from("test-out-patchstorage");
@@ -21,6 +22,7 @@ fn fetch_patchstorage_orca() {
 }
 
 #[test]
+#[ignore = "requires network access to patchstorage.com, not available on GitHub CI"]
 fn fetch_uxntal_url_caches_file() {
     use uxn_tal::fetch::resolver::resolve_entry_from_url;
     // Example uxntal:// URL pointing to a real .tal or .orca file
@@ -53,6 +55,7 @@ fn fetch_uxntal_url_caches_file() {
 }
 
 #[test]
+#[ignore = "requires network access to patchstorage.com, not available on GitHub CI"]
 fn fetch_uxntal_url_scales_caches_file() {
     use uxn_tal::fetch::resolver::resolve_entry_from_url;
     // Example uxntal:// URL pointing to a real .orca file on PatchStorage
