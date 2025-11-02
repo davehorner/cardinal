@@ -13,7 +13,7 @@ anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
-uxn-tal = { version = "0.6.0", path = "../uxn-tal" }
+uxn-tal = { version = "0.6.2", path = "../uxn-tal" }
 
 varvara = { package = "cardinal-varvara", version = "0.8.0" }
 
