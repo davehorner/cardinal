@@ -149,8 +149,17 @@ pub fn handle_orca_file_with_protocol(
         Err(_) => canon_input_p.display().to_string(),
     };
 
-    // Check if orca mode is explicitly requested (uses canonical ROM)
-    if let Some(ProtocolVarVar::Bool(true)) = result.proto_vars.get("orca") {
+    // Use orca mode if protocol var is set, or if filename ends with .orca and PatchStorage
+    //let is_patchstorage = result.url_raw.contains("patchstorage.com") || result.url.contains("patchstorage.com");
+    let is_orca_file = canon_input_p
+        .extension()
+        .map(|e| e == "orca")
+        .unwrap_or(false);
+    let orca_mode = matches!(
+        result.proto_vars.get("orca"),
+        Some(ProtocolVarVar::Bool(true))
+    ) || is_orca_file;
+    if orca_mode {
         let cmd = handle_orca_mode(
             result,
             &rel_orca,

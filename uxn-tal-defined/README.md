@@ -75,12 +75,14 @@ uxntal:var1:var2^val2:var3^^val3://actual_url
 
 ### Supported File Extensions
 
+
 The protocol handler supports the following file extensions for remote and local files:
 
 - `.tal`/`.tal.txt` — TAL source files (assembled to .rom on the fly)
 - `.rom` — Binary UXN ROM files (used as-is)
 - `.rom.txt` — Hex-encoded ROM files (automatically converted to binary .rom before use)
 - `.orca` — Orca pattern files (run with canonical orca ROM, not assembled as TAL)
+- `.bas` — BASIC source files (run in BASIC mode with the canonical BASIC ROM)
 
 When you provide a URL or file ending in `.rom.txt`, the handler will automatically fetch and convert the hex text to a binary `.rom` file using the same logic as `xxd -r -p`. This allows you to share ROMs as plain text for easy inspection, versioning, and diffing, while still running them directly via the protocol.
 
@@ -136,6 +138,42 @@ This will launch the canonical orca ROM with the specified `.orca` file in widge
 | `arg1` | String | First argument to pass to the emulator | `!arg1=somefile.input` |
 | `stdin` | String | Data to pipe to emulator stdin (for batch-mode input, e.g. BASIC ROMs) | `!stdin=RUN%0A` |
 
+### !stdin and Extended Character Input
+
+The `!stdin` bang variable allows you to pipe data directly to the emulator's standard input. This is especially useful for batch-mode interpreters (such as BASIC) that accept input from stdin.
+
+To provide extended or non-ASCII characters, use percent encoding in the value. For example, `%0A` encodes a newline, `%C2%A9` encodes the copyright symbol (©), and so on. The handler will decode percent-encoded sequences before passing the data to the emulator.
+
+**Example:**
+
+```
+uxntal uxntal://...?!stdin=RUN%0AHELLO%20WORLD%0A
+```
+This will send the lines `RUN`, `HELLO WORLD`, etc. to the emulator via stdin.
+
+### !arg1 Remote File Resolution
+
+The `!arg1` bang variable can be used to pass an argument to the emulator. If the value starts with `@`, it will be resolved as a remote HTTP(S) URL and downloaded before being passed to the emulator. This is useful for workflows where you want to provide input files or scripts from the web directly to the emulator, without manual downloading.
+
+**Example:**
+
+```
+uxntal uxntal://...?!arg1=@https://example.com/input.txt
+```
+This will download `input.txt` from the specified URL and pass it as the first argument to the emulator.
+
+| Name | Type | Description | Example |
+|------|------|-------------|---------|
+| `fit` | Enum (none, contain, cover, stretch) | Fit mode for ROM display (none, contain, cover, stretch) | `!fit=cover` |
+| `timeout` | Float | Timeout in seconds before the emulator exits (alias: t) | `!timeout=60` |
+| `t` | Float | Timeout in seconds before the emulator exits (alias for timeout) | `!t=60` |
+| `x` | String | Window X position (pixels or percent or complex) | `!x=100` |
+| `y` | String | Window Y position (pixels or percent or complex) | `!y=100` |
+| `w` | String | Window width (pixels or percent or complex) | `!w=800` |
+| `h` | String | Window height (pixels or percent or complex) | `!h=600` |
+| `arg1` | String | First argument to pass to the emulator. Supports @ for remote file URLs. | `!arg1=somefile.input` |
+| `stdin` | String | Data to pipe to emulator stdin (for batch-mode input, e.g. BASIC ROMs) | `!stdin=RUN%0A` |
+
 ## Emulator Compatibility Matrix
 
 This table shows which protocol/bang variables affect the command-line arguments for each supported emulator. An `X` means the variable is mapped to CLI args for that emulator.
@@ -154,7 +192,7 @@ This table shows which protocol/bang variables affect the command-line arguments
 | `efx` |   |    |  X |  efx^invert | proto |
 | `efxmode` |   |    |  X |  efxmode^blend | proto |
 | `orca` | X |  X |  X |  orca | proto |
-| `basic` |   |    |    |  basic | proto |
+| `basic` | X |  X |  X |  basic | proto |
 | `x`/`!x` |   |    |  X |  x^100 | both |
 | `y`/`!y` |   |    |  X |  y^100 | both |
 | `w`/`!w` |   |    |  X |  w^800 | both |

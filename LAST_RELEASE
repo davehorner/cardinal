@@ -1,7 +1,7 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/30|5754568|0.6.0
+25/10/30|4200c69|0.6.0
 ## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.6...cardinal-uxn-v0.6.0) - 2025-10-30
 
 ### Added
@@ -10,7 +10,7 @@
 
 
 ## cardinal-varvara
-25/11/05|5754568|0.10.1
+25/11/05|4200c69|0.10.1
 ## [0.10.1](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.10.0...cardinal-varvara-v0.10.1) - 2025-11-05
 
 ### Added
@@ -19,7 +19,7 @@
 
 
 ## cardinal-gui
-25/11/05|5754568|0.7.1
+25/11/05|4200c69|0.7.1
 ## [0.7.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.7.0...cardinal-gui-v0.7.1) - 2025-11-05
 
 ### Added
