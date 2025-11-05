@@ -117,19 +117,20 @@ impl Provider for SourceHut {
         r: &RepoRef,
         out_root: &Path,
     ) -> Result<FetchResult, Box<dyn std::error::Error>> {
-        // Allow .tal, .rom, .rom.txt, .orca files for direct fetch
+        // Allow .tal, .rom, .rom.txt, .orca, .bas files for direct fetch
         let entry_rel =
             match &r.path {
                 Some(p)
                     if p.to_ascii_lowercase().ends_with(".tal")
                         || p.to_ascii_lowercase().ends_with(".rom")
                         || p.to_ascii_lowercase().ends_with(".rom.txt")
-                        || p.to_ascii_lowercase().ends_with(".orca") =>
+                        || p.to_ascii_lowercase().ends_with(".orca")
+                        || p.to_ascii_lowercase().ends_with(".bas") =>
                 {
                     p.replace('\\', "/")
                 }
                 _ => return Err(
-                    "sr.ht: URL must point to a .tal, .rom, .rom.txt, or .orca file; not guessing entries"
+                    "sr.ht: URL must point to a .tal, .rom, .rom.txt, .orca, or .bas file; not guessing entries"
                         .into(),
                 ),
             };

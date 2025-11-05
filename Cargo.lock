@@ -408,13 +408,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "calloop"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb9f6e1368bd4621d2c86baa7e37de77a938adf5221e5dd3d6133340101b309e"
+dependencies = [
+ "bitflags 2.10.0",
+ "polling",
+ "rustix 1.1.2",
+ "slab",
+ "tracing",
+]
+
+[[package]]
 name = "calloop-wayland-source"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95a66a987056935f7efce4ab5668920b5d0dac4a7c99991a67395f13702ddd20"
 dependencies = [
- "calloop",
+ "calloop 0.13.0",
  "rustix 0.38.44",
+ "wayland-backend",
+ "wayland-client",
+]
+
+[[package]]
+name = "calloop-wayland-source"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "138efcf0940a02ebf0cc8d1eff41a1682a46b431630f4c52450d6265876021fa"
+dependencies = [
+ "calloop 0.14.3",
+ "rustix 1.1.2",
  "wayland-backend",
  "wayland-client",
 ]
@@ -425,8 +450,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
- "cardinal-uxn 0.5.6",
- "cardinal-varvara 0.8.0",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "env_logger",
  "log",
@@ -437,11 +462,11 @@ dependencies = [
 
 [[package]]
 name = "cardinal-gui"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
- "cardinal-uxn 0.5.6",
- "cardinal-varvara 0.7.8",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "cpal",
  "display-info",
@@ -467,17 +492,6 @@ dependencies = [
 
 [[package]]
 name = "cardinal-uxn"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a253990c60e311ba3e6e7e0c88898d02bf7a92601529de46151dc8098f6a7def"
-dependencies = [
- "anyhow",
- "getrandom 0.3.4",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-uxn"
 version = "0.6.0"
 dependencies = [
  "anyhow",
@@ -487,57 +501,9 @@ dependencies = [
 
 [[package]]
 name = "cardinal-varvara"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66f47ff06af1cba2e14b74cc33b8024281c528e5c15ace45bd15b40ff7926f5d"
+version = "0.10.1"
 dependencies = [
- "cardinal-uxn 0.5.6",
- "chrono",
- "getrandom 0.3.4",
- "gilrs",
- "hidapi",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6534c9b2ac2d58a1d31ede9ab6cbfd726581ee5460503e781c33759ebc90a666"
-dependencies = [
- "cardinal-uxn 0.5.6",
- "chrono",
- "getrandom 0.3.4",
- "gilrs",
- "hidapi",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71b0cad11a61c80edff40c95ea01fdd42eae805abb38395bb8b9e74290a8b12d"
-dependencies = [
- "cardinal-uxn 0.5.6",
- "chrono",
- "getrandom 0.3.4",
- "gilrs",
- "hidapi",
- "log",
- "static_assertions",
- "zerocopy",
-]
-
-[[package]]
-name = "cardinal-varvara"
-version = "0.10.0"
-dependencies = [
- "cardinal-uxn 0.5.6",
+ "cardinal-uxn",
  "chrono",
  "getrandom 0.3.4",
  "gilrs",
@@ -565,9 +531,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.43"
+version = "1.2.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "739eb0f94557554b3ca9a86d2d37bebd49c5e6d0c1d2bda35ba5bdac830befc2"
+checksum = "37521ac7aabe3d13122dc382493e20c9416f299d2ccd5b3a5340a2570cdeb0f3"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1077,7 +1043,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1439,7 +1405,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1741,7 +1707,7 @@ dependencies = [
  "vec_map",
  "wasm-bindgen",
  "web-sys",
- "windows 0.62.2",
+ "windows 0.56.0",
 ]
 
 [[package]]
@@ -2533,9 +2499,9 @@ checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
 
 [[package]]
 name = "iri-string"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
+checksum = "4f867b9d1d896b67beb18518eda36fdb77a32ea590de864f1325b294a6d14397"
 dependencies = [
  "memchr",
  "serde",
@@ -4238,7 +4204,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4251,14 +4217,14 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.34"
+version = "0.23.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a9586e9ee2b4f8fab52a0048ca7334d7024eef48e2cb9407e3497bb7cab7fa7"
+checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
 dependencies = [
  "once_cell",
  "rustls-pki-types",
@@ -4554,8 +4520,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3457dea1f0eb631b4034d61d4d8c32074caa6cd1ab2d59f2327bd8461e2c0016"
 dependencies = [
  "bitflags 2.10.0",
- "calloop",
- "calloop-wayland-source",
+ "calloop 0.13.0",
+ "calloop-wayland-source 0.3.0",
  "cursor-icon",
  "libc",
  "log",
@@ -4579,6 +4545,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0512da38f5e2b31201a93524adb8d3136276fa4fe4aafab4e1f727a82b534cc0"
 dependencies = [
  "bitflags 2.10.0",
+ "calloop 0.14.3",
+ "calloop-wayland-source 0.4.1",
  "cursor-icon",
  "libc",
  "log",
@@ -4599,12 +4567,12 @@ dependencies = [
 
 [[package]]
 name = "smithay-clipboard"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc8216eec463674a0e90f29e0ae41a4db573ec5b56b1c6c1c71615d249b6d846"
+checksum = "71704c03f739f7745053bde45fa203a46c58d25bc5c4efba1d9a60e9dba81226"
 dependencies = [
  "libc",
- "smithay-client-toolkit 0.19.2",
+ "smithay-client-toolkit 0.20.0",
  "wayland-backend",
 ]
 
@@ -4776,7 +4744,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4949,9 +4917,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.16"
+version = "0.7.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14307c986784f72ef81c89db7d9e28d6ac26d16213b109ea501696195e6e3ce5"
+checksum = "2efa149fe76073d6e8fd97ef4f4eca7b67f599660115591483572e406e165594"
 dependencies = [
  "bytes",
  "futures-core",
@@ -5082,6 +5050,7 @@ version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-core",
 ]
@@ -5199,12 +5168,12 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cardinal-uxn 0.5.6",
- "cardinal-varvara 0.9.0",
+ "cardinal-uxn",
+ "cardinal-varvara",
  "clap",
  "dirs",
  "env_logger",
@@ -5236,7 +5205,7 @@ dependencies = [
 
 [[package]]
 name = "uxn-tal-defined"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "tempfile",
  "tiny_http",
@@ -5699,7 +5668,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5940,6 +5909,15 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
@@ -6226,7 +6204,7 @@ dependencies = [
  "bitflags 2.10.0",
  "block2 0.5.1",
  "bytemuck",
- "calloop",
+ "calloop 0.13.0",
  "cfg_aliases",
  "concurrent-queue",
  "core-foundation 0.9.4",

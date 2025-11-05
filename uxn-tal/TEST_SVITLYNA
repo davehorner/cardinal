@@ -1,0 +1,28 @@
+# Test URLs for Svitlyna QOI image viewer
+# Svitlyna is a QOI image viewer for UXN written in TAL
+# These URLs test the viewer with various QOI showcase images using git URLs with query parameter arguments
+
+#test_inject t^^10:emu^^buxn
+
+## QOI showcase images with query parameter arguments
+# Autumn image with original
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/autumn.qoi
+
+# Cat image
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/cat.qoi
+
+# Pixel mountain image
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/pixel-mountain.qoi
+
+## Alternative format with explicit query parameter specification
+# Testing different QOI images with the same viewer
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/autumn.qoi
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/cat.qoi
+uxntal://git@https://github.com/gardenappl/svitlyna/blob/main/svitlyna.tal?!arg1=showcase/pixel-mountain.qoi
+
+## Notes:
+# - svitlyna.tal is the main QOI image viewer program
+# - The ?!arg1=showcase/filename.qoi syntax passes the QOI file as an argument
+# - This allows testing the viewer with different showcase images
+# - QOI (Quite OK Image) format is a lossless image compression format
+# - The showcase directory contains various test images in QOI format

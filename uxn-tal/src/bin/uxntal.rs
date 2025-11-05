@@ -1,4 +1,4 @@
-#![cfg_attr(windows, windows_subsystem = "windows")]
+//#![cfg_attr(windows, windows_subsystem = "windows")]
 use std::collections::VecDeque;
 // use std::path;
 use std::{
@@ -16,9 +16,53 @@ use uxn_tal::bkend_uxn38::{ensure_docker_uxn38_image, ensure_uxn38_repo};
 use uxn_tal::chocolatal;
 use uxn_tal::debug;
 use uxn_tal::dis_uxndis::ensure_uxndis_repo;
-use uxn_tal::util::RealRomCache;
+use uxn_tal::emulator_utils::{
+    detect_file_type, resolve_arg_url, spawn_emulator_with_timeout, FileType,
+};
 use uxn_tal::util::{pause_for_windows, pause_on_error};
 use uxn_tal::{Assembler, AssemblerError};
+
+// For heuristics-based emulator selection
+extern crate which;
+
+/// Get emulator launcher with heuristics-based CLI selection
+/// If heuristics indicate console-only usage and the emulator supports CLI, use CLI version
+fn get_emulator_launcher_with_heuristics<'a>(
+    result: &uxn_tal_defined::v1::ProtocolParseResult,
+    tal_source: Option<&str>,
+) -> Option<(
+    Box<dyn uxn_tal_defined::v1::EmulatorLauncher<'a> + 'a>,
+    std::path::PathBuf,
+)> {
+    use uxn_tal_defined::get_emulator_launcher;
+
+    // First try to get the regular emulator launcher
+    if let Some((launcher, mut emulator_path)) = get_emulator_launcher(result) {
+        // Check if we have TAL source to analyze
+        if let Some(source) = tal_source {
+            use uxn_tal::probe_tal::{heuristic_uses_console, heuristic_uses_gui};
+
+            // Use heuristics to determine if this is a console-only program
+            let uses_console = heuristic_uses_console(source);
+            let uses_gui = heuristic_uses_gui(source);
+
+            // If it uses console but not GUI, try to use CLI version
+            if uses_console && !uses_gui {
+                if let Some(cli_name) = launcher.cli_executable_name() {
+                    // Try to find the CLI version in PATH
+                    if let Ok(cli_path) = which::which(cli_name) {
+                        emulator_path = cli_path;
+                        println!("[HEURISTICS] Detected console-only usage, switching to CLI emulator: {}", cli_name);
+                    }
+                }
+            }
+        }
+
+        Some((launcher, emulator_path))
+    } else {
+        None
+    }
+}
 
 #[cfg(windows)]
 unsafe fn show_console() {
@@ -67,7 +111,6 @@ fn main() {
 }
 
 fn real_main() -> Result<(), AssemblerError> {
-    let rom_cache = RealRomCache;
     let mut args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
         unsafe { show_console() };
@@ -94,99 +137,124 @@ fn real_main() -> Result<(), AssemblerError> {
 
     // Store emulator flags for use after assembly
     let emulator_flags: Vec<String> = Vec::new();
+
+    // Parse protocol URL once at the beginning if present
+    let protocol_result = if !args.is_empty() {
+        args.iter()
+            .find(|arg| arg.starts_with("uxntal:"))
+            .map(|raw_url| {
+                use uxn_tal::ProtocolParser;
+                ProtocolParser::parse(raw_url)
+            })
+    } else {
+        None
+    };
+
+    // Store resolved protocol information
+    let mut protocol_rom_path: Option<String> = None;
+    let mut protocol_entry_local: Option<PathBuf> = None;
+    let mut protocol_file_type: Option<FileType> = None;
+
     #[allow(unused_mut)]
     let mut should_show_console = false;
-    if !args.is_empty() {
-        // Look for uxntal:// URL in any of the arguments
-        let uxntal_url_pos = args.iter().position(|arg| arg.starts_with("uxntal:"));
-        if let Some(pos) = uxntal_url_pos {
-            let raw_url = &args[pos];
-            use uxn_tal::ProtocolParser;
-            use uxn_tal_defined::get_emulator_launcher;
 
-            let result = ProtocolParser::parse(raw_url);
-            #[cfg(windows)]
-            {
-                use uxn_tal_defined::ProtocolVarVar;
-                if matches!(
-                    result.proto_vars.get("debug"),
-                    Some(ProtocolVarVar::Bool(true))
-                ) {
-                    should_show_console = true;
-                    unsafe {
-                        show_console();
-                    }
-                } else {
-                    should_show_console = false;
+    // If we have a protocol result, handle console debug setting and emulator setup
+    if let Some(ref result) = protocol_result {
+        #[cfg(windows)]
+        {
+            use uxn_tal_defined::ProtocolVarVar;
+            if matches!(
+                result.proto_vars.get("debug"),
+                Some(ProtocolVarVar::Bool(true))
+            ) {
+                should_show_console = true;
+                unsafe {
+                    show_console();
                 }
+            } else {
+                should_show_console = false;
             }
-            println!("uxntal {}", raw_url);
-            println!("[DEBUG] parsed uxntal protocol result: {:?}", result);
-            // Select emulator and get path
-            let (mapper, emulator_path) = match get_emulator_launcher(&result, &rom_cache) {
-                Some(pair) => pair,
-                None => {
-                    eprintln!("No suitable emulator found in PATH.");
-                    pause_on_error();
-                    std::process::exit(1);
-                }
-            };
-            // Resolve ROM path and working directory
-            let actual_url = &result.url;
-            let (entry_local, rom_dir) = match uxn_tal::resolve_entry_from_url(actual_url) {
-                Ok(v) => {
-                    println!(
-                        "[DEBUG] resolve_entry_from_url succeeded: entry_local={}, rom_dir={}",
-                        v.0.display(),
-                        v.1.display()
-                    );
-                    v
-                }
-                Err(e) => {
-                    eprintln!("Failed to resolve uxntal URL: {}", e);
-                    pause_on_error();
-                    std::process::exit(1);
-                }
-            };
-            let rom_path = entry_local
-                .strip_prefix(r"\\?\")
-                .unwrap_or(&entry_local)
-                .display()
-                .to_string();
-            println!("[DEBUG] rom_path after processing: {}", rom_path);
-            let cmd = mapper.build_command(&result, &rom_path, &emulator_path);
-            let emulator_args: Vec<String> = cmd
-                .get_args()
-                .map(|a| a.to_string_lossy().to_string())
-                .collect();
-            println!("[DEBUG] Emulator command: {:?}", cmd);
-            println!("[DEBUG] Emulator args: {:?}", emulator_args);
-            // Save for use after assembly
-            run_after_assembly = Some(emulator_path.display().to_string());
-            run_after_cwd = Some(rom_dir.clone());
-
-            // Remove the uxntal URL from args and replace with rom_path
-            args.remove(pos);
-            // Insert rom_path at the beginning (after any flags)
-            let mut new_args = Vec::new();
-            let mut added_rom_path = false;
-            for arg in args.iter() {
-                if arg.starts_with('-') {
-                    new_args.push(arg.clone());
-                } else if !added_rom_path {
-                    new_args.push(rom_path.clone());
-                    added_rom_path = true;
-                    break;
-                } else {
-                    new_args.push(arg.clone());
-                }
-            }
-            if !added_rom_path {
-                new_args.push(rom_path.clone());
-            }
-            args = new_args;
         }
+
+        let raw_url = args.iter().find(|arg| arg.starts_with("uxntal:")).unwrap();
+        println!("uxntal {}", raw_url);
+        println!("[DEBUG] parsed uxntal protocol result: {:?}", result);
+
+        // Select emulator and get path
+        use uxn_tal_defined::get_emulator_launcher;
+        let (_mapper, emulator_path) = match get_emulator_launcher(result) {
+            Some(pair) => pair,
+            None => {
+                eprintln!("No suitable emulator found in PATH.");
+                pause_on_error();
+                std::process::exit(1);
+            }
+        };
+
+        // Resolve ROM path and working directory
+        let actual_url = &result.url;
+        let (entry_local, rom_dir) = match uxn_tal::resolve_entry_from_url(actual_url) {
+            Ok(v) => {
+                println!(
+                    "[DEBUG] resolve_entry_from_url succeeded: entry_local={}, rom_dir={}",
+                    v.0.display(),
+                    v.1.display()
+                );
+                v
+            }
+            Err(e) => {
+                eprintln!("Failed to resolve uxntal URL: {}", e);
+                pause_on_error();
+                std::process::exit(1);
+            }
+        };
+        let rom_path = entry_local
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&entry_local)
+            .display()
+            .to_string();
+
+        // Detect file type once and derive ROM path accordingly
+        let entry_path = Path::new(&rom_path);
+        let file_type = detect_file_type(entry_path);
+        let final_rom_path = match file_type {
+            FileType::Tal => {
+                if rom_path.ends_with(".tal.txt") {
+                    // For .tal.txt files, replace .tal.txt with .rom
+                    rom_path.replace(".tal.txt", ".rom")
+                } else {
+                    // For .tal files, replace .tal with .rom
+                    let rom_file_path = entry_path.with_extension("rom");
+                    if rom_file_path.exists() {
+                        println!("ROM already exists at {}", rom_file_path.display());
+                    }
+                    rom_file_path.display().to_string()
+                }
+            }
+            _ => {
+                // For ROM, orca, basic, or other files, use as-is
+                rom_path.clone()
+            }
+        };
+
+        println!("[DEBUG] rom_path after processing: {}", final_rom_path);
+
+        // Store resolved protocol information for later use
+        protocol_rom_path = Some(final_rom_path);
+        protocol_entry_local = Some(entry_local);
+        protocol_file_type = Some(file_type);
+
+        // Save for use after assembly
+        println!(
+            "[DEBUG] Setting run_after_assembly: {}",
+            emulator_path.display()
+        );
+        run_after_assembly = Some(emulator_path.display().to_string());
+        run_after_cwd = Some(rom_dir.clone());
+
+        // The protocol_result already contains all the information we need
     }
+
     if should_show_console {
         unsafe { show_console() };
     }
@@ -303,6 +371,7 @@ fn real_main() -> Result<(), AssemblerError> {
             pause_on_error();
             exit(1);
         }
+        pause_for_windows();
         exit(0);
     }
 
@@ -317,6 +386,7 @@ fn real_main() -> Result<(), AssemblerError> {
     let mut input_from_stdin = false;
     let mut input_is_rom = false;
     let mut input_is_orca = false;
+    let mut input_is_basic = false;
     if want_stdin || (!positional.is_empty() && positional[0] == "/dev/stdin") {
         // Read from stdin
         use std::io::{self, Read};
@@ -330,33 +400,54 @@ fn real_main() -> Result<(), AssemblerError> {
         canon_input_p = PathBuf::from("/dev/stdin");
         input_from_stdin = true;
     } else {
-        if positional.is_empty() {
-            eprintln!("missing input file");
-            print_usage();
-            exit(2);
-        }
-        // NEW: robust resolution of the input path (expanded search roots)
-        let raw_input = &positional[0];
-        let input_path = match resolve_input_path(raw_input) {
-            Some(p) => p,
-            None => {
-                return Err(AssemblerError::FileReadError {
-                    path: raw_input.to_string(),
-                    message: "input file not found (tried direct, +.tal, +.rom, multi-root recursive scan)".to_string(),
-                });
+        // Use protocol information if available, otherwise use positional args
+        if let Some(ref entry_path) = protocol_entry_local {
+            // Use the resolved entry path from protocol parsing
+            canon_input_p = entry_path.clone();
+        } else {
+            if positional.is_empty() {
+                eprintln!("missing input file");
+                print_usage();
+                pause_on_error();
+                exit(2);
             }
-        };
-        // Canonical (or absolute fallback) before chdir so later paths remain valid
-        canon_input_p = input_path
-            .canonicalize()
-            .unwrap_or_else(|_| input_path.clone());
+            // Normal file resolution for non-protocol inputs
+            let raw_input = &positional[0];
+            let input_path = match resolve_input_path(raw_input) {
+                Some(p) => p,
+                None => {
+                    return Err(AssemblerError::FileReadError {
+                        path: raw_input.to_string(),
+                        message: "input file not found (tried direct, +.tal, +.rom, multi-root recursive scan)".to_string(),
+                    });
+                }
+            };
+            // Canonical (or absolute fallback) before chdir so later paths remain valid
+            canon_input_p = input_path
+                .canonicalize()
+                .unwrap_or_else(|_| input_path.clone());
+        }
 
-        // Detect .rom or .orca extension
-        if let Some(ext) = canon_input_p.extension() {
-            if ext == "rom" {
-                input_is_rom = true;
-            } else if ext == "orca" {
+        // Detect file type based on extension (reuse from protocol if available)
+        let file_type = protocol_file_type.unwrap_or_else(|| detect_file_type(&canon_input_p));
+        input_is_rom = file_type == FileType::Rom;
+        input_is_orca = file_type == FileType::Orca;
+        input_is_basic = file_type == FileType::Basic;
+
+        // Also check protocol variables for mode detection
+        if let Some(ref result) = protocol_result {
+            use uxn_tal_defined::ProtocolVarVar;
+            if matches!(
+                result.proto_vars.get("orca"),
+                Some(ProtocolVarVar::Bool(true))
+            ) {
                 input_is_orca = true;
+            }
+            if matches!(
+                result.proto_vars.get("basic"),
+                Some(ProtocolVarVar::Bool(true))
+            ) {
+                input_is_basic = true;
             }
         }
 
@@ -389,7 +480,10 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     // Compute rom path (absolute) before changing directory
-    let rom_path_p = if positional.len() > 1 {
+    let rom_path_p = if let Some(ref protocol_path) = protocol_rom_path {
+        // Use the resolved ROM path from protocol parsing
+        PathBuf::from(protocol_path)
+    } else if positional.len() > 1 {
         let supplied = PathBuf::from(&positional[1]);
         if supplied.is_absolute() {
             supplied
@@ -420,7 +514,10 @@ fn real_main() -> Result<(), AssemblerError> {
         }
     }
 
-    let processed_src = if !input_is_rom && !input_is_orca {
+    // Store TAL source for heuristics-based emulator selection
+    let mut original_tal_source: Option<String> = None;
+
+    let processed_src = if !input_is_rom && !input_is_orca && !input_is_basic {
         // Read as bytes, check for BOM, then validate as UTF-8
         let bytes = match std::fs::read(&canon_input_p) {
             Ok(mut b) => {
@@ -502,6 +599,7 @@ fn real_main() -> Result<(), AssemblerError> {
             Ok(tal_source) => {
                 eprintln!("[debug] UTF-8 parse OK");
                 std::io::stderr().flush().ok();
+                original_tal_source = Some(tal_source.to_string()); // Store for heuristics
                 use uxn_tal::probe_tal::print_all_tal_heuristics;
                 print_all_tal_heuristics(tal_source);
                 if pre {
@@ -509,6 +607,7 @@ fn real_main() -> Result<(), AssemblerError> {
                         Ok(s) => s,
                         Err(e) => {
                             eprintln!("Preprocessor error: {:?}", e);
+                            pause_on_error();
                             std::process::exit(1);
                         }
                     }
@@ -539,7 +638,7 @@ fn real_main() -> Result<(), AssemblerError> {
         String::new()
     };
 
-    if preprocess_only && !input_is_rom && !input_is_orca {
+    if preprocess_only && !input_is_rom && !input_is_orca && !input_is_basic {
         print!("{}", processed_src);
         pause_for_windows();
         std::process::exit(0);
@@ -608,55 +707,22 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     if input_is_orca {
-        // For .orca files, launch emulator with canonical orca ROM resolved via util (cache-aware)
+        // For .orca files, launch emulator with protocol result handling
         if let Some(ref _cmd) = run_after_assembly {
-            if let Some(raw_url) = std::env::args().nth(1) {
-                if raw_url.starts_with("uxntal:") {
-                    use uxn_tal::util::resolve_canonical_orca_rom;
-                    use uxn_tal::ProtocolParser;
-                    use uxn_tal_defined::get_emulator_launcher;
-                    let result = ProtocolParser::parse(&raw_url);
-                    if let Some((mapper, emulator_path)) =
-                        get_emulator_launcher(&result, &rom_cache)
-                    {
-                        // Always use the canonical orca ROM path, not the per-file cache
-                        let (canonical_orca_rom, _canonical_cache_dir) =
-                            match resolve_canonical_orca_rom() {
-                                Ok(pair) => pair,
-                                Err(e) => {
-                                    eprintln!("Failed to resolve canonical orca.rom: {e}");
-                                    pause_on_error();
-                                    return Ok(());
-                                }
-                            };
-                        // Set working directory to the directory containing the .orca file
-                        let orca_dir = canon_input_p.parent().unwrap_or_else(|| Path::new("."));
-                        // Compute relative path for canonical ROM from this directory
-                        let rel_rom = match canonical_orca_rom.strip_prefix(orca_dir) {
-                            Ok(rel) => rel.display().to_string(),
-                            Err(_) => canonical_orca_rom.display().to_string(),
-                        };
-                        let rel_orca = match canon_input_p.strip_prefix(orca_dir) {
-                            Ok(rel) => rel.display().to_string(),
-                            Err(_) => canon_input_p.display().to_string(),
-                        };
-                        let mut cmd = mapper.build_command(&result, &rel_rom, &emulator_path);
-                        // Insert the .orca file as the second argument (relative path)
-                        cmd.arg(&rel_orca);
-                        cmd.current_dir(orca_dir);
-                        println!("[DEBUG] Spawning emulator (orca): {:?}", cmd);
-                        match cmd.spawn() {
-                            Ok(_) => {
-                                println!(
-                                    "Launched emulator: {}",
-                                    cmd.get_program().to_string_lossy()
-                                );
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to spawn emulator: {}", e);
-                                pause_on_error();
-                            }
-                        }
+            if let Some(ref result) = protocol_result {
+                use uxn_tal::mode_orca;
+                match mode_orca::handle_orca_file_with_protocol(
+                    result,
+                    &canon_input_p,
+                    want_verbose,
+                ) {
+                    Ok(_) => {
+                        pause_on_error();
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to handle orca file: {}", e);
+                        pause_on_error();
                         return Ok(());
                     }
                 }
@@ -664,6 +730,28 @@ fn real_main() -> Result<(), AssemblerError> {
         }
         // Fallback: just print info if not protocol
         println!("[INFO] .orca file detected: {}", canon_input_p.display());
+        pause_on_error();
+        return Ok(());
+    } else if input_is_basic {
+        // For .bas files, launch emulator with protocol result handling
+        if let Some(ref result) = protocol_result {
+            use uxn_tal::mode_basic;
+            match mode_basic::handle_basic_file_with_protocol(result, &canon_input_p, want_verbose)
+            {
+                Ok(_) => {
+                    pause_on_error();
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Failed to handle basic file: {}", e);
+                    pause_on_error();
+                    return Ok(());
+                }
+            }
+        }
+        // Fallback: just print info if not protocol
+        println!("[INFO] .bas file detected: {}", canon_input_p.display());
+        pause_on_error();
         return Ok(());
     } else if input_is_rom {
         // If input is .rom, just copy to output if needed
@@ -740,29 +828,148 @@ fn real_main() -> Result<(), AssemblerError> {
     }
 
     if let Some(ref cmd) = run_after_assembly {
-        // If protocol URL is present, use protocol handler for argument construction
-        if let Some(raw_url) = std::env::args().nth(1) {
-            if raw_url.starts_with("uxntal:") {
-                use uxn_tal::ProtocolParser;
-                use uxn_tal_defined::get_emulator_launcher;
-                let result = ProtocolParser::parse(&raw_url);
-                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
-                    // Always use the actual output ROM path for the emulator
+        // If protocol result is available, use it for emulator launching
+        if let Some(ref result) = protocol_result {
+            println!("[DEBUG] Trying to get emulator launcher for protocol result");
+            if let Some((mapper, emulator_path)) =
+                get_emulator_launcher_with_heuristics(result, original_tal_source.as_deref())
+            {
+                println!("[DEBUG] Got emulator launcher: {}", emulator_path.display());
+                // Check for orca mode
+                if let Some(uxn_tal_defined::v1::ProtocolVarVar::Bool(true)) =
+                    result.proto_vars.get("orca")
+                {
+                    use uxn_tal::mode_orca;
                     let rom_path = rom_path_p.to_string_lossy().to_string();
-                    let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
-                    cmd.current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")));
-                    println!("[DEBUG] Spawning emulator: {:?}", cmd);
-                    match cmd.spawn() {
-                        Ok(_) => {
-                            println!("Launched emulator: {}", cmd.get_program().to_string_lossy());
+                    match mode_orca::handle_orca_mode(
+                        result,
+                        &rom_path,
+                        mapper.as_ref(),
+                        &emulator_path,
+                        run_after_cwd.as_deref(),
+                    ) {
+                        Ok(cmd) => {
+                            if spawn_emulator_with_timeout(
+                                mapper.as_ref(),
+                                result,
+                                cmd,
+                                &emulator_path,
+                                want_verbose,
+                            )
+                            .is_err()
+                            {
+                                pause_on_error();
+                            }
                         }
                         Err(e) => {
-                            eprintln!("Failed to spawn emulator: {}", e);
+                            eprintln!("Failed to setup orca mode: {}", e);
                             pause_on_error();
                         }
                     }
+                    pause_on_error();
                     return Ok(());
                 }
+                // Check for basic mode
+                if let Some(uxn_tal_defined::v1::ProtocolVarVar::Bool(true)) =
+                    result.proto_vars.get("basic")
+                {
+                    use uxn_tal::mode_basic;
+                    let rom_path = rom_path_p.to_string_lossy().to_string();
+                    match mode_basic::handle_basic_mode(
+                        result,
+                        &rom_path,
+                        mapper.as_ref(),
+                        &emulator_path,
+                        run_after_cwd.as_deref(),
+                    ) {
+                        Ok(cmd) => {
+                            if spawn_emulator_with_timeout(
+                                mapper.as_ref(),
+                                result,
+                                cmd,
+                                &emulator_path,
+                                want_verbose,
+                            )
+                            .is_err()
+                            {
+                                pause_on_error();
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to setup basic mode: {}", e);
+                            pause_on_error();
+                        }
+                    }
+                    pause_on_error();
+                    return Ok(());
+                }
+                // Default: normal mode
+                println!(
+                    "[DEBUG] Entering normal mode with bang_vars: {:?}",
+                    result.bang_vars.keys().collect::<Vec<_>>()
+                );
+                let rom_path = rom_path_p.to_string_lossy().to_string();
+
+                // Resolve URLs in bang variables before passing to mapper
+                let mut result_with_resolved_urls = result.clone();
+                for (key, value) in result.bang_vars.iter() {
+                    let value_str = value.value.to_string();
+                    println!("[DEBUG] Resolving bang variable {}: {}", key, value_str);
+                    println!("[DEBUG] key == 'stdin': {}", key == "stdin");
+
+                    // Special handling for !stdin - don't resolve to filename, keep as URL for content fetching
+                    let resolved_value = if key == "stdin" {
+                        println!(
+                            "[DEBUG] Keeping !stdin as URL for content fetching: {}",
+                            value_str
+                        );
+                        value_str // Keep original URL for stdin content fetching
+                    } else {
+                        let resolved = resolve_arg_url(&value_str, run_after_cwd.as_deref());
+                        println!("[DEBUG] Resolved !{} to: {}", key, resolved);
+                        resolved
+                    };
+
+                    // Create a new ProtocolQueryVarVar::String with the resolved value
+                    let resolved_var = uxn_tal_defined::v1::ProtocolQueryVar {
+                        name: value.name.clone(),
+                        description: value.description.clone(),
+                        example: value.example.clone(),
+                        var_type: value.var_type.clone(),
+                        value: uxn_tal_defined::v1::ProtocolQueryVarVar::String(resolved_value),
+                    };
+                    result_with_resolved_urls
+                        .bang_vars
+                        .insert(key.clone(), resolved_var);
+                }
+
+                let mut cmd = mapper.build_command(
+                    &result_with_resolved_urls,
+                    &rom_path,
+                    &emulator_path,
+                    run_after_cwd.as_deref(),
+                );
+                cmd.current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")));
+                if spawn_emulator_with_timeout(
+                    mapper.as_ref(),
+                    &result_with_resolved_urls,
+                    cmd,
+                    &emulator_path,
+                    want_verbose,
+                )
+                .is_err()
+                {
+                    pause_on_error();
+                }
+                return Ok(());
+            } else {
+                println!(
+                    "[DEBUG] get_emulator_launcher returned None, falling back to legacy path"
+                );
+                println!(
+                    "[DEBUG] Protocol result: proto_vars={:?}",
+                    result.proto_vars.keys().collect::<Vec<_>>()
+                );
             }
         }
         // Fallback: legacy path if not protocol URL
@@ -819,37 +1026,10 @@ fn real_main() -> Result<(), AssemblerError> {
             eprintln!("which::which and post-assembly command execution are not available in browser WASM");
         }
     }
-
-    // After assembly, if run_after_assembly is set, launch the emulator with the correct flags and ROM path
-    if let (Some(_emulator_cmd), Some(run_cwd)) =
-        (run_after_assembly.clone(), run_after_cwd.clone())
-    {
-        if let Some(raw_url) = env::args().nth(1) {
-            if raw_url.starts_with("uxntal:") {
-                use uxn_tal::ProtocolParser;
-                use uxn_tal_defined::get_emulator_launcher;
-                let result = ProtocolParser::parse(&raw_url);
-                if let Some((mapper, emulator_path)) = get_emulator_launcher(&result, &rom_cache) {
-                    let rom_path = args.first().cloned().unwrap_or_default();
-                    let mut cmd = mapper.build_command(&result, &rom_path, &emulator_path);
-                    cmd.current_dir(run_cwd);
-                    println!("[DEBUG] Spawning emulator: {:?}", cmd);
-                    match cmd.spawn() {
-                        Ok(_) => {
-                            println!("Launched emulator: {}", cmd.get_program().to_string_lossy());
-                        }
-                        Err(e) => eprintln!("Failed to launch emulator: {}", e),
-                    }
-                    return Ok(());
-                }
-            }
-        }
-    }
     // Remove intermediate file unless --no-intermediate is set
     // if !no_intermediate {
     //     let _ = fs::remove_file(&pre_path);
     // }
-    pause_on_error();
     Ok(())
 }
 

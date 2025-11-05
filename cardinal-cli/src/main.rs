@@ -1,5 +1,10 @@
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use uxn::{Backend, Uxn, UxnRam};
 use varvara::Varvara;
@@ -18,6 +23,10 @@ struct Args {
     /// Use the native Uxn implementation
     #[clap(long)]
     native: bool,
+
+    /// Timeout in seconds after which the program will be terminated
+    #[clap(long)]
+    timeout: Option<f64>,
 
     /// Arguments to pass into the VM
     #[arg(last = true)]
@@ -63,16 +72,63 @@ fn main() -> Result<()> {
     dev.output(&vm).check()?;
     dev.send_args(&mut vm, &args.args).check()?;
 
-    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-        return Ok(());
-    }
-    // Blocking loop, listening to the stdin reader thread
-    let (tx, rx) = std::sync::mpsc::channel();
-    varvara::spawn_console_worker(move |e| tx.send(e));
-    while let Ok(c) = rx.recv() {
-        dev.console(&mut vm, c);
-        dev.output(&vm).check()?;
+    // Set up timeout if specified
+    let timeout_reached = Arc::new(AtomicBool::new(false));
+    if let Some(timeout_secs) = args.timeout {
+        let timeout_flag = timeout_reached.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs_f64(timeout_secs));
+            timeout_flag.store(true, Ordering::Relaxed);
+        });
     }
 
+    fn run_console_loop(
+        rx: std::sync::mpsc::Receiver<u8>,
+        dev: &mut Varvara,
+        vm: &mut Uxn,
+        timeout_reached: &Arc<AtomicBool>,
+    ) -> Result<()> {
+        loop {
+            if timeout_reached.load(Ordering::Relaxed) {
+                info!("Timeout reached, exiting");
+                break;
+            }
+            match rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(c) => {
+                    dev.console(vm, c);
+                    dev.output(vm).check()?;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    continue;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    // Input source disconnected, exit
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        // Terminal: spawn console worker and run loop
+        let (tx, rx) = std::sync::mpsc::channel();
+        varvara::spawn_console_worker(move |e| tx.send(e));
+        run_console_loop(rx, &mut dev, &mut vm, &timeout_reached)?;
+    } else {
+        // Piped stdin: spawn console worker and run loop, then flush output and exit
+        let (tx, rx) = std::sync::mpsc::channel();
+        varvara::spawn_console_worker(move |e| tx.send(e));
+        run_console_loop(rx, &mut dev, &mut vm, &timeout_reached)?;
+        // After EOF, flush output briefly
+        for _ in 0..10 {
+            if timeout_reached.load(Ordering::Relaxed) {
+                info!("Timeout reached, exiting");
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+            dev.output(&vm).check()?;
+        }
+    }
     Ok(())
 }

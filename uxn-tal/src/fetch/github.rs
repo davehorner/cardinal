@@ -122,12 +122,13 @@ impl Provider for GitHub {
                 if p.to_ascii_lowercase().ends_with(".tal")
                     || p.to_ascii_lowercase().ends_with(".rom")
                     || p.to_ascii_lowercase().ends_with(".rom.txt")
-                    || p.to_ascii_lowercase().ends_with(".orca") =>
+                    || p.to_ascii_lowercase().ends_with(".orca")
+                    || p.to_ascii_lowercase().ends_with(".bas") =>
             {
                 p.replace('\\', "/")
             }
             _ => return Err(
-                "github: URL must point to a .tal, .rom, .rom.txt, or .orca file; not guessing entries"
+                "github: URL must point to a .tal, .rom, .rom.txt, .orca, or .bas file; not guessing entries"
                     .into(),
             ),
         };
@@ -342,7 +343,7 @@ impl Provider for GitHub {
                         path: Some(file_part.to_string()),
                     };
 
-                    let url_git = format!("git@github.com:{}/{}", owner, repo);
+                    let url_git = format!("git@github.com:{}/{}.git", owner, repo);
                     return Some((repo_ref, url_git));
                 }
             }
@@ -381,7 +382,7 @@ impl Provider for GitHub {
                 path,
             };
 
-            let url_git = format!("git@github.com:{}/{}", repo_ref.owner, repo_ref.repo);
+            let url_git = format!("git@github.com:{}/{}.git", repo_ref.owner, repo_ref.repo);
             return Some((repo_ref, url_git));
         }
         // Handle git@https://... or git@http://... (strip git@ prefix and parse as HTTPS)
@@ -390,7 +391,10 @@ impl Provider for GitHub {
         {
             let stripped_url = &normalized_url[4..]; // Remove "git@" prefix
             if let Some(repo_ref) = self.parse_url(stripped_url) {
-                let url_git = format!("https://github.com/{}/{}", repo_ref.owner, repo_ref.repo);
+                let url_git = format!(
+                    "https://github.com/{}/{}.git",
+                    repo_ref.owner, repo_ref.repo
+                );
                 return Some((repo_ref, url_git));
             }
         }

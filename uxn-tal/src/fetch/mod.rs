@@ -5,12 +5,14 @@ pub mod downloader;
 pub mod github;
 pub mod html_redirect;
 pub mod includes;
+pub mod local_file;
 pub mod provider;
 pub mod resolver;
 pub mod srht;
 
 use codeberg::Codeberg;
 use github::GitHub;
+use local_file::LocalFile;
 use provider::{FetchResult, Provider, RepoRef};
 use srht::SourceHut;
 use uxn_tal_defined::v1::ProtocolParseResult;
@@ -32,6 +34,7 @@ pub fn parse_uxntal_url(raw_url: &str) -> ProtocolParseResult {
             Box::new(GitHub),
             Box::new(Codeberg),
             Box::new(PatchStorage),
+            Box::new(LocalFile),
         ];
 
         for provider in providers {
@@ -59,6 +62,7 @@ pub fn parse_uxntal_url(raw_url: &str) -> ProtocolParseResult {
 
 pub fn parse_repo(url: &str) -> Option<(Box<dyn Provider>, RepoRef)> {
     let provs: Vec<Box<dyn Provider>> = vec![
+        Box::new(LocalFile), // Check local files first
         Box::new(SourceHut),
         Box::new(GitHub),
         Box::new(Codeberg),
@@ -82,6 +86,7 @@ pub fn parse_repo(url: &str) -> Option<(Box<dyn Provider>, RepoRef)> {
 
 pub fn parse_git_url_direct(url: &str) -> Option<RepoRef> {
     let provs: Vec<Box<dyn Provider>> = vec![
+        Box::new(LocalFile),
         Box::new(SourceHut),
         Box::new(GitHub),
         Box::new(Codeberg),

@@ -1,58 +1,58 @@
-use crate::v1::EmulatorLauncher;
+use crate::v1::{EmulatorArgMapper, EmulatorLauncher, ProtocolParseResult};
 use std::process::Command;
-use uxn_tal_common::cache::RomCache;
 
-pub struct BuxnMapper<'a> {
-    pub rom_cache: &'a dyn RomCache,
-}
+pub struct BuxnMapper;
 
-impl<'a> EmulatorLauncher<'a> for BuxnMapper<'a> {
+impl<'a> EmulatorLauncher<'a> for BuxnMapper {
     fn build_command(
         &self,
         result: &crate::v1::ProtocolParseResult,
         rom_path: &str,
         emulator_path: &std::path::Path,
+        cache_dir: Option<&std::path::Path>,
     ) -> Command {
-        if let Some(crate::v1::ProtocolVarVar::Bool(true)) = result.proto_vars.get("orca") {
-            use crate::consts::CANONICAL_ORCA;
-            use std::fs;
-            use std::path::Path;
-            let canonical_rom_path = match self
-                .rom_cache
-                .get_or_write_cached_rom(CANONICAL_ORCA, Path::new("orca.rom"))
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("[BuxnMapper] Failed to cache/fetch canonical orca ROM: {e}");
-                    Path::new("orca.rom").to_path_buf()
-                }
-            };
-            let orca_file = Path::new(rom_path);
-            let orca_rom = orca_file.with_file_name("orca.rom");
-            if canonical_rom_path != orca_rom {
-                if let Err(e) = fs::copy(&canonical_rom_path, &orca_rom) {
-                    eprintln!("[BuxnMapper] Failed to copy canonical orca ROM to working dir: {e}");
-                }
-            }
-            let mut cmd = Command::new(emulator_path);
-            let mut args = self.map_args(result);
-            args.push(orca_rom.to_string_lossy().to_string());
-            args.push(rom_path.to_string());
-            cmd.args(&args);
-            return cmd;
-        }
         let mut cmd = Command::new(emulator_path);
         let mut args = self.map_args(result);
         args.push(rom_path.to_string());
+        let post_args = self.map_post_args(result);
+        args.extend(post_args);
         cmd.args(&args);
+
+        // Set working directory to cache_dir if provided
+        if let Some(dir) = cache_dir {
+            cmd.current_dir(dir);
+        }
+
         cmd
     }
-}
-use crate::v1::{EmulatorArgMapper, ProtocolParseResult};
 
-impl<'a> EmulatorArgMapper for BuxnMapper<'a> {
+    fn timeout_follow_forceexit(&self, _emulator_path: &std::path::Path) -> bool {
+        true // buxn doesn't support --timeout flag
+    }
+
+    fn cli_executable_name(&self) -> Option<&'static str> {
+        Some("buxn-cli")
+    }
+}
+
+impl EmulatorArgMapper for BuxnMapper {
     fn map_args(&self, _result: &ProtocolParseResult) -> Vec<String> {
-        vec![]
+        let args = vec![];
+        args
+    }
+
+    fn map_post_args(&self, result: &ProtocolParseResult) -> Vec<String> {
+        let mut args = vec![];
+
+        // Handle !arg1 as an argument after the ROM (no -- separator for buxn)
+        if let Some(qv) = result.bang_vars.get("arg1") {
+            match &qv.value {
+                crate::v1::ProtocolQueryVarVar::String(s) => args.push(s.clone()),
+                _ => args.push(format!("{:?}", qv.value)),
+            }
+        }
+
+        args
     }
 }
 // Buxn emulator argument/feature mapping for protocol variables
@@ -61,7 +61,7 @@ impl<'a> EmulatorArgMapper for BuxnMapper<'a> {
 use std::path::PathBuf;
 // use std::process::Command;
 
-impl<'a> BuxnMapper<'a> {
+impl BuxnMapper {
     pub fn is_available_in_path() -> Option<PathBuf> {
         #[cfg(not(target_arch = "wasm32"))]
         {

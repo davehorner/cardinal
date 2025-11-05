@@ -270,17 +270,15 @@ fn generate_emu_compat_matrix() -> String {
 fn emu_var_affects_cli(emu: EmulatorKind, var: &str) -> (bool, &'static str) {
     match emu {
         EmulatorKind::Buxn => match var {
-            // Buxn only affected by 'orca' and 'emu'
-            "orca" | "emu" => (true, ""),
+            "orca" | "emu" | "arg1" | "stdin" => (true, ""),
             _ => (false, ""),
         },
         EmulatorKind::Uxn => match var {
-            "orca" | "emu" => (true, ""),
+            "orca" | "emu" | "arg1" | "stdin" => (true, ""),
             _ => (false, ""),
         },
         EmulatorKind::Cuxn => match var {
-            // Cuxn supports many protocol/bang vars as CLI args
-            "widget" | "ontop" | "debug" | "emu" | "orca" | "transparent" | "timeout" | "t" | "efx" | "efxmode" | "x" | "y" | "w" | "h" | "fit" | "theme" | "scale" | "opacity" | "borderless" | "fullscreen" | "vsync" | "keep_focus" | "screenshot" | "openwindow" | "close" | "refresh" | "monitor" | "id" => (true, ""),
+            "widget" | "ontop" | "debug" | "emu" | "orca" | "transparent" | "timeout" | "t" | "efx" | "efxmode" | "x" | "y" | "w" | "h" | "fit" | "theme" | "scale" | "opacity" | "borderless" | "fullscreen" | "vsync" | "keep_focus" | "screenshot" | "openwindow" | "close" | "refresh" | "monitor" | "id" | "arg1" | "stdin" => (true, ""),
             _ => (false, ""),
         },
     }

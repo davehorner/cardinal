@@ -165,12 +165,13 @@ impl Provider for Codeberg {
                 if p.to_ascii_lowercase().ends_with(".tal")
                     || p.to_ascii_lowercase().ends_with(".rom")
                     || p.to_ascii_lowercase().ends_with(".rom.txt")
-                    || p.to_ascii_lowercase().ends_with(".orca") =>
+                    || p.to_ascii_lowercase().ends_with(".orca")
+                    || p.to_ascii_lowercase().ends_with(".bas") =>
             {
                 p.replace('\\', "/")
             }
             _ => return Err(
-                "codeberg: URL must point to a .tal, .rom, .rom.txt, or .orca file; not guessing entries"
+                "codeberg: URL must point to a .tal, .rom, .rom.txt, .orca, or .bas file; not guessing entries"
                     .into(),
             ),
         };

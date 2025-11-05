@@ -1,7 +1,7 @@
 ﻿# Multi-crate LAST_RELEASE
 
 ## cardinal-uxn
-25/10/30|58cb2f4|0.6.0
+25/10/30|5754568|0.6.0
 ## [0.6.0](https://github.com/davehorner/cardinal/compare/cardinal-uxn-v0.5.6...cardinal-uxn-v0.6.0) - 2025-10-30
 
 ### Added
@@ -10,23 +10,19 @@
 
 
 ## cardinal-varvara
-25/10/30|58cb2f4|0.10.0
-## [0.10.0](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.9.0...cardinal-varvara-v0.10.0) - 2025-10-30
+25/11/05|5754568|0.10.1
+## [0.10.1](https://github.com/davehorner/cardinal/compare/cardinal-varvara-v0.10.0...cardinal-varvara-v0.10.1) - 2025-11-05
 
 ### Added
 
-- *(.orca)* [**breaking**] add ORCA mode, shared common crate, cache-aware emulator launchers; add PatchStorage provider; bump deps; improve caching and CLI UX
-
-### Other
-
-- *(rom.txt)* [**breaking**] rom.txt extensions. break out protocol into sep. crate. tests demonstrating and issue in Raven's interaction with drifblim arguments.
+- *(!arg1,!stdin,basic,file://)* add !stdin support, local file provider, and basic/orca mode handling. forced timeout and cli/gui determinations via heuristics.
 
 
 ## cardinal-gui
-25/10/30|58cb2f4|0.7.0
-## [0.7.0](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.6.0...cardinal-gui-v0.7.0) - 2025-10-30
+25/11/05|5754568|0.7.1
+## [0.7.1](https://github.com/davehorner/cardinal/compare/cardinal-gui-v0.7.0...cardinal-gui-v0.7.1) - 2025-11-05
 
 ### Added
 
-- *(.orca)* [**breaking**] add ORCA mode, shared common crate, cache-aware emulator launchers; add PatchStorage provider; bump deps; improve caching and CLI UX
+- *(!arg1,!stdin,basic,file://)* add !stdin support, local file provider, and basic/orca mode handling. forced timeout and cli/gui determinations via heuristics.
 

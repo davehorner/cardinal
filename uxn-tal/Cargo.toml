@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 authors = ["David Horner"]
 description = "uxntal:// protocol | a Rust library for assembling TAL (Tal Assembly Language) files into UXN ROM files"
@@ -16,7 +16,7 @@ regex = "1.12"
 walkdir = "2.5.0"
 once_cell = "1.21.3"
 
-varvara = { package = "cardinal-varvara", version = "0.9.0" }
+varvara = { package = "cardinal-varvara", version = "0.10.0" }
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 env_logger.workspace = true
@@ -33,7 +33,7 @@ url = "2.5.7"
 scraper = "0.24.0"
 uxn-tal-common = "0.1.0"
 #uxn-tal-common = { path = "../uxn-tal-common" }
-uxn-tal-defined = "0.3.0"
+uxn-tal-defined = "0.4.0"
 #uxn-tal-defined = { path = "../uxn-tal-defined" }
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
@@ -43,12 +43,12 @@ which = "8.0.0"
 winapi = { version = "0.3.9", features = ["consoleapi"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.6", features = [
+uxn = { package = "cardinal-uxn", version = "0.6.0", features = [
    "native",
 ] }
 
 [target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-uxn = { package = "cardinal-uxn", version = "0.5.6" }
+uxn = { package = "cardinal-uxn", version = "0.6.0" }
 
 
 [[bin]]

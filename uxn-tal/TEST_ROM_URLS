@@ -1,0 +1,110 @@
+# Test ROM URLs for systematic testing
+# These are clean uxntal:// URLs without query parameters
+# Used for testing parsing, modification, and reconstruction flows
+
+## Special configuration syntax:
+## #test_inject t^^<timeout>:emu^^{<emulator1>,<emulator2>}
+## - t^^10 sets timeout to 10 seconds
+## - emu^^{cuxn,buxn} tests with both cardinal-gui and buxn
+## - Single # comments with test_inject apply to the next URL
+## - Double ## comments are ignored
+#test_inject t^^5:emu^^{cuxn,buxn,uxn}
+## Device examples from uxn repository
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/audio-tests.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/audio.channels.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/audio.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/console.read.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/console.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/console.write.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/controller.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/datetime.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/file.cat.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/file.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/mouse.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/screen.auto.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/screen.blending.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/screen.bounds.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/screen.pixel.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/screen.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/system.expansion.tal
+
+# Test with default timeout (10s) and both emulators
+#test_inject t^^5:emu^^{cuxn,buxn,uxn}
+uxntal:widget:debug:efx%5Erandom://https://wiki.xxiivv.com/etc/catclock.tal.txt
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/a.orca
+
+# Test with longer timeout and only cardinal-gui
+#test_inject t^^15:emu^^{cuxn}
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/b.orca
+
+# Test with shorter timeout and only buxn
+#test_inject t^^3:emu^^{buxn}
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/c.orca
+
+# Default configuration (no injection comment)
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/d.orca
+
+# Test both emulators with default timeout
+#test_inject emu^^{cuxn,buxn}
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/u.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/f.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/g.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/h.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/i.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/j.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/k.orca
+uxntal://https://git.sr.ht/~rabbits/orca-examples/tree/master/item/basics/l.orca
+
+# TAL source files
+uxntal://https://git.sr.ht/~rabbits/orca-toy/tree/main/item/src/orca.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/demos/screen.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/audio.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/controller.tal
+
+# ROM files
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/demos/mandelbrot.rom
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/devices/piano.rom
+
+# BASIC files from tiny-basic examples
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/ascii.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/brain.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/drawing.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/fib.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/fizzbuzz.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/fizzbuzz2.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/font.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/game.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/input.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/labyrinth.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/paint.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/sad.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/sierpinski.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/stack.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/test.bas?!stdin=RUN%0A
+uxntal://git@https://git.sr.ht/~rabbits/tiny-basic/tree/main/item/examples/tictactoe.bas?!stdin=RUN%0A
+
+# Exercise TAL files from uxn repository
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/ack.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/fib.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/fizzbuzz.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/hello.bf
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/primes.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/quine.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/sierpinski.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/subleq.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/tak.tal
+
+# Software applications from uxn repository
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/software/clock.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/software/piano.tal
+
+# GUI examples from uxn repository
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/button.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/hover.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/label.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/monospace.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/picture.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/shapes.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/terminal.tal
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/gui/timer.tal

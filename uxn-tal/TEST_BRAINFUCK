@@ -1,0 +1,157 @@
+# Test URLs for Brainfuck interpreter using brainfuck.tal
+# brainfuck.tal is a Brainfuck interpreter for UXN written in TAL
+# These URLs test the interpreter with various Brainfuck programs from the shinbatsu repository
+# Each URL uses the brainfuck.tal interpreter with ?!stdin= syntax to pipe the brainfuck file to stdin
+# Usage: cat program.bf | uxncli brainfuck.rom
+
+#test_inject t^^15:emu^^cuxn
+
+## Simple programs
+# Hello World program
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Hello.bf
+
+# Print A program
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Print_A.bf
+
+## Mathematical operations
+# Addition program
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Plus.bf
+
+# Multiplication program
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Multiply.bf
+
+# Double a number
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Double.bf
+
+# Power of 2
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Pow2.bf
+
+# Division by 10
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Div10.bf
+
+## Mathematical sequences
+# Fibonacci sequence
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Fibo.bf
+
+# Sum between 1 and N
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Sum_between_1_N.bf
+
+# Squares
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Squares.bf
+
+## String operations
+# Reverse string
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Reverse.bf
+
+# To uppercase
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/To_upper.bf
+
+# ROT13 cipher
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Rot13.bf
+
+## Logic and conditionals
+# If statement example
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/If.bf
+
+# Is Even check
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Is_Even.bf
+
+## Classic programs
+# FizzBuzz
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Fizz_buzz.bf
+
+# Quine (self-printing program)
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Quine.bf
+
+## ASCII and character operations
+# All ASCII characters
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/All_ASCII.bf
+
+# ASCII to integer
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Atoi.bf
+
+## Games and interactive programs
+#test_inject t^^30:emu^^cuxn
+
+# Tic Tac Toe game
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Tic_tac_toe.bf
+
+# Game of Life
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Game_of_life.bf
+
+# Move game
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Move_game.bf
+
+# Maze solver
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Maze.bf
+
+#test_inject t^^10:emu^^cuxn
+
+## Advanced algorithms
+# Bubble sort
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Bubble.bf
+
+# Calculator
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Calculator.bf
+
+# Random number generator
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Random.bf
+
+## String manipulation
+# Add asterisks
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Add_astetisks.bf
+
+# Middle character
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Middle_char.bf
+
+# First and last characters
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/First_last.bf
+
+# Remove first and last
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Remove_first_last.bf
+
+## Utility programs
+# Clear all
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Clear_all.bf
+
+# Repeat program
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Repeat.bf
+
+# Swap values
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Swap.bf
+
+## Mathematical problems
+# Absolute value
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Abs.bf
+
+# Square root
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Root.bf
+
+# Third angle calculation
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Third_angle.bf
+
+## Alphabet operations
+# Alphabet addition
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Alph_add.bf
+
+# Alphabet after N
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Alphabet_after_n.bf
+
+# Nth even number
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Nth_even.bf
+
+## Special programs
+# A + B without plus operator
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/A_no_plus_b.bf
+
+# Type password (security demo)
+uxntal://https://git.sr.ht/~rabbits/uxn/tree/main/item/projects/examples/exercises/brainfuck.tal?!stdin=@https://raw.githubusercontent.com/shinbatsu/Brainfuck/main/BrainFuck/Type_password.bf
+
+## Notes:
+# - brainfuck.tal is the main Brainfuck interpreter program from the UXN repository
+# - The ?!stdin=@https://raw.githubusercontent.com/... syntax downloads and pipes the .bf file to stdin
+# - Different timeout values are used based on program complexity (10s default, 15s for simple, 30s for games)
+# - Each Brainfuck program tests different aspects of the interpreter
+# - Programs range from simple output to complex interactive applications
+# - Some programs require user input and may need interactive testing
+# - Usage: cat program.bf | uxncli brainfuck.rom (now automated via !stdin)

@@ -116,6 +116,7 @@ This will launch the canonical orca ROM with the specified `.orca` file in widge
 | `efx` | String | Effect name or identifier for emulator (string) | `efx^invert` |
 | `efxmode` | String | Effect mode for emulator (string) | `efxmode^blend` |
 | `orca` | Bool | Orca mode: run the orca ROM with the given .orca file. Automatically set if the URL ends with .orca. | `orca` |
+| `basic` | Bool | Basic mode: run the basic ROM with the given .bas file. Automatically set if the URL ends with .bas. | `basic` |
 | `x` | String | Window X position (pixels or percent or complex) | `x^100` |
 | `y` | String | Window Y position (pixels or percent or complex) | `y^100` |
 | `w` | String | Window width (pixels or percent or complex) | `w^800` |
@@ -132,6 +133,8 @@ This will launch the canonical orca ROM with the specified `.orca` file in widge
 | `y` | String | Window Y position (pixels or percent or complex) | `!y=100` |
 | `w` | String | Window width (pixels or percent or complex) | `!w=800` |
 | `h` | String | Window height (pixels or percent or complex) | `!h=600` |
+| `arg1` | String | First argument to pass to the emulator | `!arg1=somefile.input` |
+| `stdin` | String | Data to pipe to emulator stdin (for batch-mode input, e.g. BASIC ROMs) | `!stdin=RUN%0A` |
 
 ## Emulator Compatibility Matrix
 
@@ -151,10 +154,13 @@ This table shows which protocol/bang variables affect the command-line arguments
 | `efx` |   |    |  X |  efx^invert | proto |
 | `efxmode` |   |    |  X |  efxmode^blend | proto |
 | `orca` | X |  X |  X |  orca | proto |
+| `basic` |   |    |    |  basic | proto |
 | `x`/`!x` |   |    |  X |  x^100 | both |
 | `y`/`!y` |   |    |  X |  y^100 | both |
 | `w`/`!w` |   |    |  X |  w^800 | both |
 | `h`/`!h` |   |    |  X |  h^600 | both |
+| `!arg1` | X |  X |  X |  !arg1=somefile.input | bang |
+| `!stdin` | X |  X |  X |  !stdin=RUN%0A | bang |
 
 
 **Note:** If both a protocol variable (e.g. `x`) and a bang variable (e.g. `!x`) are provided, the protocol variable typically takes precedence and overrides the bang variable.
