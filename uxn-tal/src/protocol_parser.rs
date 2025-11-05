@@ -9,4 +9,10 @@ impl ProtocolParser {
     pub fn parse(raw_url: &str) -> ProtocolParseResult {
         crate::parse_uxntal_url(raw_url)
     }
+
+    /// Render a ProtocolParseResult back into a uxntal URL
+    /// This exposes the render_url functionality from uxn_tal_defined
+    pub fn render_url(result: &ProtocolParseResult) -> String {
+        uxn_tal_defined::v1::ProtocolParser::render_url(result)
+    }
 }

@@ -1,99 +1,22 @@
-/// Returns the canonical orca ROM path and its cache dir for the canonical orca URL, without fetching or assembling.
-/// Returns (orca_rom_path, cache_dir) if present, or an error if not found.
-pub fn get_cached_canonical_orca_rom() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
-    use uxn_tal_common::hash_url;
-    use uxn_tal_defined::consts::CANONICAL_ORCA;
-    // Get the canonical orca URL and hash it for the cache dir
-    let url = CANONICAL_ORCA;
-    let roms_dir =
-        crate::paths::uxntal_roms_get_path().ok_or("Failed to get uxntal roms directory")?;
-    let cache_dir = roms_dir.join(format!("{}", hash_url(url)));
-    let orca_rom = cache_dir.join("orca.rom");
-    if !orca_rom.exists() {
-        return Err(format!(
-            "orca.rom not found in cache dir: {}",
-            orca_rom.display()
-        ));
-    }
-    let metadata =
-        std::fs::metadata(&orca_rom).map_err(|e| format!("orca.rom metadata error: {e}"))?;
-    if metadata.len() == 0 {
-        return Err(format!(
-            "orca.rom is empty in cache dir: {}",
-            orca_rom.display()
-        ));
-    }
-    Ok((orca_rom, cache_dir))
-}
-/// Returns the path to the canonical orca ROM in the workspace, if it exists, without fetching or parsing includes.
-/// Returns (orca_rom_path, roms_dir) on success.
-pub fn get_workspace_canonical_orca_rom() -> Result<(std::path::PathBuf, std::path::PathBuf), String>
-{
-    let roms_dir = std::path::PathBuf::from("roms");
-    let orca_rom = roms_dir.join("orca.rom");
-    if !orca_rom.exists() {
-        return Err(format!(
-            "orca.rom not found in workspace roms dir: {}",
-            orca_rom.display()
-        ));
-    }
-    let metadata =
-        std::fs::metadata(&orca_rom).map_err(|e| format!("orca.rom metadata error: {e}"))?;
-    if metadata.len() == 0 {
-        return Err(format!(
-            "orca.rom is empty in workspace roms dir: {}",
-            orca_rom.display()
-        ));
-    }
-    Ok((orca_rom, roms_dir))
-}
-/// Resolves and ensures the canonical orca ROM is present in the cache directory, returning its path.
-/// Returns (orca_rom_path, cache_dir) on success.
-pub fn resolve_canonical_orca_rom() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
-    // Try to get the cached canonical orca ROM without fetching
-    if let Ok(pair) = get_cached_canonical_orca_rom() {
-        return Ok(pair);
-    }
-    // If not present, fall back to fetching/assembling
-    use uxn_tal_common::cache::RomEntryResolver;
-    use uxn_tal_defined::consts::CANONICAL_ORCA;
-    let entry_resolver = crate::util::RealRomEntryResolver;
-    let (tal_path, cache_dir) = entry_resolver
-        .resolve_entry_and_cache_dir(CANONICAL_ORCA)
-        .map_err(|e| format!("Failed to resolve canonical orca: {e}"))?;
-    let orca_rom = cache_dir.join("orca.rom");
-    // If orca.rom is missing, but we have the TAL, assemble and cache it
-    if !orca_rom.exists() {
-        // Assemble the canonical orca TAL to orca.rom, setting CWD to cache_dir for include resolution
-        let prev_dir =
-            std::env::current_dir().map_err(|e| format!("Failed to get current dir: {e}"))?;
-        let set_dir = std::env::set_current_dir(&cache_dir);
-        let rom_bytes = match set_dir {
-            Ok(_) => {
-                let result = crate::assemble_file(&tal_path)
-                    .map_err(|e| format!("Failed to assemble canonical orca.tal: {e}"));
-                // Restore previous dir
-                let _ = std::env::set_current_dir(&prev_dir);
-                result?
-            }
-            Err(e) => {
-                return Err(format!("Failed to set current dir to cache dir: {e}"));
-            }
-        };
-        std::fs::write(&orca_rom, &rom_bytes)
-            .map_err(|e| format!("Failed to write canonical orca.rom: {e}"))?;
-    }
-    let metadata =
-        std::fs::metadata(&orca_rom).map_err(|e| format!("orca.rom metadata error: {e}"))?;
-    if metadata.len() == 0 {
-        return Err(format!(
-            "orca.rom is empty in cache dir: {}",
-            orca_rom.display()
-        ));
-    }
-    Ok((orca_rom, cache_dir))
-}
+use std::process::Command;
 use uxn_tal_common::cache::RomEntryResolver;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Create a git command with console window hidden on Windows
+pub fn create_git_command() -> Command {
+    #[cfg(windows)]
+    let mut cmd = Command::new("git");
+    #[cfg(not(windows))]
+    let cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        // Hide console window on Windows (CREATE_NO_WINDOW = 0x08000000)
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
 
 /// Real implementation of RomEntryResolver for use in uxn-tal and integration tests.
 pub struct RealRomEntryResolver;

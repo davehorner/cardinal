@@ -131,7 +131,7 @@ pub fn ensure_buxn_repo() -> Result<Option<PathBuf>, AssemblerError> {
     let uxntal_path = home_dir.join(".uxntal");
     let buxn_path = uxntal_path.join(".buxn");
     if !buxn_path.exists() {
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("clone")
             .arg("https://github.com/davehorner/buxn.git")
             .arg(&buxn_path)
@@ -143,7 +143,7 @@ pub fn ensure_buxn_repo() -> Result<Option<PathBuf>, AssemblerError> {
         }
     } else {
         // If already exists, do a git pull
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("-C")
             .arg(&buxn_path)
             .arg("pull")

@@ -1,5 +1,4 @@
 use std::{borrow::Cow, fmt};
-use uxn_tal_common::cache::RomCache;
 // This module is intended to be extended with per-emulator mapping modules (see emu_cuxn.rs, emu_uxn.rs, emu_buxn.rs)
 use std::collections::HashMap;
 
@@ -214,6 +213,12 @@ pub static PROTOCOL_VARS: &[ProtocolVar] = &[
         example: "orca",
         var_type: ProtocolVarType::Bool,
     },
+    ProtocolVar {
+        name: "basic",
+        description: "Basic mode: run the basic ROM with the given .bas file. Automatically set if the URL ends with .bas.",
+        example: "basic",
+        var_type: ProtocolVarType::Bool,
+    },
     // Added to match bang vars for compatibility matrix
     ProtocolVar {
         name: "x",
@@ -308,6 +313,22 @@ pub static BANG_VARS: &[ProtocolQueryVar] = &[
         name: Cow::Borrowed("h"),
         description: Cow::Borrowed("Window height (pixels or percent or complex)"),
         example: Cow::Borrowed("!h=600"),
+        var_type: ProtocolQueryType::String,
+        value: ProtocolQueryVarVar::String(String::new()),
+    },
+    ProtocolQueryVar {
+        name: Cow::Borrowed("arg1"),
+        description: Cow::Borrowed("First argument to pass to the emulator"),
+        example: Cow::Borrowed("!arg1=somefile.input"),
+        var_type: ProtocolQueryType::String,
+        value: ProtocolQueryVarVar::String(String::new()),
+    },
+    ProtocolQueryVar {
+        name: Cow::Borrowed("stdin"),
+        description: Cow::Borrowed(
+            "Data to pipe to emulator stdin (for batch-mode input, e.g. BASIC ROMs)",
+        ),
+        example: Cow::Borrowed("!stdin=RUN%0A"),
         var_type: ProtocolQueryType::String,
         value: ProtocolQueryVarVar::String(String::new()),
     },
@@ -604,6 +625,11 @@ impl ProtocolParser {
             proto_vars_map.insert("orca".to_string(), ProtocolVarVar::Bool(true));
         }
 
+        // If the url ends with .bas, set basic=true in proto_vars_map
+        if url.trim().to_ascii_lowercase().ends_with(".bas") {
+            proto_vars_map.insert("basic".to_string(), ProtocolVarVar::Bool(true));
+        }
+
         let repo_ref = None;
         ProtocolParseResult {
             url_raw: raw_url.to_string(),
@@ -616,6 +642,87 @@ impl ProtocolParser {
             query_string,
             repo_ref,
         }
+    }
+
+    /// Render a ProtocolParseResult back into a uxntal URL
+    pub fn render_url(result: &ProtocolParseResult) -> String {
+        let mut url = String::from("uxntal:");
+
+        // Add protocol variables
+        let mut proto_parts = Vec::new();
+        for (key, value) in &result.proto_vars {
+            // Skip bang variables in protocol section
+            if key.starts_with('!') {
+                continue;
+            }
+
+            let value_str = match value {
+                ProtocolVarVar::Bool(true) => key.clone(),
+                ProtocolVarVar::Bool(false) => format!("{}^^false", key),
+                ProtocolVarVar::String(s) => format!("{}^^{}", key, s),
+                ProtocolVarVar::Int(i) => format!("{}^^{}", key, i),
+                ProtocolVarVar::Float(f) => format!("{}^^{}", key, f),
+                ProtocolVarVar::Enum(e) => format!("{}^^{}", key, e),
+                ProtocolVarVar::Invalid(s) => format!("{}^^{}", key, s),
+            };
+            proto_parts.push(value_str);
+        }
+
+        // Add bang variables to protocol section
+        for (key, var) in &result.bang_vars {
+            if key.starts_with('!') {
+                let bang_key = key;
+                let value_str = match &var.value {
+                    ProtocolQueryVarVar::Bool(true) => format!("{}=true", bang_key),
+                    ProtocolQueryVarVar::Bool(false) => format!("{}=false", bang_key),
+                    ProtocolQueryVarVar::String(s) => format!("{}={}", bang_key, s),
+                    ProtocolQueryVarVar::Int(i) => format!("{}={}", bang_key, i),
+                    ProtocolQueryVarVar::Float(f) => format!("{}={}", bang_key, f),
+                    ProtocolQueryVarVar::Enum(e) => format!("{}={}", bang_key, e),
+                    ProtocolQueryVarVar::Invalid(s) => format!("{}={}", bang_key, s),
+                };
+                proto_parts.push(value_str);
+            }
+        }
+
+        // Join protocol parts with colons
+        if !proto_parts.is_empty() {
+            url.push_str(&proto_parts.join(":"));
+        }
+
+        // Add the URL part
+        url.push_str("://");
+        url.push_str(&result.url);
+
+        // Add query string if present
+        if !result.query_string.is_empty() {
+            if !result.query_string.starts_with('?') {
+                url.push('?');
+            }
+            url.push_str(&result.query_string);
+        } else if !result.query_vars.is_empty() {
+            // Reconstruct query string from query_vars
+            url.push('?');
+            let mut query_parts = Vec::new();
+            for (key, var) in &result.query_vars {
+                if key.starts_with('!') {
+                    continue; // Bang vars go in protocol section
+                }
+                let value_str = match &var.value {
+                    ProtocolQueryVarVar::Bool(true) => format!("{}=true", key),
+                    ProtocolQueryVarVar::Bool(false) => format!("{}=false", key),
+                    ProtocolQueryVarVar::String(s) => format!("{}={}", key, s),
+                    ProtocolQueryVarVar::Int(i) => format!("{}={}", key, i),
+                    ProtocolQueryVarVar::Float(f) => format!("{}={}", key, f),
+                    ProtocolQueryVarVar::Enum(e) => format!("{}={}", key, e),
+                    ProtocolQueryVarVar::Invalid(s) => format!("{}={}", key, s),
+                };
+                query_parts.push(value_str);
+            }
+            url.push_str(&query_parts.join("&"));
+        }
+
+        url
     }
 
     /// Extract the actual target URL from a parsed uxntal URL
@@ -692,6 +799,12 @@ impl ProtocolParser {
 /// Emulator argument mapping trait
 pub trait EmulatorArgMapper {
     fn map_args(&self, result: &ProtocolParseResult) -> Vec<String>;
+
+    /// Map arguments that should come after the ROM file
+    fn map_post_args(&self, _result: &ProtocolParseResult) -> Vec<String> {
+        // Default implementation returns empty vector for backward compatibility
+        Vec::new()
+    }
 }
 
 /// EmulatorMapperFactory: returns the correct EmulatorArgMapper for a ProtocolParseResult
@@ -704,14 +817,12 @@ pub trait EmulatorPathCheck {
 /// EmulatorMapperFactory: returns the correct EmulatorArgMapper and path for a ProtocolParseResult
 pub fn get_emulator_launcher<'a>(
     result: &ProtocolParseResult,
-    rom_cache: &'a dyn RomCache,
 ) -> Option<(Box<dyn EmulatorLauncher<'a> + 'a>, std::path::PathBuf)> {
     match result.proto_vars.get("emu") {
         Some(ProtocolVarVar::Enum("buxn")) => {
             if let Some(path) = emu_buxn::BuxnMapper::is_available_in_path() {
                 Some((
-                    Box::new(emu_buxn::BuxnMapper { rom_cache })
-                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    Box::new(emu_buxn::BuxnMapper) as Box<dyn EmulatorLauncher<'a> + 'a>,
                     path,
                 ))
             } else {
@@ -721,8 +832,7 @@ pub fn get_emulator_launcher<'a>(
         Some(ProtocolVarVar::Enum("uxn")) => {
             if let Some(path) = emu_uxn::UxnMapper::is_available_in_path() {
                 Some((
-                    Box::new(emu_uxn::UxnMapper { rom_cache })
-                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    Box::new(emu_uxn::UxnMapper) as Box<dyn EmulatorLauncher<'a> + 'a>,
                     path,
                 ))
             } else {
@@ -732,8 +842,7 @@ pub fn get_emulator_launcher<'a>(
         _ => {
             if let Some(path) = emu_cuxn::CuxnMapper::is_available_in_path(result) {
                 Some((
-                    Box::new(emu_cuxn::CuxnMapper { rom_cache })
-                        as Box<dyn EmulatorLauncher<'a> + 'a>,
+                    Box::new(emu_cuxn::CuxnMapper) as Box<dyn EmulatorLauncher<'a> + 'a>,
                     path,
                 ))
             } else {
@@ -743,28 +852,62 @@ pub fn get_emulator_launcher<'a>(
     }
 }
 
+/// Get emulator launcher with heuristics-based CLI selection
+/// If heuristics indicate console-only usage and the emulator supports CLI, use CLI version
+pub fn get_emulator_launcher_with_heuristics<'a>(
+    result: &ProtocolParseResult,
+    heuristics: Option<&TalHeuristics>,
+) -> Option<(Box<dyn EmulatorLauncher<'a> + 'a>, std::path::PathBuf)> {
+    // First try to get the regular emulator launcher
+    if let Some((launcher, mut emulator_path)) = get_emulator_launcher(result) {
+        // Check if we have heuristics and they indicate console-only usage
+        if let Some(h) = heuristics {
+            if h.uses_console && !h.uses_gui {
+                if let Some(cli_name) = launcher.cli_executable_name() {
+                    // Try to find the CLI version in PATH
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Ok(cli_path) = which::which(cli_name) {
+                        emulator_path = cli_path;
+                        println!("[HEURISTICS] Detected console-only usage, switching to CLI emulator: {}", cli_name);
+                    }
+                }
+            }
+        }
+
+        Some((launcher, emulator_path))
+    } else {
+        None
+    }
+}
+
 /// EmulatorMapperFactory: returns the correct EmulatorArgMapper for a ProtocolParseResult
 pub fn get_emulator_mapper<'a>(
     result: &ProtocolParseResult,
-    rom_cache: &'a dyn RomCache,
 ) -> Option<(Box<dyn EmulatorArgMapper + 'a>, Option<std::path::PathBuf>)> {
     match result.proto_vars.get("emu") {
         Some(ProtocolVarVar::Enum("buxn")) => Some((
-            Box::new(emu_buxn::BuxnMapper { rom_cache }),
+            Box::new(emu_buxn::BuxnMapper),
             emu_buxn::BuxnMapper::is_available_in_path(),
         )),
         Some(ProtocolVarVar::Enum("uxn")) => Some((
-            Box::new(emu_uxn::UxnMapper { rom_cache }),
+            Box::new(emu_uxn::UxnMapper),
             emu_uxn::UxnMapper::is_available_in_path(),
         )),
         _ => Some((
-            Box::new(emu_cuxn::CuxnMapper { rom_cache }),
+            Box::new(emu_cuxn::CuxnMapper),
             emu_cuxn::CuxnMapper::is_available_in_path(result),
         )),
     }
 }
 
 /// Trait for launching an emulator with the correct command and arguments
+/// Heuristics results from TAL source analysis
+#[derive(Debug, Clone, Default)]
+pub struct TalHeuristics {
+    pub uses_console: bool,
+    pub uses_gui: bool,
+}
+
 pub trait EmulatorLauncher<'a> {
     /// Build a std::process::Command for this emulator, given the protocol parse result and ROM path
     fn build_command(
@@ -772,7 +915,20 @@ pub trait EmulatorLauncher<'a> {
         result: &ProtocolParseResult,
         rom_path: &str,
         emulator_path: &std::path::Path,
+        cache_dir: Option<&std::path::Path>,
     ) -> std::process::Command;
+
+    /// Returns true if this emulator requires manual timeout handling (kill after timeout)
+    /// Returns false if the emulator supports native --timeout flag
+    fn timeout_follow_forceexit(&self, _emulator_path: &std::path::Path) -> bool {
+        true // Default to manual timeout handling for compatibility
+    }
+
+    /// Returns the CLI version executable name if this emulator supports a CLI version
+    /// Should return "cardinal-cli" for cuxn, None for others
+    fn cli_executable_name(&self) -> Option<&'static str> {
+        None // Default to no CLI version
+    }
 }
 
 /// Enum of all supported emulator mappers for docgen/compatibility table

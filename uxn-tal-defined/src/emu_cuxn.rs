@@ -5,11 +5,10 @@ use crate::{
 };
 use std::path::PathBuf;
 use std::process::Command;
-use uxn_tal_common::cache::RomCache;
 #[cfg(not(target_arch = "wasm32"))]
 use which::which;
 
-impl<'a> EmulatorPathCheck for CuxnMapper<'a> {
+impl EmulatorPathCheck for CuxnMapper {
     fn is_available_in_path(_result: &ProtocolParseResult) -> Option<PathBuf> {
         let bin = {
             #[cfg(windows)]
@@ -53,54 +52,47 @@ impl<'a> EmulatorPathCheck for CuxnMapper<'a> {
     }
 }
 
-pub struct CuxnMapper<'a> {
-    pub rom_cache: &'a dyn RomCache,
-}
+pub struct CuxnMapper;
 
-impl<'a> EmulatorLauncher<'a> for CuxnMapper<'a> {
+impl<'a> EmulatorLauncher<'a> for CuxnMapper {
+    fn cli_executable_name(&self) -> Option<&'static str> {
+        Some("cardinal-cli")
+    }
+
     fn build_command(
         &self,
         result: &ProtocolParseResult,
         rom_path: &str,
         emulator_path: &std::path::Path,
-    ) -> Command {
-        if let Some(crate::ProtocolVarVar::Bool(true)) = result.proto_vars.get("orca") {
-            use crate::consts::CANONICAL_ORCA;
-            use std::fs;
-            use std::path::Path;
-            let canonical_rom_path = match self
-                .rom_cache
-                .get_or_write_cached_rom(CANONICAL_ORCA, Path::new("orca.rom"))
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("[CuxnMapper] Failed to cache/fetch canonical orca ROM: {e}");
-                    Path::new("orca.rom").to_path_buf()
-                }
-            };
-            let orca_file = Path::new(rom_path);
-            let orca_rom = orca_file.with_file_name("orca.rom");
-            if canonical_rom_path != orca_rom {
-                if let Err(e) = fs::copy(&canonical_rom_path, &orca_rom) {
-                    eprintln!("[CuxnMapper] Failed to copy canonical orca ROM to working dir: {e}");
-                }
-            }
-            let mut cmd = Command::new(emulator_path);
-            let mut args = self.map_args(result);
-            args.insert(0, orca_file.to_string_lossy().to_string());
-            args.insert(0, orca_rom.to_string_lossy().to_string());
-            cmd.args(&args);
-            return cmd;
-        }
+        cache_dir: Option<&std::path::Path>,
+    ) -> std::process::Command {
         let mut cmd = Command::new(emulator_path);
         let mut args = self.map_args(result);
         args.push(rom_path.to_string());
+        let post_args = self.map_post_args(result);
+        args.extend(post_args);
         cmd.args(&args);
+
+        // Set working directory to cache_dir if provided
+        if let Some(dir) = cache_dir {
+            cmd.current_dir(dir);
+        }
+
         cmd
+    }
+
+    fn timeout_follow_forceexit(&self, emulator_path: &std::path::Path) -> bool {
+        // Check if this is cardinal-cli (CLI version)
+        if let Some(filename) = emulator_path.file_name() {
+            if filename.to_string_lossy().contains("cardinal-cli") {
+                return true; // cardinal-cli doesn't support --timeout flag, use manual timeout
+            }
+        }
+        false // cardinal-gui supports native --timeout flag
     }
 }
 
-impl<'a> EmulatorArgMapper for CuxnMapper<'a> {
+impl EmulatorArgMapper for CuxnMapper {
     fn map_args(&self, result: &ProtocolParseResult) -> Vec<String> {
         let mut args = vec![];
 
@@ -130,9 +122,7 @@ impl<'a> EmulatorArgMapper for CuxnMapper<'a> {
                 })
         });
         // Only map each protocol/query variable once
-        if let Some(ProtocolVarVar::Enum(emu)) = result.proto_vars.get("emu") {
-            args.push(format!("--emu={}", emu));
-        }
+        // Note: 'emu' parameter is for emulator selection only, not passed to cardinal-gui
         if let Some(ProtocolVarVar::Bool(widget)) = result.proto_vars.get("widget") {
             if *widget {
                 args.push("--widget".to_string());
@@ -235,6 +225,22 @@ impl<'a> EmulatorArgMapper for CuxnMapper<'a> {
                 _ => args.push(format!("--id={:?}", qv.value)),
             }
         }
+        args
+    }
+
+    fn map_post_args(&self, result: &ProtocolParseResult) -> Vec<String> {
+        let mut args = vec![];
+
+        // Handle !arg1 as an argument after the ROM
+        if let Some(qv) = result.bang_vars.get("arg1") {
+            // Add -- separator before post-ROM arguments
+            args.push("--".to_string());
+            match &qv.value {
+                ProtocolQueryVarVar::String(s) => args.push(s.clone()),
+                _ => args.push(format!("{:?}", qv.value)),
+            }
+        }
+
         args
     }
 }

@@ -21,7 +21,6 @@ use std::collections::HashMap;
 /// Runs all TAL heuristics and prints the results for the given source.
 pub fn print_all_tal_heuristics(tal_source: &str) {
     println!("--- TAL Heuristics ---");
-    println!("Proportional font: {}", uses_proportional_font(tal_source));
     println!("Has manifest: {}", has_manifest(tal_source));
     println!("Has theme: {}", has_theme(tal_source));
     println!("Has snarf: {}", has_snarf(tal_source));
@@ -33,39 +32,6 @@ pub fn print_all_tal_heuristics(tal_source: &str) {
     println!("Uses GUI: {}", heuristic_uses_gui(tal_source));
     let stats = analyze_tal_source_stats(tal_source);
     println!("Stats: {:?}", stats);
-}
-
-/// Returns true if the TAL source meta block contains a proportional font setting.
-pub fn uses_proportional_font(tal_source: &str) -> bool {
-    let mut lexer = Lexer::new(tal_source.to_string(), None);
-    let tokens = match lexer.tokenize() {
-        Ok(t) => t,
-        Err(_) => return false,
-    };
-    let mut in_meta = false;
-    let mut last_key: Option<String> = None;
-    for t in &tokens {
-        match &t.token {
-            Token::LabelDef(_, label) if label == "meta" => {
-                in_meta = true;
-                continue;
-            }
-            Token::LabelDef(_, _) if in_meta => break, // End of meta block
-            Token::SublabelDef(key) | Token::Word(key) if in_meta && key.starts_with('&') => {
-                last_key = Some(key.trim_start_matches('&').to_string());
-            }
-            Token::RawString(val) | Token::Word(val) if in_meta && last_key.is_some() => {
-                let key = last_key.take().unwrap();
-                if (key == "font" || key == "font_type" || key == "font-family")
-                    && val.to_lowercase().contains("proportional")
-                {
-                    return true;
-                }
-            }
-            _ => {}
-        }
-    }
-    false
 }
 
 /// Returns true if the TAL source has a manifest block.
@@ -366,6 +332,11 @@ pub fn heuristic_uses_console(tal_source: &str) -> bool {
         || tal_source.contains("input/<listen>")
         || tal_source.contains(";input/on-console .Console/vector DEO2")
         || tal_source.contains(".Console/read DEI")
+        || tal_source.contains(".Console/write DEO")
+        || tal_source.contains(".Console/char DEO")  // Custom console char output
+        || tal_source.contains(".Console/error DEO")
+        || tal_source.contains("#18 DEO")  // Console/write port
+        || tal_source.contains("#19 DEO") // Console/error port
 }
 
 /// Returns true if the TAL source uses the GUI (screen)

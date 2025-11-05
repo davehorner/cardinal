@@ -93,7 +93,7 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
     let uxntal_path = home_dir.join(".uxntal");
     let uxndis_path = uxntal_path.join(".uxndis");
     if !uxndis_path.exists() {
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("clone")
             .arg("https://git.sr.ht/~rabbits/uxndis")
             .arg(&uxndis_path)
@@ -105,7 +105,7 @@ pub fn ensure_uxndis_repo() -> Result<Option<PathBuf>, AssemblerError> {
         }
     } else {
         // If already exists, do a git pull
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("-C")
             .arg(&uxndis_path)
             .arg("pull")

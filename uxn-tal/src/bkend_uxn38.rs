@@ -56,7 +56,7 @@ pub fn ensure_uxn38_repo() -> Result<Option<PathBuf>, AssemblerError> {
     let uxntal_path = home_dir.join(".uxntal");
     let uxn38_path = uxntal_path.join(".uxn38");
     if !uxn38_path.exists() {
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("clone")
             .arg("https://github.com/davehorner/uxn38.git")
             .arg(&uxn38_path)
@@ -68,7 +68,7 @@ pub fn ensure_uxn38_repo() -> Result<Option<PathBuf>, AssemblerError> {
         }
     } else {
         // If already exists, do a git pull
-        let status = Command::new("git")
+        let status = crate::util::create_git_command()
             .arg("-C")
             .arg(&uxn38_path)
             .arg("pull")

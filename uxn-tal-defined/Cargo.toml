@@ -1,6 +1,6 @@
 [package]
 name = "uxn-tal-defined"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Shared protocol definitions for uxntal://"
 license = "MIT OR Apache-2.0"

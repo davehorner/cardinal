@@ -619,8 +619,8 @@ impl Lexer {
                         self.advance(); // skip second quote
                         continue;
                     }
-                    // End string at any byte <= 0x20 (space, tab, newline, etc.)
-                    if ch as u8 <= 0x20 {
+                    // End string at whitespace characters (space, tab, newline, etc.)
+                    if ch.is_whitespace() {
                         break;
                     }
                     string_content.push(ch);

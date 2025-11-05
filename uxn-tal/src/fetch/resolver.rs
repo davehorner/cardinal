@@ -37,22 +37,55 @@ pub fn resolve_entry_from_url(raw: &str) -> Result<(PathBuf, PathBuf), Box<dyn s
                     // Preserve original protocol (http/https) for git@http(s):// URLs
                     let url_git = if url.starts_with("git@https://") {
                         // For git@https:// URLs, use HTTPS format
-                        format!(
-                            "https://{}/{}/{}",
-                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
-                        )
+                        if provider_repo_ref.host == "github.com" {
+                            format!(
+                                "https://{}/{}/{}.git",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        } else {
+                            format!(
+                                "https://{}/{}/{}",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        }
                     } else if url.starts_with("git@http://") {
                         // For git@http:// URLs, use HTTP format
-                        format!(
-                            "http://{}/{}/{}",
-                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
-                        )
+                        if provider_repo_ref.host == "github.com" {
+                            format!(
+                                "http://{}/{}/{}.git",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        } else {
+                            format!(
+                                "http://{}/{}/{}",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        }
                     } else {
                         // For regular git@ URLs, use SSH format
-                        format!(
-                            "git@{}:{}/{}",
-                            provider_repo_ref.host, provider_repo_ref.owner, provider_repo_ref.repo
-                        )
+                        if provider_repo_ref.host == "github.com" {
+                            format!(
+                                "git@{}:{}/{}.git",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        } else {
+                            format!(
+                                "git@{}:{}/{}",
+                                provider_repo_ref.host,
+                                provider_repo_ref.owner,
+                                provider_repo_ref.repo
+                            )
+                        }
                     };
 
                     uxn_tal_defined::RepoRef {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/davehorner/cardinal/compare/uxn-tal-defined-v0.3.0...uxn-tal-defined-v0.4.0) - 2025-11-05
+
+### Added
+
+- *(!arg1,!stdin,basic,file://)* add !stdin support, local file provider, and basic/orca mode handling. forced timeout and cli/gui determinations via heuristics.
+
 ## [0.3.0](https://github.com/davehorner/cardinal/compare/uxn-tal-defined-v0.2.0...uxn-tal-defined-v0.3.0) - 2025-11-02
 
 ### Added

@@ -1,9 +1,9 @@
 use std::fs;
 use std::io::Write;
+use uxn_tal::mode_orca;
 use uxn_tal::RealRomEntryResolver;
 use uxn_tal_common::cache::RomEntryResolver;
 use uxn_tal_defined::v1::{ProtocolParseResult, ProtocolVarVar};
-use uxn_tal_defined::EmulatorLauncher;
 
 #[test]
 #[ignore = "requires buxn-gui executable in PATH, not available on GitHub CI"]
@@ -41,21 +41,34 @@ fn test_buxn_runs_buxn_gui_with_orca_rom_and_orca_file() {
         .proto_vars
         .insert("orca".to_string(), ProtocolVarVar::Bool(true));
     // Use the real RomCache implementation for integration test
-    let rom_cache = uxn_tal::RealRomCache;
-    let mapper = uxn_tal_defined::emu_buxn::BuxnMapper {
-        rom_cache: &rom_cache,
-    };
+    let mapper = uxn_tal_defined::emu_buxn::BuxnMapper;
+
+    // Actually resolve and cache the canonical orca ROM using the orca mode functionality
+    let (canonical_orca_rom, _canonical_cache_dir) = mode_orca::resolve_canonical_orca_rom()
+        .expect("Should resolve and cache canonical orca ROM");
+
+    // Copy the canonical orca ROM to our test cache dir so the mapper can find it
+    let orca_rom_in_cache = cache_dir.join("orca.rom");
+    std::fs::copy(&canonical_orca_rom, &orca_rom_in_cache)
+        .expect("Should copy canonical orca ROM to cache dir");
 
     // Find buxn-gui in PATH
     let buxn_gui = which::which("buxn-gui").expect("buxn-gui must be in PATH for this test");
 
-    // Save current working directory
-    // let orig_cwd = std::env::current_dir().expect("get cwd");
+    // Save current working directory and set to cache dir
     std::env::set_current_dir(&cache_dir).expect("set cwd to cache dir");
-    // The build_command should resolve and cache the canonical orca ROM and build the correct command
-    // Use only the filename (relative path) for the .orca file
+
+    // Use the orca mode functionality to build the proper command
     let orca_filename = cached_orca_path.file_name().unwrap().to_string_lossy();
-    let mut cmd = mapper.build_command(&result, &orca_filename, &buxn_gui);
+    let mut cmd = mode_orca::handle_orca_mode(
+        &result,
+        &orca_filename,
+        &mapper,
+        &buxn_gui,
+        Some(&cache_dir),
+    )
+    .expect("Should handle orca mode");
+
     // Print debug info for manual testing
     println!("[DEBUG] Working dir: {}", cache_dir.display());
     println!("[DEBUG] Executable: {}", buxn_gui.display());

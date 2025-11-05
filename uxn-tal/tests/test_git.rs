@@ -14,10 +14,10 @@ mod tests {
         // Test git@github.com:davehorner/uxn-games (should work on Windows)
         let url = "uxntal://git@github.com:davehorner/uxn-games/tree/main/flap/flap.tal";
         let parsed = uxn_tal::parse_uxntal_url(url);
-        // For git@ URLs, url_git should be Some(...)
+        // For git@ URLs, url_git should be Some(...) with .git suffix for GitHub
         assert_eq!(
             parsed.repo_ref.as_ref().map(|r| r.url_git.clone()),
-            Some("git@github.com:davehorner/uxn-games".to_string())
+            Some("git@github.com:davehorner/uxn-games.git".to_string())
         );
         assert_eq!(parsed.url_raw, url);
         let cache_dir = dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".cache"));
