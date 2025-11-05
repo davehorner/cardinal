@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/davehorner/cardinal/compare/uxn-tal-defined-v0.4.0...uxn-tal-defined-v0.4.1) - 2025-11-05
+
+### Fixed
+
+- *(orca)* patchstorage provider resolved to .orca but did not test extension. uxntal://https://patchstorage.com/diatonic-scales/ works.
+
 ## [0.4.0](https://github.com/davehorner/cardinal/compare/uxn-tal-defined-v0.3.0...uxn-tal-defined-v0.4.0) - 2025-11-05
 
 ### Added
