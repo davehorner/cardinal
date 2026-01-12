@@ -120,6 +120,7 @@ impl Provider for GitHub {
         let entry_rel = match &r.path {
             Some(p)
                 if p.to_ascii_lowercase().ends_with(".tal")
+                    || p.to_ascii_lowercase().ends_with(".smal")
                     || p.to_ascii_lowercase().ends_with(".rom")
                     || p.to_ascii_lowercase().ends_with(".rom.txt")
                     || p.to_ascii_lowercase().ends_with(".orca")
@@ -133,19 +134,17 @@ impl Provider for GitHub {
             ),
         };
 
-        // Check cache for entry file first
+        // Check cache for entry file first; if present, use it but still walk includes
         let entry_local = out_root.join(&entry_rel);
-        if entry_local.exists() {
+        let entry_local = if entry_local.exists() {
             eprintln!("[GitHub] Using cached file: {}", entry_local.display());
-            return Ok(FetchResult {
-                entry_local: entry_local.clone(),
-                all_files: vec![entry_local],
-            });
-        }
-        let entry_local = Self::fetch_file(r, out_root, &entry_rel)?;
+            entry_local
+        } else {
+            Self::fetch_file(r, out_root, &entry_rel)?
+        };
         let mut all = vec![entry_local.clone()];
-        // Recursively fetch includes for .tal files
-        if entry_rel.to_ascii_lowercase().ends_with(".tal") {
+        // Recursively fetch includes for .tal and .smal files
+        if entry_rel.to_ascii_lowercase().ends_with(".tal") || entry_rel.to_ascii_lowercase().ends_with(".smal") {
             let mut visited: HashSet<String> = [entry_rel.clone()].into_iter().collect();
             let mut q: VecDeque<(String, PathBuf)> =
                 VecDeque::from([(entry_rel.clone(), entry_local.clone())]);

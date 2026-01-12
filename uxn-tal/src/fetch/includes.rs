@@ -6,6 +6,17 @@ pub fn parse_includes(tal: &str) -> Vec<String> {
     let includes = extract_includes_from_lexer(tal, None);
     let mut out = includes;
 
+    // Also handle plain `include "file"` occurrences (used by .smal files)
+    for line in tal.lines() {
+        if let Some(pos) = line.find("include \"") {
+            let rest = &line[pos + "include \"".len()..];
+            if let Some(end) = rest.find('"') {
+                let name = &rest[..end];
+                out.push(name.to_string());
+            }
+        }
+    }
+
     out.sort();
     out.dedup();
     out

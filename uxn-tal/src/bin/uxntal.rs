@@ -706,6 +706,87 @@ fn real_main() -> Result<(), AssemblerError> {
         return res.map(|_| ());
     }
 
+    // Special-case: if input file has `.smal` extension, use uxnsmal pipeline
+    if canon_input_p.extension().and_then(|s| s.to_str()) == Some("smal") {
+        #[cfg(feature = "uses_uxnsmal")]
+        {
+            match uxn_tal::assemble_file_with_symbols(&canon_input_p) {
+                Ok((rom_path_buf, sym_path, size)) => {
+                    println!("{} ({} bytes)", rom_path_buf.display(), size);
+                    println!("Wrote SYM to {}", sym_path.display());
+
+                    // If protocol requested an emulator, try to launch it now
+                    if let Some(ref result) = protocol_result {
+                        println!("[DEBUG] protocol requested emulator after SMAL assembly");
+                        if let Some((mapper, emulator_path)) =
+                            get_emulator_launcher_with_heuristics(result, None)
+                        {
+                            println!("[DEBUG] Got emulator launcher: {}", emulator_path.display());
+                            let rom_path = rom_path_buf.display().to_string();
+
+                            // Resolve bang vars similar to the normal path
+                            let mut result_with_resolved_urls = result.clone();
+                            for (key, value) in result.bang_vars.iter() {
+                                let value_str = value.value.to_string();
+                                let resolved_value = if key == "stdin" {
+                                    value_str
+                                } else {
+                                    resolve_arg_url(&value_str, run_after_cwd.as_deref())
+                                };
+                                let resolved_var = uxn_tal_defined::v1::ProtocolQueryVar {
+                                    name: value.name.clone(),
+                                    description: value.description.clone(),
+                                    example: value.example.clone(),
+                                    var_type: value.var_type.clone(),
+                                    value: uxn_tal_defined::v1::ProtocolQueryVarVar::String(resolved_value),
+                                };
+                                result_with_resolved_urls
+                                    .bang_vars
+                                    .insert(key.clone(), resolved_var);
+                            }
+
+                            let mut cmd = mapper.build_command(
+                                &result_with_resolved_urls,
+                                &rom_path,
+                                &emulator_path,
+                                run_after_cwd.as_deref(),
+                            );
+                            cmd.current_dir(run_after_cwd.clone().unwrap_or_else(|| PathBuf::from(".")));
+                            if spawn_emulator_with_timeout(
+                                mapper.as_ref(),
+                                &result_with_resolved_urls,
+                                cmd,
+                                &emulator_path,
+                                want_verbose,
+                            )
+                            .is_err()
+                            {
+                                pause_on_error();
+                            }
+                            return Ok(());
+                        } else {
+                            println!("[DEBUG] No emulator launcher available for SMAL protocol result");
+                        }
+                    }
+
+                    // No emulator requested or failed to launch: return after assembly
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("SMAL assembly error: {}", e);
+                    pause_on_error();
+                    return Err(e);
+                }
+            }
+        }
+        #[cfg(not(feature = "uses_uxnsmal"))]
+        {
+            eprintln!("SMAL support not compiled in (build with feature 'uses_uxnsmal')");
+            pause_on_error();
+            std::process::exit(1);
+        }
+    }
+
     if input_is_orca {
         // For .orca files, launch emulator with protocol result handling
         if let Some(ref _cmd) = run_after_assembly {

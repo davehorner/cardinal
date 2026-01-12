@@ -106,9 +106,35 @@ pub fn assemble_with_path(source: &str, path: &str) -> Result<Vec<u8>, Assembler
 
 /// Convenience function to assemble a TAL file directly from a file path
 pub fn assemble_file<P: AsRef<std::path::Path>>(input_path: P) -> Result<Vec<u8>, AssemblerError> {
-    let source = std::fs::read_to_string(&input_path)?;
+    let input_path = input_path.as_ref();
+    let source = std::fs::read_to_string(input_path)?;
+    let ext = input_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if ext == "smal" {
+        #[cfg(feature = "uses_uxnsmal")]
+        {
+            use uxnsmal::{compiler::Compiler, lexer::Lexer, parser::Parser, reporter::Reporter, typechecker::Typechecker};
+
+            let tokens = Lexer::lex(&source).map_err(|e| AssemblerError::Internal { message: format!("smal lexer error: {e}") })?;
+            let mut ast = Parser::parse(&source, &tokens).map_err(|e| AssemblerError::Internal { message: format!("smal parser error: {e}") })?;
+            match Typechecker::check(&mut ast) {
+                Ok((program, _problems)) => {
+                    let bytecode = Compiler::compile(&program).map_err(|e| AssemblerError::Internal { message: format!("smal compile error: {e}") })?;
+                    return Ok(bytecode.opcodes);
+                }
+                Err(problems) => {
+                    let report = Reporter::new(&problems, &source, input_path);
+                    return Err(AssemblerError::Internal { message: report.to_string() });
+                }
+            }
+        }
+        #[cfg(not(feature = "uses_uxnsmal"))]
+        {
+            return Err(AssemblerError::Internal { message: "SMAL support not enabled in this build".to_string() });
+        }
+    }
+
     let mut assembler = Assembler::new();
-    let path_str = input_path.as_ref().to_string_lossy().into_owned();
+    let path_str = input_path.to_string_lossy().into_owned();
     assembler.assemble(&source, Some(path_str))
 }
 
@@ -140,6 +166,54 @@ pub fn assemble_file_with_symbols<P: AsRef<std::path::Path>>(
     let source = std::fs::read_to_string(input_path)?;
     let mut assembler = Assembler::new();
     let path_str = input_path.to_string_lossy().into_owned();
+
+    let ext = input_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if ext == "smal" {
+        #[cfg(feature = "uses_uxnsmal")]
+        {
+            use uxnsmal::{compiler::Compiler, lexer::Lexer, parser::Parser, reporter::Reporter, typechecker::Typechecker};
+
+            let tokens = Lexer::lex(&source).map_err(|e| AssemblerError::Internal { message: format!("smal lexer error: {e}") })?;
+            let mut ast = Parser::parse(&source, &tokens).map_err(|e| AssemblerError::Internal { message: format!("smal parser error: {e}") })?;
+            match Typechecker::check(&mut ast) {
+                Ok((program, _problems)) => {
+                    let bytecode = Compiler::compile(&program).map_err(|e| AssemblerError::Internal { message: format!("smal compile error: {e}") })?;
+
+                    // Save ROM file
+                    let rom_path = input_path.with_extension("rom");
+                    std::fs::write(&rom_path, &bytecode.opcodes)?;
+
+                    // Save symbol file (binary format: little-endian u16 addr, null-terminated name)
+                    let sym_path = input_path.with_extension("sym");
+                    let mut symbols_vec: Vec<(String, u16)> = bytecode
+                        .labels
+                        .iter()
+                        .filter(|(_, &addr)| addr >= 0x100)
+                        .map(|(name, &addr)| (name.clone(), addr))
+                        .collect();
+                    symbols_vec.sort_by_key(|(_, addr)| *addr);
+                    let mut out = Vec::new();
+                    for (name, addr) in symbols_vec {
+                        out.extend_from_slice(&addr.to_le_bytes());
+                        out.extend_from_slice(name.as_bytes());
+                        out.push(0);
+                    }
+                    std::fs::write(&sym_path, &out)?;
+
+                    return Ok((rom_path, sym_path, bytecode.opcodes.len()));
+                }
+                Err(problems) => {
+                    let report = Reporter::new(&problems, &source, input_path);
+                    return Err(AssemblerError::Internal { message: report.to_string() });
+                }
+            }
+        }
+        #[cfg(not(feature = "uses_uxnsmal"))]
+        {
+            return Err(AssemblerError::Internal { message: "SMAL support not enabled in this build".to_string() });
+        }
+    }
+
     let rom = assembler.assemble(&source, Some(path_str))?;
 
     // Save ROM file

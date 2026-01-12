@@ -48,6 +48,7 @@ cpal.workspace = true
 getrandom = "0.3.4"
 display-info = "0.5.7"
 reqwest = { version = "0.12.24", features = ["blocking", "json"] }
+image = "0.24"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures.workspace = true

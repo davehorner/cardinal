@@ -29,6 +29,8 @@ pub struct StageConfig {
     pub scale: f32,
     pub rom_title: String,
     pub transparent: Option<String>,
+    /// Optional path where a single PNG screenshot will be written when first frame is available
+    pub screenshot: Option<std::path::PathBuf>,
     pub color_transform_name: String,
     pub color_params: Vec<f32>,
     pub effects: EffectsConfig,
@@ -109,6 +111,7 @@ pub struct Stage<'a> {
     pub texture: Option<egui::TextureHandle>,
     pub event_rx: mpsc::Receiver<Event>,
     pub resized: Option<Box<dyn FnMut(u16, u16)>>,
+    pub screenshot_written: bool,
     pub transparent_rgb: Option<(u8, u8, u8)>,
     pub stopped: bool,
     pub drag_started: bool,
@@ -165,6 +168,7 @@ impl<'a> Stage<'a> {
             scroll: (0.0, 0.0),
             cursor_pos: None,
             texture: None,
+            screenshot_written: false,
             transparent_rgb,
             drag_window: false,
             drag_start_pos: None,
@@ -379,6 +383,31 @@ impl<'a> Stage<'a> {
             texture.set(image, egui::TextureOptions::NEAREST);
         } else {
             self.texture = Some(ctx.load_texture("frame", image, egui::TextureOptions::NEAREST));
+        }
+        // If requested, write a single PNG screenshot of the current frame (only once)
+        if !self.screenshot_written {
+            if let Some(ref path) = self.config.screenshot {
+                // `out` contains BGRA bytes per pixel; convert to RGBA
+                let w = out.size.0 as u32;
+                let h = out.size.1 as u32;
+                let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+                for chunk in out.frame.chunks(4) {
+                    let b = chunk[0];
+                    let g = chunk[1];
+                    let r = chunk[2];
+                    let a = 255u8;
+                    rgba.push(r);
+                    rgba.push(g);
+                    rgba.push(b);
+                    rgba.push(a);
+                }
+                if let Err(e) = image::save_buffer(path, &rgba, w, h, image::ColorType::Rgba8) {
+                    eprintln!("WARN: failed to write screenshot {}: {e}", path.display());
+                } else {
+                    println!("Wrote screenshot: {}", path.display());
+                    self.screenshot_written = true;
+                }
+            }
         }
     }
     pub fn draw(&self, ui: &mut egui::Ui) {

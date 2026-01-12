@@ -134,6 +134,9 @@ struct Args {
     /// Parameters for color transform (comma or space separated)
     #[clap(long, alias = "color_params", value_delimiter = ',')]
     color_params: Vec<f32>,
+    /// Capture a screenshot to the given path and exit
+    #[clap(long, value_name = "PATH")]
+    capture_screenshot: Option<std::path::PathBuf>,
 }
 
 pub fn run() -> Result<()> {
@@ -287,6 +290,7 @@ pub fn run() -> Result<()> {
     let efxt = args.efxt.unwrap_or(3.0);
     let efxmode = args.efxmode.clone();
     let fit_mode = args.fit.clone().unwrap_or_else(|| "contain".to_string());
+    let screenshot_path = args.capture_screenshot.clone();
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -319,6 +323,7 @@ pub fn run() -> Result<()> {
                     transparent: transparent_color.map(|s| s.to_string()),
                     color_transform_name: color_transform,
                     color_params,
+                    screenshot: screenshot_path.clone(),
                     effects: crate::stage::EffectsConfig {
                         effect_mode: 0,
                         effect_order: (0..crate::effects::EFFECT_COUNT).collect(),

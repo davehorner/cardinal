@@ -49,6 +49,7 @@ impl<'a> UxnPanel<'a> {
                 scale: 1.0,
                 rom_title: texture_name,
                 transparent,
+                    screenshot: None,
                 color_transform_name: "invert".to_string(),
                 color_params: vec![],
                 effects: crate::stage::EffectsConfig {

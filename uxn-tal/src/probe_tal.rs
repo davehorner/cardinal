@@ -328,26 +328,63 @@ pub fn heuristic_expects_a_path(tal_source: &str) -> bool {
 
 /// Returns true if the TAL source uses the console (input/output)
 pub fn heuristic_uses_console(tal_source: &str) -> bool {
-    tal_source.contains(".Console/vector")
+    // TAL-style checks (always enabled)
+    let tal_checks = tal_source.contains(".Console/vector")
         || tal_source.contains("input/<listen>")
         || tal_source.contains(";input/on-console .Console/vector DEO2")
         || tal_source.contains(".Console/read DEI")
         || tal_source.contains(".Console/write DEO")
-        || tal_source.contains(".Console/char DEO")  // Custom console char output
+        || tal_source.contains(".Console/char DEO") // Custom console char output
         || tal_source.contains(".Console/error DEO")
-        || tal_source.contains("#18 DEO")  // Console/write port
-        || tal_source.contains("#19 DEO") // Console/error port
+        || tal_source.contains("#18 DEO") // Console/write port
+        || tal_source.contains("#19 DEO"); // Console/error port
+
+    // SMAL-style checks (only when `uses_uxnsmal` feature enabled)
+    #[cfg(feature = "uses_uxnsmal")]
+    {
+        let smal_checks = tal_source.contains("Console-write")
+            || tal_source.contains("Console.write")
+            || tal_source.contains("Console-write output")
+            || tal_source.contains("Console.write output");
+        return tal_checks || smal_checks;
+    }
+
+    #[cfg(not(feature = "uses_uxnsmal"))]
+    {
+        tal_checks
+    }
 }
 
 /// Returns true if the TAL source uses the GUI (screen)
 pub fn heuristic_uses_gui(tal_source: &str) -> bool {
-    tal_source.contains(".Screen/vector")
+    // TAL-style checks (always enabled)
+    let tal_checks = tal_source.contains(".Screen/vector")
         || tal_source.contains(".Screen/width DEO2")
         || tal_source.contains(".Screen/height DEO2")
         || tal_source.contains(".Screen/x DEO2")
         || tal_source.contains(".Screen/y DEO2")
         || tal_source.contains(".Screen/pixel DEO")
-        || tal_source.contains(".Screen/sprite DEO")
+        || tal_source.contains(".Screen/sprite DEO");
+
+    // SMAL-style checks (only when `uses_uxnsmal` feature enabled)
+    #[cfg(feature = "uses_uxnsmal")]
+    {
+        let smal_checks = tal_source.contains("Screen.width")
+            || tal_source.contains("Screen.height")
+            || tal_source.contains("Screen.x")
+            || tal_source.contains("Screen.y")
+            || tal_source.contains("Screen.pixel")
+            || tal_source.contains("Screen.sprite")
+            || tal_source.contains("Screen.vector")
+            || tal_source.contains("Screen.addr")
+            || tal_source.contains("Screen.auto");
+        return tal_checks || smal_checks;
+    }
+
+    #[cfg(not(feature = "uses_uxnsmal"))]
+    {
+        tal_checks
+    }
 }
 
 // Heuristics and statistics for TAL source and ROM analysis
