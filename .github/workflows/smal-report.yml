@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          path: .
 
       - name: Show workspace
         run: |
@@ -27,12 +25,6 @@ jobs:
           echo "Checking for cardinal/uxnsmal..."
           if [ -d cardinal/uxnsmal ]; then
             echo "Found cardinal/uxnsmal in workspace.";
-          elif [ -d ../uxnsmal ]; then
-            echo "Found ../uxnsmal; copying into cardinal/uxnsmal";
-            rm -rf cardinal/uxnsmal || true; cp -a ../uxnsmal cardinal/uxnsmal;
-          elif [ -d uxnsmal ]; then
-            echo "Found uxnsmal at repo root; copying into cardinal/uxnsmal";
-            rm -rf cardinal/uxnsmal || true; cp -a uxnsmal cardinal/uxnsmal;
           else
             echo "Cloning uxnsmal into cardinal/uxnsmal";
             rm -rf cardinal/uxnsmal || true; git clone --depth 1 https://github.com/bbogdan-ov/uxnsmal.git cardinal/uxnsmal;
