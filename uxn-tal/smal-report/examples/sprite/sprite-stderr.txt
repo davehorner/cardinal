@@ -1,0 +1,5 @@
+[90m[[0m2026-01-12T11:02:35Z [32mINFO [0m cardinal_varvara[90m][0m [Varvara::new] (USB) uses_usb=true
+[90m[[0m2026-01-12T11:02:35Z [32mINFO [0m cardinal_varvara[90m][0m [Varvara::new] USB+gilrs: constructing ControllerUsb with gilrs
+[90m[[0m2026-01-12T11:02:35Z [32mINFO [0m cardinal_varvara::controller_gilrs[90m][0m [NATIVE] spawn_gilrs_controller_thread called
+[90m[[0m2026-01-12T11:02:35Z [32mINFO [0m cardinal_varvara::controller_gilrs[90m][0m [NATIVE] spawn_gilrs_controller_thread called
+[90m[[0m2026-01-12T11:02:35Z [32mINFO [0m cardinal_cli[90m][0m startup complete in 18.9µs

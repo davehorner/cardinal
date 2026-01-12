@@ -1,11 +1,8 @@
-name: SMAL Report
+name: DISABLED: SMAL Report (duplicate)
 
-on:
-  push:
-    branches: [ smal-report ]
-  pull_request:
-    branches: [ smal-report ]
-  workflow_dispatch:
+# Disabled to avoid duplicate checkout/workspace layout issues.
+# The canonical smal-report workflow lives at .github/workflows/smal-report.yml
+on: []
 
 jobs:
   smal-report:

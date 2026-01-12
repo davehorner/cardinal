@@ -1,0 +1,9 @@
+[package]
+name = "smal_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uxn-tal = { path = "../../uxn-tal", features = ["uses_uxnsmal"] }
+
+[workspace]

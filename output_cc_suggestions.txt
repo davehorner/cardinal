@@ -1,0 +1,10 @@
+
+----------------------
+feat: add SMAL support and enhance cardinal build process
+
+- Updated smal-report.yml for proper working directory setup
+- Added support for SMAL (.smal) files in uxn-tal
+- Enhanced Cargo.lock with new dependencies for image processing
+- Made modifications in cardinal-gui to capture screenshots and for new feature flags
+- Improved file fetching for x-tal and .smal files in source providers
+
