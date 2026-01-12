@@ -25,16 +25,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Build workspace (cardinal-gui)
-        working-directory: cardinal
-        run: cargo build -p cardinal-gui --verbose
+        run: cargo build -p cardinal-gui --manifest-path cardinal/Cargo.toml --verbose
 
       - name: Run smal_examples test
-        working-directory: cardinal
         env:
           SMAL_TEST_STRICT: '1'
           SMAL_GUI_CAPTURE: '1'
           SMAL_GUI_TIMEOUT_MS: '15000'
-        run: xvfb-run -a cargo test -p uxn-tal --features uses_uxnsmal --test smal_examples -- --nocapture
+        run: xvfb-run -a cargo test -p uxn-tal --features uses_uxnsmal --manifest-path cardinal/Cargo.toml --test smal_examples -- --nocapture
 
       - name: List smal-report files
         run: ls -R cardinal/uxn-tal/smal-report || true
